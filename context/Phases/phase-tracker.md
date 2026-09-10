@@ -200,11 +200,11 @@ Phase Status
 | 40  | Purchase Orders    | Supplier + Products       | ✅     |
 | 41  | Goods Receipt Note | Purchase Order            | ✅     |
 | 42  | Purchase Invoice   | Voucher + Inventory + GST | ✅     |
-| 43  | Purchase Return    | Purchase Invoice          | ⬜     |
+| 43  | Purchase Return    | Purchase Invoice          | ✅     |
 
 Phase Status
 
-🟨 In Progress — Purchase Orders (#40, feature-spec 42) implemented 2026-09-10 on
+✅ Complete — Purchase Orders (#40, feature-spec 42) implemented 2026-09-10 on
 branch `42-purchase-orders`, the mirror of Sales Order (feature-spec 36) from the
 purchase side: no financial/stock effect, `receivedQuantity` maintained exclusively
 by `applyReceipt` (forward infrastructure for Goods Receipt Note, feature-spec 43,
@@ -229,8 +229,20 @@ Settings ledger mapping (five new + shared `roundOffLedgerId`) validated against
 ledgers to the Cash-in-Hand group or a `BankAccount`-linked ledger, and matches an
 optionally-linked Goods Receipt Note's lines via a `(productId, warehouseId, quantity)`
 bijection. "Create Invoice" (Goods Receipt Note's entry point into #42) is wired up on
-the Goods Receipt Note detail page. Purchase Return (#43, feature-spec 45) is next —
-the last of Phase 4.
+the Goods Receipt Note detail page. Purchase Return (#43, feature-spec 45) implemented
+2026-09-11 on branch `feature/purchase-return`, the mirror of Sales Return
+(feature-spec 39) from the purchase side, ledger and stock direction reversed — the
+sole purchase-side adjustment document in this phase (no Purchase-side Credit
+Note/Debit Note pair, unlike Phase 3's three-way split). Reuses Purchase Invoice's
+six-field ledger mapping and its deep active/company-owned/correct-group validation
+(extracted to `src/modules/company/utils/purchase-ledger-mapping.ts` so both documents
+share one implementation instead of two), and restricts its `CASH_REFUND` refund ledger
+to the Cash-in-Hand group or a `BankAccount`-linked ledger, mirroring Purchase Invoice's
+payment-ledger rule. Posts `StockTransactionType.PURCHASE_RETURN`/`OUT` (goods leaving
+the company's warehouse back to the supplier) and `VoucherType.PURCHASE_RETURN`
+(Credit Purchase Account + Input Tax, Debit Supplier/refund ledger — the reversal of
+Purchase Invoice's own posting). **This closes Phase 4 — Purchase Management in full
+(all four documents, tracker #40–#43).**
 
 ---
 
@@ -338,7 +350,19 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **39 - Debit Note** (Phase 3 — Sales Management) — spec drafted 2026-07-19 as `context/feature-specs/41-debit-note.md`. **#33 Quotations, #34 Sales Orders, #35 Delivery Challans, #36 Sales Invoice, #37 Sales Return, and #38 Credit Note were all implemented 2026-09-10** (git branch `36-sales-orders`; see `context/progress-tracker.md`'s Completed entries), six of the seven Phase 3 documents, closing the Quotation → Sales Order → Delivery Challan → Sales Invoice conversion chain and adding Sales Return and Credit Note, the first two of three post-invoice adjustment documents. Debit Note is next and last — the mirror of Credit Note, increasing what the customer owes, with **no stock movement**, reusing Sales Invoice's Company Settings ledger mapping and Sales Return's `RefundMode` enum (read Sales Return's spec Goal section's "Relationship to Credit Note and Debit Note" note before implementing). Phase 1/2 are both fully complete (Branch Management, #11, implemented 2026-09-10 — see the Phase 1 status-discrepancy note above, now resolved). Per `ai-workflow-rules.md` only one feature is worked at a time and the next feature awaits explicit user direction.
+➡ **Phase 5 — Inventory** (Opening Stock #44, Stock Adjustment #45, Stock Transfer #46,
+Physical Verification #47, Batch Tracking #48, Serial Number Tracking #49). Phases 1–4
+are now all fully complete: Phase 3 — Sales Management (#33–#39, all seven documents)
+and Phase 4 — Purchase Management (#40–#43, all four documents, the last being Purchase
+Return implemented 2026-09-11) — see each phase's own status paragraph above and
+`context/progress-tracker.md`'s Completed entries for the full record. Feature-specs
+for Phase 5 (Inventory, tracker #44–#49) and Phase 6 (Accounting — the four manual
+voucher screens, tracker #50–#53) are being drafted per explicit user request,
+following the same batch-drafting-without-implementation precedent as the Phase 3/4
+spec batches (drafted 2026-07-18/19, implemented much later, one at a time). Per
+`ai-workflow-rules.md` only one feature is *implemented* at a time; drafting multiple
+specs together is the established documentation-only exception, and the next feature
+to actually build still awaits explicit user direction.
 
 ---
 

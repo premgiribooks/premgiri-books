@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardList, PackageCheck, ReceiptText } from "lucide-react";
+import { ClipboardList, PackageCheck, ReceiptText, RotateCcw } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,8 +9,9 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
 // Mirrors /sales's hub exactly (src/app/sales/page.tsx) — one card per Phase
 // 4 document type; Purchase Orders (42-purchase-orders.md), Goods Receipt
-// Notes (43-goods-receipt-note.md), and Purchase Invoices
-// (44-purchase-invoice.md) wired so far.
+// Notes (43-goods-receipt-note.md), Purchase Invoices
+// (44-purchase-invoice.md), and Purchase Returns (45-purchase-return.md) —
+// the fourth and final card, completing this hub.
 const PURCHASE_MODULES = [
   {
     href: "/purchase/orders",
@@ -30,6 +31,12 @@ const PURCHASE_MODULES = [
     title: "Purchase Invoices",
     description: "The document that records a supplier's bill — posts accounting entries and stock movement.",
   },
+  {
+    href: "/purchase/returns",
+    icon: RotateCcw,
+    title: "Purchase Returns",
+    description: "The physical, quantity-based reversal of a posted Purchase Invoice — goods back out to the supplier.",
+  },
 ] as const;
 
 export default async function PurchaseHubPage() {
@@ -47,8 +54,8 @@ export default async function PurchaseHubPage() {
         <div>
           <h1 className="text-xl font-semibold text-foreground">Purchase</h1>
           <p className="text-sm text-muted-foreground">
-            Manage the Purchase document chain — Purchase Order, Goods Receipt Note, and
-            Purchase Invoice.
+            Manage the Purchase document chain — Purchase Order, Goods Receipt Note,
+            Purchase Invoice, and Purchase Return.
           </p>
         </div>
 
