@@ -115,15 +115,63 @@ export async function postVoucher(
   return runInTransaction((innerTx) => postVoucherInTransaction(innerTx, companyId, input, documentType));
 }
 
+async function cancelVoucherInTransaction(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  id: string,
+  original: PostedVoucher,
+  documentType: DocumentType
+): Promise<PostedVoucher> {
+  await assertFinancialYearOpenForDate(tx, companyId, original.financialYearId, original.voucherDate, "cancelled");
+
+  // Re-verified inside the transaction to close the race with a
+  // concurrent cancellation of the same voucher.
+  const current = await voucherRepository.findById(id, tx);
+  if (!current || current.companyId !== companyId || current.status !== "POSTED") {
+    throw new AppError("Only a posted voucher can be cancelled.");
+  }
+
+  const generated = await documentNumberEngine.generateNumber(tx, {
+    companyId,
+    financialYearId: original.financialYearId,
+    documentType,
+  });
+
+  try {
+    return await voucherRepository.reverse(tx, companyId, original, generated);
+  } catch (error) {
+    // A truly concurrent cancellation of the same voucher can pass the
+    // `current.status === "POSTED"` re-check above (read-committed
+    // isolation doesn't see the peer's uncommitted write) and only collide
+    // here, on `reversalOfId`'s unique constraint — surface the same
+    // friendly rejection instead of a raw Prisma error.
+    if (isUniqueConstraintError(error, "reversalOfId")) {
+      throw new AppError("Only a posted voucher can be cancelled.");
+    }
+    throw error;
+  }
+}
+
 /**
  * Reversal-based cancellation (never mutation). Rejects a voucher that is
  * not `POSTED`, is itself a reversal, or whose financial year is closed;
  * otherwise creates the mirrored reversal (its own generated number, same
  * type/FY, entries mirrored, narration "Reversal of {number}") and flips the
  * original to `CANCELLED`, atomically.
+ *
+ * Accepts an optional external transaction (the `postVoucher`/`tx?`
+ * convention, extended here for feature-spec 38 — Sales Invoice's
+ * cancellation must reverse both the voucher AND the stock movement in one
+ * transaction). When `tx` is passed, the caller already owns the
+ * transaction's lifecycle and must have called `ensureSequence` before
+ * opening it, mirroring `postVoucher`'s own dual-mode contract exactly.
  */
-export async function cancelVoucher(companyId: string, id: string): Promise<PostedVoucher> {
-  const original = await voucherRepository.findById(id);
+export async function cancelVoucher(
+  companyId: string,
+  id: string,
+  tx?: Prisma.TransactionClient
+): Promise<PostedVoucher> {
+  const original = await voucherRepository.findById(id, tx);
   if (!original || original.companyId !== companyId) {
     throw new AppError("Voucher not found.");
   }
@@ -135,38 +183,13 @@ export async function cancelVoucher(companyId: string, id: string): Promise<Post
   }
 
   const documentType = VOUCHER_TYPE_TO_DOCUMENT_TYPE[original.voucherType];
+
+  if (tx) {
+    return cancelVoucherInTransaction(tx, companyId, id, original, documentType);
+  }
+
   await documentNumberEngine.ensureSequence(companyId, original.financialYearId, documentType);
-
-  return runInTransaction(async (tx) => {
-    await assertFinancialYearOpenForDate(tx, companyId, original.financialYearId, original.voucherDate, "cancelled");
-
-    // Re-verified inside the transaction to close the race with a
-    // concurrent cancellation of the same voucher.
-    const current = await voucherRepository.findById(id, tx);
-    if (!current || current.companyId !== companyId || current.status !== "POSTED") {
-      throw new AppError("Only a posted voucher can be cancelled.");
-    }
-
-    const generated = await documentNumberEngine.generateNumber(tx, {
-      companyId,
-      financialYearId: original.financialYearId,
-      documentType,
-    });
-
-    try {
-      return await voucherRepository.reverse(tx, companyId, original, generated);
-    } catch (error) {
-      // A truly concurrent cancellation of the same voucher can pass the
-      // `current.status === "POSTED"` re-check above (read-committed
-      // isolation doesn't see the peer's uncommitted write) and only collide
-      // here, on `reversalOfId`'s unique constraint — surface the same
-      // friendly rejection instead of a raw Prisma error.
-      if (isUniqueConstraintError(error, "reversalOfId")) {
-        throw new AppError("Only a posted voucher can be cancelled.");
-      }
-      throw error;
-    }
-  });
+  return runInTransaction((innerTx) => cancelVoucherInTransaction(innerTx, companyId, id, original, documentType));
 }
 
 /** Company-scoped: a cross-company id resolves as not-found, never leaking existence. */

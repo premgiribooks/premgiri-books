@@ -11,7 +11,11 @@ import { clearCurrentBranch } from "@/lib/current-branch";
 import { companyService } from "@/modules/company/services/company-service";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { saveCompanyLogo } from "@/modules/company/services/company-logo-service";
-import type { CompanyProfileInput, CompanySettingsInput } from "@/modules/company/validation/company-schema";
+import type {
+  CompanyProfileInput,
+  CompanySettingsInput,
+  SalesLedgerMappingInput,
+} from "@/modules/company/validation/company-schema";
 import type { ActionResult } from "@/types/api";
 import type { CompanySettings, CompanyWithSettings } from "@/types/company";
 
@@ -41,6 +45,19 @@ export async function updateCompanySettingsAction(
   try {
     const settings = await companySettingsService.updateSettings(companyId, input);
     revalidatePath("/profile");
+    return { success: true, data: settings };
+  } catch (error) {
+    return { success: false, error: toActionErrorMessage(error) };
+  }
+}
+
+export async function updateSalesLedgerMappingAction(
+  companyId: string,
+  input: SalesLedgerMappingInput
+): Promise<ActionResult<CompanySettings>> {
+  try {
+    const settings = await companySettingsService.updateSalesLedgerMapping(companyId, input);
+    revalidatePath("/settings/sales-ledgers");
     return { success: true, data: settings };
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
