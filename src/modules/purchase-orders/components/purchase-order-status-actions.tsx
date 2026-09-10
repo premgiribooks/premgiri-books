@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -19,19 +20,29 @@ interface PurchaseOrderStatusActionsProps {
   canEdit: boolean;
   /** Gated on "purchase"/"approve" — Cancel-while-CONFIRMED. */
   canApprove: boolean;
+  /** Gated on "purchase"/"create" — Create Goods Receipt Note
+   * (feature-spec 43), the same permission the "New Purchase Order"/"New
+   * Goods Receipt Note" buttons use. Just a link to
+   * /purchase/receipts/new?purchaseOrderId=; the GRN form itself pre-fills
+   * from the order's remaining quantities. */
+  canCreateReceipt: boolean;
 }
 
 type TransitionAction = (id: string) => Promise<ActionResult<PurchaseOrderDetail>>;
 
 /**
- * The detail page's status-transition button row — no "Create Goods Receipt
- * Note" here (feature-spec 43 owns that; mirrors
- * sales-order-status-actions.tsx's identical forward-note for "Create
- * Delivery Challan" before feature-spec 37 existed). Each button is only
- * rendered when both the current status permits the transition and the
- * caller holds the matching permission.
+ * The detail page's status-transition button row, including "Create Goods
+ * Receipt Note" (feature-spec 43) — mirrors
+ * sales-order-status-actions.tsx's identical "Create Delivery Challan"
+ * pattern. Each button is only rendered when both the current status
+ * permits the transition and the caller holds the matching permission.
  */
-export function PurchaseOrderStatusActions({ purchaseOrder, canEdit, canApprove }: PurchaseOrderStatusActionsProps) {
+export function PurchaseOrderStatusActions({
+  purchaseOrder,
+  canEdit,
+  canApprove,
+  canCreateReceipt,
+}: PurchaseOrderStatusActionsProps) {
   const router = useRouter();
   const [pending, setPending] = React.useState<PurchaseOrderStatus | null>(null);
 
@@ -87,6 +98,16 @@ export function PurchaseOrderStatusActions({ purchaseOrder, canEdit, canApprove 
         >
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
+      ) : null}
+
+      {canCreateReceipt &&
+      (purchaseOrder.status === "CONFIRMED" || purchaseOrder.status === "PARTIALLY_RECEIVED") ? (
+        <Button
+          size="sm"
+          variant="outline"
+          nativeButton={false}
+          render={<Link href={`/purchase/receipts/new?purchaseOrderId=${purchaseOrder.id}`}>Create Goods Receipt Note</Link>}
+        />
       ) : null}
     </div>
   );

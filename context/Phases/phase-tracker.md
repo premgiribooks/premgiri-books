@@ -198,7 +198,7 @@ Phase Status
 | #   | Feature            | Depends On                | Status |
 | --- | ------------------ | ------------------------- | ------ |
 | 40  | Purchase Orders    | Supplier + Products       | ✅     |
-| 41  | Goods Receipt Note | Purchase Order            | ⬜     |
+| 41  | Goods Receipt Note | Purchase Order            | ✅     |
 | 42  | Purchase Invoice   | Voucher + Inventory + GST | ⬜     |
 | 43  | Purchase Return    | Purchase Invoice          | ⬜     |
 
@@ -210,7 +210,17 @@ purchase side: no financial/stock effect, `receivedQuantity` maintained exclusiv
 by `applyReceipt` (forward infrastructure for Goods Receipt Note, feature-spec 43,
 which does not exist yet). `rate` prefills from `product.purchasePrice`, never
 `resolvePrice` — no Pricing Engine call anywhere in this phase. Goods Receipt Note
-(#41) is next.
+(#41, feature-spec 43) implemented 2026-09-10 on branch `feature/goods-receipt-note`,
+the mirror of Delivery Challan (feature-spec 37) from the purchase side: no
+financial/stock effect, no Inventory Engine call anywhere in this module — Purchase
+Invoice (feature-spec 44) remains the sole `StockTransactionType.PURCHASE` writer in
+this phase. Receiving a GRN calls `purchaseOrderService.applyReceipt` atomically,
+passing each line's combined `quantity + rejectedQuantity` as the fulfillment amount
+(both count as "physically arrived" per the spec's Quantity rule, even though only
+`quantity` is ever billed). "Create Goods Receipt Note" (Purchase Order's entry point
+into #41) is wired up on the Purchase Order detail page. `markInvoiced` and
+`listReceivedNotInvoiced` are forward infrastructure for Purchase Invoice
+(feature-spec 44), which does not exist yet. Purchase Invoice (#42) is next.
 
 ---
 
