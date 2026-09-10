@@ -196,14 +196,20 @@ Phase Status
 
 | #   | Feature            | Depends On                | Status |
 | --- | ------------------ | ------------------------- | ------ |
-| 40  | Purchase Orders    | Supplier + Products       | ⬜     |
+| 40  | Purchase Orders    | Supplier + Products       | ✅     |
 | 41  | Goods Receipt Note | Purchase Order            | ⬜     |
 | 42  | Purchase Invoice   | Voucher + Inventory + GST | ⬜     |
 | 43  | Purchase Return    | Purchase Invoice          | ⬜     |
 
 Phase Status
 
-⬜ Not Started
+🟨 In Progress — Purchase Orders (#40, feature-spec 42) implemented 2026-09-10 on
+branch `42-purchase-orders`, the mirror of Sales Order (feature-spec 36) from the
+purchase side: no financial/stock effect, `receivedQuantity` maintained exclusively
+by `applyReceipt` (forward infrastructure for Goods Receipt Note, feature-spec 43,
+which does not exist yet). `rate` prefills from `product.purchasePrice`, never
+`resolvePrice` — no Pricing Engine call anywhere in this phase. Goods Receipt Note
+(#41) is next.
 
 ---
 
