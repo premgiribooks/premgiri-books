@@ -189,8 +189,24 @@ export const companyService = {
     }
 
     const data = companyProfileSchema.parse(input);
+    // Only the six compliance-only fields `companyProfileSchema` omits are
+    // pulled from `existing` — never the whole row. `existing` is a
+    // `CompanyWithSettings` (carries `id`/`createdAt`/`updatedAt`/
+    // `bootstrapVersion`/the nested `settings` relation row on top of the
+    // plain Company columns); spreading it wholesale into `data` headed for
+    // `prisma.company.update()` smuggled those extra fields — most fatally
+    // the raw `settings` object, which Prisma's typed client rejects outright
+    // (a relation field's update `data` must be a nested-write descriptor
+    // like `{ update: {...} }`, not the row itself) — into every profile
+    // save, which TypeScript's excess-property check doesn't catch for a
+    // spread (only for a literal's own keys).
     const merged: CompanyPersistData = {
-      ...existing,
+      legalName: existing.legalName,
+      gstin: existing.gstin,
+      pan: existing.pan,
+      tan: existing.tan,
+      cin: existing.cin,
+      currency: existing.currency,
       ...data,
       displayName: blankToNull(data.displayName),
       businessType: blankToNull(data.businessType),
@@ -202,6 +218,7 @@ export const companyService = {
       addressLine2: blankToNull(data.addressLine2),
       city: blankToNull(data.city),
       state: blankToNull(data.state),
+      stateCode: blankToNull(data.stateCode),
       district: blankToNull(data.district),
       pinCode: blankToNull(data.pinCode),
       logo: blankToNull(data.logo),

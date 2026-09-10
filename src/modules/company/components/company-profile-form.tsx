@@ -18,7 +18,15 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BUSINESS_TYPE_SUGGESTIONS } from "@/constants/company";
+import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import { LogoUpload } from "@/modules/company/components/logo-upload";
 import { updateCompanyProfileAction } from "@/modules/company/actions/company-actions";
 import {
@@ -30,6 +38,13 @@ interface CompanyProfileFormProps {
   companyId: string;
   defaultValues: Partial<CompanyProfileInput>;
 }
+
+// Base UI's Select decides controlled-vs-uncontrolled on the first render by
+// checking whether `value` is `undefined` — NONE_VALUE (a distinct, defined
+// "controlled, nothing selected yet" sentinel) keeps it controlled for the
+// component's entire lifetime; see branch-selector.tsx/
+// product-option-selector.tsx for the reference fix this mirrors.
+const NONE_VALUE = "__none__";
 
 const BASE_DEFAULT_VALUES: CompanyProfileInput = {
   companyName: "",
@@ -238,6 +253,47 @@ export function CompanyProfileForm({ companyId, defaultValues }: CompanyProfileF
                 <FormControl>
                   <Input {...field} value={field.value ?? ""} />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="stateCode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>GST State</FormLabel>
+                <FormControl>
+                  <Select
+                    value={field.value || NONE_VALUE}
+                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? undefined : next)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select your company's GST state">
+                        {(current: string | null) => {
+                          if (!current || current === NONE_VALUE) {
+                            return "Select your company's GST state";
+                          }
+                          return (
+                            GST_STATE_CODES.find((entry) => entry.code === current)?.name ??
+                            "Select your company's GST state"
+                          );
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GST_STATE_CODES.map((entry) => (
+                        <SelectItem key={entry.code} value={entry.code}>
+                          {entry.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  Required before you can create a Quotation or other GST-taxed document —
+                  determines whether tax is CGST/SGST or IGST.
+                </p>
                 <FormMessage />
               </FormItem>
             )}

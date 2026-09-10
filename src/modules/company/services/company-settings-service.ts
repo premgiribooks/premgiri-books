@@ -6,7 +6,9 @@ import { assertPermission } from "@/lib/permissions";
 import { companySettingsRepository } from "@/modules/company/repositories/company-settings-repository";
 import {
   companySettingsSchema,
+  salesLedgerMappingSchema,
   type CompanySettingsInput,
+  type SalesLedgerMappingInput,
 } from "@/modules/company/validation/company-schema";
 
 export const companySettingsService = {
@@ -34,6 +36,25 @@ export const companySettingsService = {
 
     const data = companySettingsSchema.parse(input);
     const settings = await companySettingsRepository.update(companyId, data);
+    if (!settings) {
+      throw new AppError("Company settings not found.");
+    }
+    return settings;
+  },
+
+  // Sales Invoice's ledger mapping (38-sales-invoice.md) — gated by
+  // "settings"/"edit" (spec 34's Document Numbering precedent), NOT
+  // "company"/"edit" like updateSettings above, since this section lives
+  // under /settings, not the Company Admin's own Profile page.
+  async updateSalesLedgerMapping(companyId: string, input: SalesLedgerMappingInput): Promise<CompanySettings> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "settings", "edit");
+    if (user.companyId !== companyId) {
+      throw new AppError("Company settings not found.");
+    }
+
+    const data = salesLedgerMappingSchema.parse(input);
+    const settings = await companySettingsRepository.updateSalesLedgerMapping(companyId, data);
     if (!settings) {
       throw new AppError("Company settings not found.");
     }

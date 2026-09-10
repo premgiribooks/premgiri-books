@@ -15,6 +15,7 @@ const NULLABLE_FIELDS = [
   "addressLine2",
   "city",
   "state",
+  "stateCode",
   "district",
   "pinCode",
   "logo",

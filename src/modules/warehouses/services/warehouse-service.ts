@@ -87,8 +87,8 @@ export const warehouseService = {
    * The branch picker's options: the company's active branches, plus (when
    * `includeBranchId` is supplied by the edit page) the edited warehouse's
    * current branch even if since deactivated, so the stored value stays
-   * visible. Empty until Branch Management (12-branch-management.md) is
-   * implemented — the picker renders "No branches", not an error.
+   * visible. Empty for a zero-branch company (12-branch-management.md — a
+   * fully-supported state) — the picker renders "No branches", not an error.
    */
   async listSelectableBranches(includeBranchId?: string): Promise<WarehouseBranchOption[]> {
     const user = await getCurrentCompanyUser();

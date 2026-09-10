@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { assertPermission } from "@/lib/permissions";
@@ -85,6 +87,36 @@ function resolveDebtorGroup(allGroups: LedgerGroup[], ledgerGroupId: string): Le
   return group;
 }
 
+async function createCustomerInTransaction(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  data: CreateCustomerInput,
+  group: LedgerGroup
+): Promise<CustomerWithLedger> {
+  // Re-checked inside the transaction so a concurrent group deactivation
+  // between the read above and this write is caught.
+  const freshGroup = await tx.ledgerGroup.findUnique({ where: { id: data.ledgerGroupId } });
+  if (!freshGroup?.isActive) {
+    throw new AppError("Cannot assign a customer to an inactive ledger group.");
+  }
+
+  const ledger = await ledgerService.createUnderGroup(
+    companyId,
+    data.ledgerGroupId,
+    {
+      name: data.displayName,
+      openingBalance: data.openingBalance,
+      openingBalanceType: data.openingBalanceType,
+      description: data.description ?? null,
+    },
+    tx
+  );
+
+  const customer = await customerRepository.create(companyId, ledger.id, toPersistData(data), tx);
+
+  return { ...customer, ledger: { ...ledger, ledgerGroup: group } };
+}
+
 export const customerService = {
   async listCustomers(filters: CustomerListFilters = {}): Promise<CustomerWithLedger[]> {
     const user = await getCurrentCompanyUser();
@@ -132,11 +164,31 @@ export const customerService = {
     return groups.filter((group) => debtorIds.has(group.id));
   },
 
+  /** Same lookup as `listSelectableLedgerGroupsForCustomer`, gated on
+   * `"sales"/"create"` instead of `"masters"/"view"` — the Quick Customer
+   * conversion counterpart to `createCustomerFromSale` above; a role that
+   * can sell but can't manage master data must still be able to trigger the
+   * automatic conversion (code review finding). */
+  async listSelectableLedgerGroupsForSale(): Promise<LedgerGroup[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "create");
+
+    const groups = await ledgerGroupRepository.findMany(user.companyId, { status: "active" });
+    const debtorIds = getSundryDebtorsSubtreeIds(groups);
+    return groups.filter((group) => debtorIds.has(group.id));
+  },
+
   // Creates BOTH the underlying Ledger (via ledgerService.createUnderGroup —
   // never duplicated Ledger-write logic) AND the Customer row in one
   // transaction; neither can exist without the other
   // (26-customer-management.md, the 15-bank-management.md shape exactly).
-  async createCustomer(input: CreateCustomerInput): Promise<CustomerWithLedger> {
+  //
+  // Accepts an optional external transaction (the `postVoucher`/`tx?`
+  // convention, extended here for feature-spec 38 — Sales Invoice's Quick
+  // Customer conversion must commit or roll back atomically with the rest
+  // of `postSalesInvoice`). When `tx` is passed, the caller already owns
+  // the transaction's lifecycle.
+  async createCustomer(input: CreateCustomerInput, tx?: Prisma.TransactionClient): Promise<CustomerWithLedger> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "create");
 
@@ -146,35 +198,42 @@ export const customerService = {
     const group = resolveDebtorGroup(allGroups, data.ledgerGroupId);
 
     try {
-      return await runInTransaction(async (tx) => {
-        // Re-checked inside the transaction so a concurrent group
-        // deactivation between the read above and this write is caught.
-        const freshGroup = await tx.ledgerGroup.findUnique({ where: { id: data.ledgerGroupId } });
-        if (!freshGroup?.isActive) {
-          throw new AppError("Cannot assign a customer to an inactive ledger group.");
-        }
+      if (tx) {
+        return await createCustomerInTransaction(tx, user.companyId, data, group);
+      }
+      return await runInTransaction((innerTx) => createCustomerInTransaction(innerTx, user.companyId, data, group));
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      translatePersistError(error);
+    }
+  },
 
-        const ledger = await ledgerService.createUnderGroup(
-          user.companyId,
-          data.ledgerGroupId,
-          {
-            name: data.displayName,
-            openingBalance: data.openingBalance,
-            openingBalanceType: data.openingBalanceType,
-            description: data.description ?? null,
-          },
-          tx
-        );
+  /**
+   * Identical creation logic to `createCustomer`, gated on `"sales"/"create"`
+   * instead of `"masters"/"create"` — for SYSTEM-TRIGGERED customer creation
+   * as a side effect of an already-authorized action elsewhere (Sales
+   * Invoice's Quick Customer conversion, feature-spec 38), not a standalone
+   * master-data-management action. The caller's authorization to post the
+   * sale is what justifies creating the buyer's record; requiring a separate
+   * `masters`/`create` right here would silently break the spec's "automatic
+   * conversion" promise for any role (e.g. a cashier) that can sell but
+   * can't manage master data (code review finding). Always requires `tx` —
+   * this path only exists to run inside `postSalesInvoice`'s own
+   * transaction, never as a standalone create.
+   */
+  async createCustomerFromSale(input: CreateCustomerInput, tx: Prisma.TransactionClient): Promise<CustomerWithLedger> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "create");
 
-        const customer = await customerRepository.create(
-          user.companyId,
-          ledger.id,
-          toPersistData(data),
-          tx
-        );
+    const data = createCustomerSchema.parse(input);
 
-        return { ...customer, ledger: { ...ledger, ledgerGroup: group } };
-      });
+    const allGroups = await ledgerGroupRepository.findMany(user.companyId, {});
+    const group = resolveDebtorGroup(allGroups, data.ledgerGroupId);
+
+    try {
+      return await createCustomerInTransaction(tx, user.companyId, data, group);
     } catch (error) {
       if (error instanceof AppError) {
         throw error;

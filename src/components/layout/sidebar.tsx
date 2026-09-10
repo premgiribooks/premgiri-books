@@ -23,7 +23,7 @@ import { SidebarItem } from "@/components/layout/sidebar-item";
 const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: Boxes, label: "Masters", href: "/masters", adminOnly: true },
-  { icon: ShoppingCart, label: "Sales" },
+  { icon: ShoppingCart, label: "Sales", href: "/sales" },
   { icon: Truck, label: "Purchase" },
   { icon: Package, label: "Inventory" },
   { icon: Calculator, label: "Accounting", href: "/accounting" },

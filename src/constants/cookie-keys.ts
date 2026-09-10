@@ -2,6 +2,7 @@ export const COOKIE_KEYS = {
   SESSION_TOKEN: "session_token",
   ACTIVE_COMPANY_ID: "active_company_id",
   ACTIVE_FINANCIAL_YEAR_ID: "active_financial_year_id",
+  ACTIVE_BRANCH_ID: "active_branch_id",
 } as const;
 
 export type CookieKey = (typeof COOKIE_KEYS)[keyof typeof COOKIE_KEYS];

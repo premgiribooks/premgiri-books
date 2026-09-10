@@ -7,10 +7,15 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { assertPermission } from "@/lib/permissions";
 import { setCurrentCompany } from "@/lib/current-company";
+import { clearCurrentBranch } from "@/lib/current-branch";
 import { companyService } from "@/modules/company/services/company-service";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { saveCompanyLogo } from "@/modules/company/services/company-logo-service";
-import type { CompanyProfileInput, CompanySettingsInput } from "@/modules/company/validation/company-schema";
+import type {
+  CompanyProfileInput,
+  CompanySettingsInput,
+  SalesLedgerMappingInput,
+} from "@/modules/company/validation/company-schema";
 import type { ActionResult } from "@/types/api";
 import type { CompanySettings, CompanyWithSettings } from "@/types/company";
 
@@ -46,6 +51,19 @@ export async function updateCompanySettingsAction(
   }
 }
 
+export async function updateSalesLedgerMappingAction(
+  companyId: string,
+  input: SalesLedgerMappingInput
+): Promise<ActionResult<CompanySettings>> {
+  try {
+    const settings = await companySettingsService.updateSalesLedgerMapping(companyId, input);
+    revalidatePath("/settings/sales-ledgers");
+    return { success: true, data: settings };
+  } catch (error) {
+    return { success: false, error: toActionErrorMessage(error) };
+  }
+}
+
 export async function uploadCompanyLogoAction(
   formData: FormData
 ): Promise<ActionResult<{ path: string }>> {
@@ -71,6 +89,11 @@ export async function uploadCompanyLogoAction(
 export async function selectCompanyAction(companyId: string): Promise<ActionResult> {
   try {
     await setCurrentCompany(companyId);
+    // A branch selected under a different company must never silently
+    // persist into this one (12-branch-management.md's Branch Selection
+    // rules). This is defence-in-depth on top of getCurrentBranch()'s own
+    // companyId check — it just avoids a lingering dead cookie.
+    await clearCurrentBranch();
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
   }

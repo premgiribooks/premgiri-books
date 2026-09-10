@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isValidGstStateCode } from "@/engines/gst/state-codes";
 import {
   EMAIL_REGEX,
   GSTIN_REGEX,
@@ -22,6 +23,18 @@ function optionalPattern(regex: RegExp, message: string) {
     .refine((value) => !value || regex.test(value), { message });
 }
 
+// The company's own GST state code (01-38, GST_STATE_CODES) — the GST
+// Engine's determineSupplyType() needs this to decide intra- vs inter-state
+// tax on every future document (first consumer: Quotation, feature-spec 35).
+// Validated against the statutory list, never a free-text guess.
+const STATE_CODE_SCHEMA = z
+  .string()
+  .trim()
+  .optional()
+  .refine((value) => !value || isValidGstStateCode(value), {
+    message: "Select a valid GST state",
+  });
+
 export const companySchema = z.object({
   companyName: z.string().trim().min(2, "Company name must be at least 2 characters"),
   legalName: z.string().trim().min(2, "Legal name must be at least 2 characters"),
@@ -39,6 +52,7 @@ export const companySchema = z.object({
   addressLine2: optionalText(),
   city: optionalText(),
   state: optionalText(),
+  stateCode: STATE_CODE_SCHEMA,
   district: optionalText(),
   country: z.string().trim().min(1, "Country is required"),
   pinCode: optionalPattern(PIN_CODE_REGEX, "Enter a valid 6-digit PIN code"),
@@ -79,3 +93,19 @@ export const companySettingsSchema = z.object({
 });
 
 export type CompanySettingsInput = z.infer<typeof companySettingsSchema>;
+
+// Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — a
+// separate schema/action/permission gate from companySettingsSchema above:
+// this section is gated by "settings"/"edit" (spec 34's precedent), not
+// "company"/"edit". All six optional so a partial save is allowed while
+// drafting the mapping — postSalesInvoice itself enforces completeness.
+export const salesLedgerMappingSchema = z.object({
+  salesLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputCgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputSgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputIgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputCessLedgerId: z.uuid("Select a valid ledger").optional(),
+  roundOffLedgerId: z.uuid("Select a valid ledger").optional(),
+});
+
+export type SalesLedgerMappingInput = z.infer<typeof salesLedgerMappingSchema>;

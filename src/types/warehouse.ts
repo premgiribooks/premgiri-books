@@ -5,10 +5,11 @@ import type { Warehouse as PrismaWarehouse } from "@prisma/client";
 export type Warehouse = PrismaWarehouse;
 
 /**
- * The slice of Branch the warehouse list and the branch picker need. The
- * Branch module itself is unimplemented (12-branch-management.md, drafted
- * only) — this deliberately stays a narrow read-model instead of a full
- * Branch type so nothing here has to change when that module lands.
+ * The slice of Branch the warehouse list and the branch picker need. Branch
+ * Management (12-branch-management.md) is now implemented (src/types/branch.ts
+ * has the full type) — this deliberately stays a narrow read-model rather
+ * than switching to that full Branch type, since the warehouse picker only
+ * ever needs id/branchName/isActive.
  */
 export interface WarehouseBranchOption {
   id: string;
