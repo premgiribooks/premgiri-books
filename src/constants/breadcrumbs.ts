@@ -9,6 +9,8 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   company: "Company",
   "financial-year": "Financial Year Management",
   branch: "Branch Management",
+  sales: "Sales",
+  quotations: "Quotations",
   accounting: "Accounting",
   "ledger-groups": "Ledger Groups",
   ledgers: "Ledgers",

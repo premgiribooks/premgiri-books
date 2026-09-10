@@ -179,7 +179,7 @@ remains unimplemented — each records a forward-note migration:
 
 | #   | Feature           | Depends On                        | Status |
 | --- | ----------------- | --------------------------------- | ------ |
-| 33  | Quotations        | Customer + Products + Pricing     | ⬜     |
+| 33  | Quotations        | Customer + Products + Pricing     | ✅     |
 | 34  | Sales Orders      | Quotations                        | ⬜     |
 | 35  | Delivery Challans | Sales Orders                      | ⬜     |
 | 36  | Sales Invoice     | Voucher + Inventory + GST Engines | ⬜     |
@@ -189,7 +189,7 @@ remains unimplemented — each records a forward-note migration:
 
 Phase Status
 
-⬜ Not Started
+🟨 In Progress — Quotations (#33, feature-spec 35) implemented 2026-09-10, the first of seven Phase 3 documents. Establishes the `/sales` hub and the shared header/line-item/engine-composition conventions specs 36–41 reuse. "Convert to Sales Order" is deliberately NOT part of #33 — it is Sales Orders' (#34) own entry point once that spec is implemented; see `context/progress-tracker.md`'s Completed entry for the full forward-note record.
 
 ---
 
@@ -312,7 +312,7 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **25 - Supplier Management** (Business Parties group) — spec drafted 2026-07-18 as `context/feature-specs/27-supplier-management.md`, written as a mirror of spec 26. **#24 Customer Management was implemented 2026-07-19** (git branch `new-features`; see `context/progress-tracker.md`'s Completed entry), so #25 is the recommended next item per the recorded order (26 → 27; Pricing 28 → 29 → 30; engines: 34 → 31, with 32/33 independent). All remaining Phase 2 items have drafted specs (2026-07-18). Feature-spec 12 (Branch Management) remains drafted-but-unimplemented from a prior session (see the Phase 1 status-discrepancy note above); per `ai-workflow-rules.md` only one feature is worked at a time and the next feature awaits explicit user direction.
+➡ **34 - Sales Orders** (Phase 3 — Sales Management) — spec drafted 2026-07-19 as `context/feature-specs/36-sales-orders.md`. **#33 Quotations was implemented 2026-09-10** (git branch `35-quotations`; see `context/progress-tracker.md`'s Completed entry), the first of the seven Phase 3 documents and the establishing spec for the chain's shared header/line-item shape. Sales Orders is next in the documented conversion chain (Quotation → Sales Order → Delivery Challan → Sales Invoice) and is also what closes the "Convert to Sales Order" gap Quotations deliberately deferred. Phase 1/2 are both fully complete (Branch Management, #11, implemented 2026-09-10 — see the Phase 1 status-discrepancy note above, now resolved). Per `ai-workflow-rules.md` only one feature is worked at a time and the next feature awaits explicit user direction.
 
 ---
 

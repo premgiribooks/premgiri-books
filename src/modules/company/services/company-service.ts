@@ -202,6 +202,7 @@ export const companyService = {
       addressLine2: blankToNull(data.addressLine2),
       city: blankToNull(data.city),
       state: blankToNull(data.state),
+      stateCode: blankToNull(data.stateCode),
       district: blankToNull(data.district),
       pinCode: blankToNull(data.pinCode),
       logo: blankToNull(data.logo),

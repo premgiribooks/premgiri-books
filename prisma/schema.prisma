@@ -48,6 +48,15 @@ model Company {
   addressLine2     String?
   city             String?
   state            String?
+  // The company's own GST state code (01-38, GST_STATE_CODES) — needed by
+  // the GST Engine's determineSupplyType() to decide intra- vs inter-state
+  // tax on every future document (first consumer: Quotation, feature-spec
+  // 35). Deliberately a real, explicit column rather than derived from
+  // `gstin`'s prefix or a fuzzy match against the free-text `state` name —
+  // an existing company's stateCode is null until a Company Admin sets it
+  // via Company Profile; the first document-creating call blocks with a
+  // friendly error until it is set, never guesses.
+  stateCode        String?
   district         String?
   country          String   @default("India")
   pinCode          String?
@@ -89,6 +98,7 @@ model Company {
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
   stockTransactions StockTransaction[]
+  quotations        Quotation[]
 
   @@index([companyName])
 }
@@ -128,6 +138,7 @@ model FinancialYear {
 
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
+  quotations        Quotation[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -182,10 +193,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company  Company?  @relation(fields: [companyId], references: [id])
-  role     Role?     @relation(fields: [roleId], references: [id])
-  sessions Session[]
-  vouchers Voucher[]
+  company    Company?    @relation(fields: [companyId], references: [id])
+  role       Role?       @relation(fields: [roleId], references: [id])
+  sessions   Session[]
+  vouchers   Voucher[]
+  quotations Quotation[]
 
   @@index([companyId])
   @@index([roleId])
@@ -605,6 +617,7 @@ model Product {
 
   priceListItems    PriceListItem[]
   stockTransactions StockTransaction[]
+  quotationItems    QuotationItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -776,6 +789,8 @@ model Customer {
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+
+  quotations Quotation[]
 
   @@index([companyId])
   @@index([priceListId])
@@ -1072,4 +1087,93 @@ model StockTransaction {
   @@index([companyId, transactionDate])
   @@index([referenceType, referenceId])
   @@index([transferGroupId])
+}
+
+// Quotation — the first, non-binding step of the Sales document chain
+// (35-quotations.md; architecture-context.md Document Driven: Quotation ->
+// Sales Order -> Delivery Challan -> Sales Invoice). A priced offer with no
+// financial or stock effect: no Voucher, no stock movement, no GST register
+// entry. Header totals are a denormalized snapshot, recomputed from `items`
+// via the GST Engine's calculateDocument every time lines are saved while
+// editable, and simply not recomputed once terminal (mirrors Voucher.
+// totalAmount's "denormalized for list rendering only" convention).
+//
+// Deliberately does NOT yet have `salesOrders SalesOrder[]` (feature-spec
+// 36's back-relation target) — SalesOrder does not exist yet and Prisma
+// cannot reference a missing model. Feature-spec 36's own migration adds
+// that relation from its side (a purely additive change), together with
+// "Convert to Sales Order".
+//
+// No `branchId` — Branch Management (feature-spec 12) is implemented, but
+// every document in this chain (specs 36-41) is drafted around this header
+// shape without a branch dimension, and Voucher/DocumentSequence/
+// StockTransaction are all still branch-less too; adding it only here would
+// make Quotation the sole branch-aware document. Revisit as one deliberate
+// cross-cutting migration later, not per-document.
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model Quotation {
+  id                     String          @id @default(uuid())
+  companyId              String
+  company                Company         @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear   @relation(fields: [financialYearId], references: [id])
+  quotationNumber        String
+  quotationDate          DateTime        @db.Date
+  validUntil             DateTime?       @db.Date
+  customerId             String
+  customer               Customer        @relation(fields: [customerId], references: [id])
+  placeOfSupplyStateCode String
+  status                 QuotationStatus @default(DRAFT)
+  narration              String?
+  subtotal               Decimal         @db.Decimal(14, 2)
+  totalDiscount          Decimal         @db.Decimal(14, 2)
+  taxableAmount          Decimal         @db.Decimal(14, 2)
+  totalCgst              Decimal         @db.Decimal(14, 2)
+  totalSgst              Decimal         @db.Decimal(14, 2)
+  totalIgst              Decimal         @db.Decimal(14, 2)
+  totalCess              Decimal         @db.Decimal(14, 2)
+  grandTotal             Decimal         @db.Decimal(14, 2)
+  createdByUserId        String?
+  createdBy              User?           @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  items QuotationItem[]
+
+  @@unique([companyId, financialYearId, quotationNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+}
+
+model QuotationItem {
+  id              String    @id @default(uuid())
+  quotationId     String
+  quotation       Quotation @relation(fields: [quotationId], references: [id])
+  lineNumber      Int
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Decimal   @db.Decimal(14, 4)
+  rate            Decimal   @db.Decimal(14, 2)
+  discountPercent Decimal   @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal   @default(0) @db.Decimal(14, 2)
+  ratePercent     Decimal   @db.Decimal(5, 2)
+  cessPercent     Decimal   @default(0) @db.Decimal(5, 2)
+  taxableAmount   Decimal   @db.Decimal(14, 2)
+  cgst            Decimal   @db.Decimal(14, 2)
+  sgst            Decimal   @db.Decimal(14, 2)
+  igst            Decimal   @db.Decimal(14, 2)
+  cess            Decimal   @db.Decimal(14, 2)
+  totalAmount     Decimal   @db.Decimal(14, 2)
+
+  @@unique([quotationId, lineNumber])
+  @@index([quotationId])
+  @@index([productId])
 }
