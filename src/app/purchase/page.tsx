@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, PackageCheck } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,13 +8,20 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
 // Mirrors /sales's hub exactly (src/app/sales/page.tsx) — one card per Phase
-// 4 document type; only Purchase Orders wired this task (42-purchase-orders.md).
+// 4 document type; Purchase Orders (42-purchase-orders.md) and Goods Receipt
+// Notes (43-goods-receipt-note.md) wired so far.
 const PURCHASE_MODULES = [
   {
     href: "/purchase/orders",
     icon: ClipboardList,
     title: "Purchase Orders",
     description: "The company's commitment to buy from a Supplier, tracked through to receipt.",
+  },
+  {
+    href: "/purchase/receipts",
+    icon: PackageCheck,
+    title: "Goods Receipt Notes",
+    description: "The receiving record between a confirmed Purchase Order and the eventual Purchase Invoice.",
   },
 ] as const;
 

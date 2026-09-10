@@ -38,10 +38,11 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
     notFound();
   }
 
-  const [isAdmin, canEdit, canApprove] = await Promise.all([
+  const [isAdmin, canEdit, canApprove, canCreateReceipt] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "edit"),
     hasPermission(user, "purchase", "approve"),
+    hasPermission(user, "purchase", "create"),
   ]);
 
   const isEditable = purchaseOrder.status === "DRAFT";
@@ -71,7 +72,12 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
                 }
               />
             ) : null}
-            <PurchaseOrderStatusActions purchaseOrder={purchaseOrder} canEdit={canEdit} canApprove={canApprove} />
+            <PurchaseOrderStatusActions
+              purchaseOrder={purchaseOrder}
+              canEdit={canEdit}
+              canApprove={canApprove}
+              canCreateReceipt={canCreateReceipt}
+            />
           </div>
         </div>
 

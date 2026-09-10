@@ -96,6 +96,7 @@ model Company {
   customers         Customer[]
   suppliers         Supplier[]
   purchaseOrders    PurchaseOrder[]
+  goodsReceiptNotes GoodsReceiptNote[]
   auditLogs         AuditLog[]
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
@@ -172,6 +173,7 @@ model FinancialYear {
   creditNotes       CreditNote[]
   debitNotes        DebitNote[]
   purchaseOrders    PurchaseOrder[]
+  goodsReceiptNotes GoodsReceiptNote[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -239,6 +241,7 @@ model User {
   creditNotes               CreditNote[]
   debitNotes                DebitNote[]
   purchaseOrders            PurchaseOrder[]
+  goodsReceiptNotes         GoodsReceiptNote[]
 
   @@index([companyId])
   @@index([roleId])
@@ -592,10 +595,11 @@ model Warehouse {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  products             Product[]
-  stockTransactions    StockTransaction[]
-  deliveryChallanItems DeliveryChallanItem[]
-  salesInvoiceItems    SalesInvoiceItem[]
+  products              Product[]
+  stockTransactions     StockTransaction[]
+  deliveryChallanItems  DeliveryChallanItem[]
+  salesInvoiceItems     SalesInvoiceItem[]
+  goodsReceiptNoteItems GoodsReceiptNoteItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, code])
@@ -668,13 +672,14 @@ model Product {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
-  priceListItems       PriceListItem[]
-  stockTransactions    StockTransaction[]
-  quotationItems       QuotationItem[]
-  salesOrderItems      SalesOrderItem[]
-  deliveryChallanItems DeliveryChallanItem[]
-  salesInvoiceItems    SalesInvoiceItem[]
-  purchaseOrderItems   PurchaseOrderItem[]
+  priceListItems        PriceListItem[]
+  stockTransactions     StockTransaction[]
+  quotationItems        QuotationItem[]
+  salesOrderItems       SalesOrderItem[]
+  deliveryChallanItems  DeliveryChallanItem[]
+  salesInvoiceItems     SalesInvoiceItem[]
+  purchaseOrderItems    PurchaseOrderItem[]
+  goodsReceiptNoteItems GoodsReceiptNoteItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -901,7 +906,8 @@ model Supplier {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  purchaseOrders PurchaseOrder[]
+  purchaseOrders    PurchaseOrder[]
+  goodsReceiptNotes GoodsReceiptNote[]
 
   @@index([companyId])
 }
@@ -1312,10 +1318,8 @@ model PurchaseOrder {
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
 
-  items PurchaseOrderItem[]
-  // goodsReceiptNotes GoodsReceiptNote[] — feature-spec 43's back-relation
-  // target, added by that spec's own migration once GoodsReceiptNote exists
-  // (the identical forward-note pattern SalesOrder used for DeliveryChallan).
+  items             PurchaseOrderItem[]
+  goodsReceiptNotes GoodsReceiptNote[]
 
   @@unique([companyId, financialYearId, orderNumber])
   @@index([companyId, supplierId])
@@ -1343,8 +1347,84 @@ model PurchaseOrderItem {
   cess             Decimal       @db.Decimal(14, 2)
   totalAmount      Decimal       @db.Decimal(14, 2)
 
+  goodsReceiptNoteItems GoodsReceiptNoteItem[]
+
   @@unique([purchaseOrderId, lineNumber])
   @@index([productId])
+}
+
+// Goods Receipt Note (feature-spec 43) — the receiving/goods-inward record
+// between a confirmed Purchase Order and the eventual Purchase Invoice
+// (spec 44). Deliberately carries NO pricing or GST fields (same reasoning
+// as Delivery Challan) and does NOT call the Inventory Engine — per the
+// tracker's own Depends On column (Purchase Order only), stock only moves at
+// Purchase Invoice posting time. `purchaseOrderId` is optional at the header
+// (a GRN may be raised directly), but linkage is conditional per line: every
+// line must carry a `purchaseOrderItemId` of that same order when set, and
+// none may when it isn't — enforced in
+// goods-receipt-note-schema.ts/goods-receipt-note-service.ts, not
+// expressible as a schema-level constraint. `rejectedQuantity` is pure
+// record-keeping in this task (see 43-goods-receipt-note.md's Data Model) —
+// both `quantity` and `rejectedQuantity` count toward "received" for
+// order-fulfillment purposes since the goods did physically arrive, but only
+// `quantity` is ever billed (Purchase Invoice resolves its own cost
+// independently).
+enum GoodsReceiptNoteStatus {
+  DRAFT
+  RECEIVED
+  INVOICED
+  CANCELLED
+}
+
+model GoodsReceiptNote {
+  id              String                 @id @default(uuid())
+  companyId       String
+  company         Company                @relation(fields: [companyId], references: [id])
+  financialYearId String
+  financialYear   FinancialYear          @relation(fields: [financialYearId], references: [id])
+  grnNumber       String
+  grnDate         DateTime               @db.Date
+  supplierId      String
+  supplier        Supplier               @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id])
+  status          GoodsReceiptNoteStatus @default(DRAFT)
+  narration       String?
+  createdByUserId String?
+  createdBy       User?                  @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  items GoodsReceiptNoteItem[]
+  // purchaseInvoice PurchaseInvoice? — feature-spec 44's back-relation
+  // target, added by that spec's own migration once PurchaseInvoice exists
+  // (the identical forward-note pattern this model itself replaces above,
+  // now that PurchaseOrder.goodsReceiptNotes exists).
+
+  @@unique([companyId, financialYearId, grnNumber])
+  @@index([companyId, supplierId])
+  @@index([companyId, status])
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceiptNoteItem {
+  id                  String             @id @default(uuid())
+  goodsReceiptNoteId  String
+  goodsReceiptNote    GoodsReceiptNote   @relation(fields: [goodsReceiptNoteId], references: [id])
+  lineNumber          Int
+  productId           String
+  product             Product            @relation(fields: [productId], references: [id])
+  warehouseId         String
+  warehouse           Warehouse          @relation(fields: [warehouseId], references: [id])
+  quantity            Decimal            @db.Decimal(14, 4)
+  rejectedQuantity    Decimal            @default(0) @db.Decimal(14, 4)
+  purchaseOrderItemId String?
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
+
+  @@unique([goodsReceiptNoteId, lineNumber])
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([purchaseOrderItemId])
 }
 
 model SalesOrder {
