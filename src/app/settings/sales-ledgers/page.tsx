@@ -25,10 +25,11 @@ export default async function SalesLedgersSettingsPage() {
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Sales & GST Ledgers</h1>
+          <h1 className="text-xl font-semibold text-foreground">Sales & Purchase GST Ledgers</h1>
           <p className="text-sm text-muted-foreground">
-            Map the ledgers Sales Invoice posting uses for the sale, output tax, and round-off
-            entries. All six must be configured before a Sales Invoice can be posted.
+            Map the ledgers Sales Invoice and Purchase Invoice posting use for the sale/purchase,
+            output/input tax, and shared round-off entries. Each document&apos;s own set must be fully
+            configured before it can be posted.
           </p>
         </div>
 
@@ -42,6 +43,11 @@ export default async function SalesLedgersSettingsPage() {
             outputSgstLedgerId: settings?.outputSgstLedgerId ?? undefined,
             outputIgstLedgerId: settings?.outputIgstLedgerId ?? undefined,
             outputCessLedgerId: settings?.outputCessLedgerId ?? undefined,
+            purchaseLedgerId: settings?.purchaseLedgerId ?? undefined,
+            inputCgstLedgerId: settings?.inputCgstLedgerId ?? undefined,
+            inputSgstLedgerId: settings?.inputSgstLedgerId ?? undefined,
+            inputIgstLedgerId: settings?.inputIgstLedgerId ?? undefined,
+            inputCessLedgerId: settings?.inputCessLedgerId ?? undefined,
             roundOffLedgerId: settings?.roundOffLedgerId ?? undefined,
           }}
         />

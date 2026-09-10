@@ -97,6 +97,7 @@ model Company {
   suppliers         Supplier[]
   purchaseOrders    PurchaseOrder[]
   goodsReceiptNotes GoodsReceiptNote[]
+  purchaseInvoices  PurchaseInvoice[]
   auditLogs         AuditLog[]
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
@@ -144,6 +145,22 @@ model CompanySettings {
   outputCessLedger   Ledger?  @relation("CompanySettingsOutputCess", fields: [outputCessLedgerId], references: [id])
   roundOffLedgerId   String?
   roundOffLedger     Ledger?  @relation("CompanySettingsRoundOff", fields: [roundOffLedgerId], references: [id])
+  // Purchase Invoice's posting-time ledger mapping (44-purchase-invoice.md) —
+  // five new fields alongside the Sales/Output-GST mapping above, reusing
+  // roundOffLedgerId rather than adding a second Round Off account (one
+  // Round Off ledger serves both directions). Posting a Purchase Invoice
+  // requires these five plus the shared roundOffLedgerId (six total) to be
+  // configured — same missing-mapping rejection style as Sales Invoice.
+  purchaseLedgerId   String?
+  purchaseLedger     Ledger?  @relation("CompanySettingsPurchaseLedger", fields: [purchaseLedgerId], references: [id])
+  inputCgstLedgerId  String?
+  inputCgstLedger    Ledger?  @relation("CompanySettingsInputCgst", fields: [inputCgstLedgerId], references: [id])
+  inputSgstLedgerId  String?
+  inputSgstLedger    Ledger?  @relation("CompanySettingsInputSgst", fields: [inputSgstLedgerId], references: [id])
+  inputIgstLedgerId  String?
+  inputIgstLedger    Ledger?  @relation("CompanySettingsInputIgst", fields: [inputIgstLedgerId], references: [id])
+  inputCessLedgerId  String?
+  inputCessLedger    Ledger?  @relation("CompanySettingsInputCess", fields: [inputCessLedgerId], references: [id])
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -174,6 +191,7 @@ model FinancialYear {
   debitNotes        DebitNote[]
   purchaseOrders    PurchaseOrder[]
   goodsReceiptNotes GoodsReceiptNote[]
+  purchaseInvoices  PurchaseInvoice[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -228,20 +246,22 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company                   Company?           @relation(fields: [companyId], references: [id])
-  role                      Role?              @relation(fields: [roleId], references: [id])
-  sessions                  Session[]
-  vouchers                  Voucher[]
-  quotations                Quotation[]
-  salesOrders               SalesOrder[]
-  deliveryChallans          DeliveryChallan[]
-  salesInvoices             SalesInvoice[]
-  salesInvoiceItemOverrides SalesInvoiceItem[]
-  salesReturns              SalesReturn[]
-  creditNotes               CreditNote[]
-  debitNotes                DebitNote[]
-  purchaseOrders            PurchaseOrder[]
-  goodsReceiptNotes         GoodsReceiptNote[]
+  company                      Company?              @relation(fields: [companyId], references: [id])
+  role                         Role?                 @relation(fields: [roleId], references: [id])
+  sessions                     Session[]
+  vouchers                     Voucher[]
+  quotations                   Quotation[]
+  salesOrders                  SalesOrder[]
+  deliveryChallans             DeliveryChallan[]
+  salesInvoices                SalesInvoice[]
+  salesInvoiceItemOverrides    SalesInvoiceItem[]
+  salesReturns                 SalesReturn[]
+  creditNotes                  CreditNote[]
+  debitNotes                   DebitNote[]
+  purchaseOrders               PurchaseOrder[]
+  goodsReceiptNotes            GoodsReceiptNote[]
+  purchaseInvoices             PurchaseInvoice[]
+  purchaseInvoiceItemOverrides PurchaseInvoiceItem[]
 
   @@index([companyId])
   @@index([roleId])
@@ -362,14 +382,20 @@ model Ledger {
   voucherEntries VoucherEntry[]
 
   salesInvoicePayments              SalesInvoicePayment[]
-  salesReturnsAsRefundLedger        SalesReturn[]         @relation("SalesReturnRefundLedger")
-  creditNotesAsRefundLedger         CreditNote[]          @relation("CreditNoteRefundLedger")
-  companySettingsAsSalesLedger      CompanySettings[]     @relation("CompanySettingsSalesLedger")
-  companySettingsAsOutputCgstLedger CompanySettings[]     @relation("CompanySettingsOutputCgst")
-  companySettingsAsOutputSgstLedger CompanySettings[]     @relation("CompanySettingsOutputSgst")
-  companySettingsAsOutputIgstLedger CompanySettings[]     @relation("CompanySettingsOutputIgst")
-  companySettingsAsOutputCessLedger CompanySettings[]     @relation("CompanySettingsOutputCess")
-  companySettingsAsRoundOffLedger   CompanySettings[]     @relation("CompanySettingsRoundOff")
+  purchaseInvoicePayments           PurchaseInvoicePayment[]
+  salesReturnsAsRefundLedger        SalesReturn[]            @relation("SalesReturnRefundLedger")
+  creditNotesAsRefundLedger         CreditNote[]             @relation("CreditNoteRefundLedger")
+  companySettingsAsSalesLedger      CompanySettings[]        @relation("CompanySettingsSalesLedger")
+  companySettingsAsOutputCgstLedger CompanySettings[]        @relation("CompanySettingsOutputCgst")
+  companySettingsAsOutputSgstLedger CompanySettings[]        @relation("CompanySettingsOutputSgst")
+  companySettingsAsOutputIgstLedger CompanySettings[]        @relation("CompanySettingsOutputIgst")
+  companySettingsAsOutputCessLedger CompanySettings[]        @relation("CompanySettingsOutputCess")
+  companySettingsAsRoundOffLedger   CompanySettings[]        @relation("CompanySettingsRoundOff")
+  companySettingsAsPurchaseLedger   CompanySettings[]        @relation("CompanySettingsPurchaseLedger")
+  companySettingsAsInputCgstLedger  CompanySettings[]        @relation("CompanySettingsInputCgst")
+  companySettingsAsInputSgstLedger  CompanySettings[]        @relation("CompanySettingsInputSgst")
+  companySettingsAsInputIgstLedger  CompanySettings[]        @relation("CompanySettingsInputIgst")
+  companySettingsAsInputCessLedger  CompanySettings[]        @relation("CompanySettingsInputCess")
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -600,6 +626,7 @@ model Warehouse {
   deliveryChallanItems  DeliveryChallanItem[]
   salesInvoiceItems     SalesInvoiceItem[]
   goodsReceiptNoteItems GoodsReceiptNoteItem[]
+  purchaseInvoiceItems  PurchaseInvoiceItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, code])
@@ -680,6 +707,7 @@ model Product {
   salesInvoiceItems     SalesInvoiceItem[]
   purchaseOrderItems    PurchaseOrderItem[]
   goodsReceiptNoteItems GoodsReceiptNoteItem[]
+  purchaseInvoiceItems  PurchaseInvoiceItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -908,6 +936,7 @@ model Supplier {
 
   purchaseOrders    PurchaseOrder[]
   goodsReceiptNotes GoodsReceiptNote[]
+  purchaseInvoices  PurchaseInvoice[]
 
   @@index([companyId])
 }
@@ -1069,11 +1098,12 @@ model Voucher {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  entries      VoucherEntry[]
-  salesInvoice SalesInvoice?
-  salesReturn  SalesReturn?
-  creditNote   CreditNote?
-  debitNote    DebitNote?
+  entries         VoucherEntry[]
+  salesInvoice    SalesInvoice?
+  salesReturn     SalesReturn?
+  creditNote      CreditNote?
+  debitNote       DebitNote?
+  purchaseInvoice PurchaseInvoice?
 
   @@unique([companyId, financialYearId, voucherType, voucherNumber])
   @@index([companyId, voucherDate])
@@ -1320,6 +1350,7 @@ model PurchaseOrder {
 
   items             PurchaseOrderItem[]
   goodsReceiptNotes GoodsReceiptNote[]
+  purchaseInvoices  PurchaseInvoice[]
 
   @@unique([companyId, financialYearId, orderNumber])
   @@index([companyId, supplierId])
@@ -1395,11 +1426,8 @@ model GoodsReceiptNote {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
-  items GoodsReceiptNoteItem[]
-  // purchaseInvoice PurchaseInvoice? — feature-spec 44's back-relation
-  // target, added by that spec's own migration once PurchaseInvoice exists
-  // (the identical forward-note pattern this model itself replaces above,
-  // now that PurchaseOrder.goodsReceiptNotes exists).
+  items           GoodsReceiptNoteItem[]
+  purchaseInvoice PurchaseInvoice?
 
   @@unique([companyId, financialYearId, grnNumber])
   @@index([companyId, supplierId])
@@ -1425,6 +1453,123 @@ model GoodsReceiptNoteItem {
   @@index([productId])
   @@index([warehouseId])
   @@index([purchaseOrderItemId])
+}
+
+// Purchase Invoice (feature-spec 44) — the purchase-side mirror of
+// SalesInvoice, first Purchase document with real financial (Voucher Engine,
+// VoucherType.PURCHASE) and stock (Inventory Engine, StockTransactionType.
+// PURCHASE/IN) consequences. Unlike SalesInvoice there is no
+// customerMode-equivalent discriminator — every Purchase Invoice references
+// an existing, active Supplier (no Quick/Walk-in concept for purchases).
+// `invoiceNumber` is nullable and assigned only at posting time (a DRAFT row
+// has no committed identity yet) — deliberately different from
+// SalesInvoice.invoiceNumber, which is non-nullable and assigned at DRAFT
+// creation; Postgres unique indexes treat NULL as distinct from NULL, so
+// multiple DRAFT rows coexist under the same
+// @@unique([companyId, financialYearId, invoiceNumber]) without collision.
+// `supplierInvoiceNumber` (the supplier's own bill number) is the required,
+// per-supplier-unique identifier a DRAFT row is looked up by instead.
+enum PurchaseInvoiceStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model PurchaseInvoice {
+  id                     String                @id @default(uuid())
+  companyId              String
+  company                Company               @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear         @relation(fields: [financialYearId], references: [id])
+  invoiceNumber          String?
+  supplierInvoiceNumber  String
+  invoiceDate            DateTime              @db.Date
+  supplierId             String
+  supplier               Supplier              @relation(fields: [supplierId], references: [id])
+  placeOfSupplyStateCode String
+  purchaseOrderId        String?
+  purchaseOrder          PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  goodsReceiptNoteId     String?               @unique
+  goodsReceiptNote       GoodsReceiptNote?     @relation(fields: [goodsReceiptNoteId], references: [id])
+  status                 PurchaseInvoiceStatus @default(DRAFT)
+  narration              String?
+  subtotal               Decimal               @db.Decimal(14, 2)
+  totalDiscount          Decimal               @db.Decimal(14, 2)
+  taxableAmount          Decimal               @db.Decimal(14, 2)
+  totalCgst              Decimal               @db.Decimal(14, 2)
+  totalSgst              Decimal               @db.Decimal(14, 2)
+  totalIgst              Decimal               @db.Decimal(14, 2)
+  totalCess              Decimal               @db.Decimal(14, 2)
+  roundOff               Decimal               @default(0) @db.Decimal(14, 2)
+  grandTotal             Decimal               @db.Decimal(14, 2)
+  amountPaid             Decimal               @default(0) @db.Decimal(14, 2)
+  voucherId              String?               @unique
+  voucher                Voucher?              @relation(fields: [voucherId], references: [id])
+  createdByUserId        String?
+  createdBy              User?                 @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  items    PurchaseInvoiceItem[]
+  payments PurchaseInvoicePayment[]
+
+  @@unique([companyId, financialYearId, invoiceNumber])
+  @@unique([companyId, supplierId, supplierInvoiceNumber])
+  @@index([companyId, status])
+  @@index([purchaseOrderId])
+}
+
+model PurchaseInvoiceItem {
+  id                 String          @id @default(uuid())
+  purchaseInvoiceId  String
+  purchaseInvoice    PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  lineNumber         Int
+  productId          String
+  product            Product         @relation(fields: [productId], references: [id])
+  warehouseId        String
+  warehouse          Warehouse       @relation(fields: [warehouseId], references: [id])
+  quantity           Decimal         @db.Decimal(14, 4)
+  rate               Decimal         @db.Decimal(14, 2)
+  discountPercent    Decimal         @default(0) @db.Decimal(5, 2)
+  discountAmount     Decimal         @default(0) @db.Decimal(14, 2)
+  ratePercent        Decimal         @db.Decimal(5, 2)
+  cessPercent        Decimal         @default(0) @db.Decimal(5, 2)
+  taxableAmount      Decimal         @db.Decimal(14, 2)
+  cgst               Decimal         @db.Decimal(14, 2)
+  sgst               Decimal         @db.Decimal(14, 2)
+  igst               Decimal         @db.Decimal(14, 2)
+  cess               Decimal         @db.Decimal(14, 2)
+  totalAmount        Decimal         @db.Decimal(14, 2)
+  isTaxOverridden    Boolean         @default(false)
+  overriddenCgst     Decimal?        @db.Decimal(14, 2)
+  overriddenSgst     Decimal?        @db.Decimal(14, 2)
+  overriddenIgst     Decimal?        @db.Decimal(14, 2)
+  overriddenCess     Decimal?        @db.Decimal(14, 2)
+  overrideReason     String?
+  overriddenByUserId String?
+  overriddenBy       User?           @relation(fields: [overriddenByUserId], references: [id])
+
+  @@unique([purchaseInvoiceId, lineNumber])
+  @@index([productId])
+  @@index([warehouseId])
+}
+
+// Cash/bank payment lines — restricted, server-side, to an active,
+// company-owned ledger that is either under the seeded Cash-in-Hand ledger
+// group or carries a BankAccount detail row (44-purchase-invoice.md's Ledger
+// Posting rule) — stricter than SalesInvoicePayment's "any active company
+// Ledger" convention, since paying out is a real cash/bank outflow.
+model PurchaseInvoicePayment {
+  id                String          @id @default(uuid())
+  purchaseInvoiceId String
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  ledgerId          String
+  ledger            Ledger          @relation(fields: [ledgerId], references: [id])
+  amount            Decimal         @db.Decimal(14, 2)
+  reference         String?
+
+  @@index([purchaseInvoiceId])
+  @@index([ledgerId])
 }
 
 model SalesOrder {

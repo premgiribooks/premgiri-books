@@ -199,7 +199,7 @@ Phase Status
 | --- | ------------------ | ------------------------- | ------ |
 | 40  | Purchase Orders    | Supplier + Products       | ✅     |
 | 41  | Goods Receipt Note | Purchase Order            | ✅     |
-| 42  | Purchase Invoice   | Voucher + Inventory + GST | ⬜     |
+| 42  | Purchase Invoice   | Voucher + Inventory + GST | ✅     |
 | 43  | Purchase Return    | Purchase Invoice          | ⬜     |
 
 Phase Status
@@ -219,8 +219,18 @@ passing each line's combined `quantity + rejectedQuantity` as the fulfillment am
 (both count as "physically arrived" per the spec's Quantity rule, even though only
 `quantity` is ever billed). "Create Goods Receipt Note" (Purchase Order's entry point
 into #41) is wired up on the Purchase Order detail page. `markInvoiced` and
-`listReceivedNotInvoiced` are forward infrastructure for Purchase Invoice
-(feature-spec 44), which does not exist yet. Purchase Invoice (#42) is next.
+`listReceivedNotInvoiced` were forward infrastructure for Purchase Invoice, now
+consumed. Purchase Invoice (#42, feature-spec 44) implemented 2026-09-10 on branch
+`feature/purchase-invoice`, the mirror of Sales Invoice (feature-spec 38) from the
+purchase side: the first Purchase document with real financial (`VoucherType.PURCHASE`)
+and stock (`StockTransactionType.PURCHASE`/`IN`) consequences. Adds a six-field Company
+Settings ledger mapping (five new + shared `roundOffLedgerId`) validated against the
+"Purchase Accounts"/"Duties & Taxes" ledger groups on every posting, restricts payment
+ledgers to the Cash-in-Hand group or a `BankAccount`-linked ledger, and matches an
+optionally-linked Goods Receipt Note's lines via a `(productId, warehouseId, quantity)`
+bijection. "Create Invoice" (Goods Receipt Note's entry point into #42) is wired up on
+the Goods Receipt Note detail page. Purchase Return (#43, feature-spec 45) is next —
+the last of Phase 4.
 
 ---
 

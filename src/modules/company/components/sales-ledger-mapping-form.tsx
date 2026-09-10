@@ -28,13 +28,21 @@ const FIELDS: { name: keyof SalesLedgerMappingInput; label: string }[] = [
   { name: "outputSgstLedgerId", label: "Output SGST" },
   { name: "outputIgstLedgerId", label: "Output IGST" },
   { name: "outputCessLedgerId", label: "Output Cess" },
+  { name: "purchaseLedgerId", label: "Purchase Account" },
+  { name: "inputCgstLedgerId", label: "Input CGST" },
+  { name: "inputSgstLedgerId", label: "Input SGST" },
+  { name: "inputIgstLedgerId", label: "Input IGST" },
+  { name: "inputCessLedgerId", label: "Input Cess" },
   { name: "roundOffLedgerId", label: "Round Off" },
 ];
 
-/** Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — a
+/** Sales Invoice's (38-sales-invoice.md) and Purchase Invoice's
+ * (44-purchase-invoice.md) combined posting-time ledger mapping — a
  * separate section/permission gate ("settings"/"edit") from the operational
  * Company Settings tab on Profile ("company"/"edit"). Posting a Sales
- * Invoice requires all six configured; this form allows a partial save. */
+ * Invoice requires its own six configured; posting a Purchase Invoice
+ * requires its own five plus the shared Round Off field; this form allows a
+ * partial save either way. */
 export function SalesLedgerMappingForm({ companyId, ledgers, defaultValues, disabled }: SalesLedgerMappingFormProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 

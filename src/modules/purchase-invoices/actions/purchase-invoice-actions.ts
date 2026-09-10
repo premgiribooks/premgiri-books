@@ -1,0 +1,66 @@
+"use server";
+
+import { runAction } from "@/lib/run-action";
+import { purchaseInvoiceService } from "@/modules/purchase-invoices/services/purchase-invoice-service";
+import type {
+  CreatePurchaseInvoiceInput,
+  PreviewPurchaseInvoiceInput,
+  UpdatePurchaseInvoiceInput,
+} from "@/modules/purchase-invoices/validation/purchase-invoice-schema";
+import type { ActionResult } from "@/types/api";
+import type { GoodsReceiptNotePrefill, PurchaseInvoiceDetail, PurchaseInvoicePreview } from "@/types/purchase-invoice";
+
+const LIST_PATH = "/purchase/invoices";
+const RECEIPT_LIST_PATH = "/purchase/receipts";
+const ORDER_LIST_PATH = "/purchase/orders";
+
+function detailPath(id: string): string {
+  return `${LIST_PATH}/${id}`;
+}
+
+export async function createDraftAction(input: CreatePurchaseInvoiceInput): Promise<ActionResult<PurchaseInvoiceDetail>> {
+  return runAction(() => purchaseInvoiceService.createDraft(input), [LIST_PATH]);
+}
+
+export async function updateDraftAction(
+  id: string,
+  input: UpdatePurchaseInvoiceInput
+): Promise<ActionResult<PurchaseInvoiceDetail>> {
+  return runAction(() => purchaseInvoiceService.updateDraft(id, input), [LIST_PATH, detailPath(id), `${detailPath(id)}/edit`]);
+}
+
+// Posting can advance a linked Goods Receipt Note (RECEIVED -> INVOICED) —
+// revalidate its list path alongside this invoice's own.
+export async function postPurchaseInvoiceAction(id: string): Promise<ActionResult<PurchaseInvoiceDetail>> {
+  return runAction(() => purchaseInvoiceService.postPurchaseInvoice(id), [
+    LIST_PATH,
+    detailPath(id),
+    RECEIPT_LIST_PATH,
+    ORDER_LIST_PATH,
+  ]);
+}
+
+export async function cancelPurchaseInvoiceAction(id: string): Promise<ActionResult<PurchaseInvoiceDetail>> {
+  return runAction(() => purchaseInvoiceService.cancelPurchaseInvoice(id), [
+    LIST_PATH,
+    detailPath(id),
+    RECEIPT_LIST_PATH,
+    ORDER_LIST_PATH,
+  ]);
+}
+
+// Read-only — no revalidation. Backs "New Purchase Invoice"'s
+// `?goodsReceiptNoteId=` pre-fill.
+export async function getGoodsReceiptNotePrefillAction(
+  goodsReceiptNoteId: string
+): Promise<ActionResult<GoodsReceiptNotePrefill | null>> {
+  return runAction(() => purchaseInvoiceService.getGoodsReceiptNotePrefill(goodsReceiptNoteId), []);
+}
+
+// Read-only — no revalidation. Mirrors sales-invoice-actions.ts's
+// previewSalesInvoiceAction.
+export async function previewPurchaseInvoiceAction(
+  input: PreviewPurchaseInvoiceInput
+): Promise<ActionResult<PurchaseInvoicePreview>> {
+  return runAction(() => purchaseInvoiceService.previewPurchaseInvoice(input), []);
+}

@@ -311,11 +311,15 @@ export const purchaseOrderService = {
   },
 
   // Company-scoped only (not FY-scoped) — mirrors salesOrderService.getSalesOrder.
-  async getPurchaseOrder(id: string): Promise<PurchaseOrderDetail | null> {
+  // Accepts an optional transaction client so a posting-time caller (e.g.
+  // purchaseInvoiceService.postPurchaseInvoice) can re-verify this row
+  // through its own Serializable transaction's snapshot rather than the
+  // global `prisma` singleton (code review finding on purchase-invoice-service.ts).
+  async getPurchaseOrder(id: string, client: PrismaClientOrTransaction = prisma): Promise<PurchaseOrderDetail | null> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "purchase", "view");
 
-    const purchaseOrder = await purchaseOrderRepository.findById(id);
+    const purchaseOrder = await purchaseOrderRepository.findById(id, client);
     if (!purchaseOrder || purchaseOrder.companyId !== user.companyId) {
       return null;
     }
