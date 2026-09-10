@@ -50,12 +50,13 @@ model Company {
   state            String?
   // The company's own GST state code (01-38, GST_STATE_CODES) — needed by
   // the GST Engine's determineSupplyType() to decide intra- vs inter-state
-  // tax on every future document (first consumer: Quotation, feature-spec
-  // 35). Deliberately a real, explicit column rather than derived from
-  // `gstin`'s prefix or a fuzzy match against the free-text `state` name —
-  // an existing company's stateCode is null until a Company Admin sets it
-  // via Company Profile; the first document-creating call blocks with a
-  // friendly error until it is set, never guesses.
+  // tax on every GST-taxed document (first consumer: Quotation, feature-spec
+  // 35; also needed by Purchase Order, feature-spec 42). Deliberately a real,
+  // explicit column rather than derived from `gstin`'s prefix or a fuzzy
+  // match against the free-text `state` name — an existing company's
+  // stateCode is null until a Company Admin sets it via Company Profile; the
+  // first document-creating call blocks with a friendly error until it is
+  // set, never guesses.
   stateCode        String?
   district         String?
   country          String   @default("India")
@@ -94,6 +95,7 @@ model Company {
   priceLists        PriceList[]
   customers         Customer[]
   suppliers         Supplier[]
+  purchaseOrders    PurchaseOrder[]
   auditLogs         AuditLog[]
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
@@ -169,6 +171,7 @@ model FinancialYear {
   salesReturns      SalesReturn[]
   creditNotes       CreditNote[]
   debitNotes        DebitNote[]
+  purchaseOrders    PurchaseOrder[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -235,6 +238,7 @@ model User {
   salesReturns              SalesReturn[]
   creditNotes               CreditNote[]
   debitNotes                DebitNote[]
+  purchaseOrders            PurchaseOrder[]
 
   @@index([companyId])
   @@index([roleId])
@@ -670,6 +674,7 @@ model Product {
   salesOrderItems      SalesOrderItem[]
   deliveryChallanItems DeliveryChallanItem[]
   salesInvoiceItems    SalesInvoiceItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -895,6 +900,8 @@ model Supplier {
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
 
   @@index([companyId])
 }
@@ -1150,6 +1157,25 @@ model StockTransaction {
   @@index([transferGroupId])
 }
 
+// Purchase Order (feature-spec 42) — the company's commitment to buy from a
+// Supplier, first document of Phase 4's chain (Purchase Order -> Goods
+// Receipt Note -> Purchase Invoice -> Purchase Return). The mirror of
+// SalesOrder from the purchase side: no financial or stock effect at all (no
+// Voucher, no stock movement, no reservation) — what it tracks is
+// fulfillment from the supplier's side via `receivedQuantity`, maintained
+// exclusively by Goods Receipt Note's posting flow (feature-spec 43) through
+// `purchaseOrderService.applyReceipt`. Unlike SalesOrder, there is no
+// Quotation-equivalent predecessor (no "Purchase Quotation"/RFQ concept in
+// this phase's scope).
+enum PurchaseOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
 // Quotation — the first, non-binding step of the Sales document chain
 // (35-quotations.md; architecture-context.md Document Driven: Quotation ->
 // Sales Order -> Delivery Challan -> Sales Invoice). A priced offer with no
@@ -1257,6 +1283,68 @@ enum SalesOrderStatus {
   DELIVERED
   CLOSED
   CANCELLED
+}
+
+model PurchaseOrder {
+  id                     String              @id @default(uuid())
+  companyId              String
+  company                Company             @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear       @relation(fields: [financialYearId], references: [id])
+  orderNumber            String
+  orderDate              DateTime            @db.Date
+  expectedDeliveryDate   DateTime?           @db.Date
+  supplierId             String
+  supplier               Supplier            @relation(fields: [supplierId], references: [id])
+  placeOfSupplyStateCode String
+  status                 PurchaseOrderStatus @default(DRAFT)
+  narration              String?
+  subtotal               Decimal             @db.Decimal(14, 2)
+  totalDiscount          Decimal             @db.Decimal(14, 2)
+  taxableAmount          Decimal             @db.Decimal(14, 2)
+  totalCgst              Decimal             @db.Decimal(14, 2)
+  totalSgst              Decimal             @db.Decimal(14, 2)
+  totalIgst              Decimal             @db.Decimal(14, 2)
+  totalCess              Decimal             @db.Decimal(14, 2)
+  grandTotal             Decimal             @db.Decimal(14, 2)
+  createdByUserId        String?
+  createdBy              User?               @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  items PurchaseOrderItem[]
+  // goodsReceiptNotes GoodsReceiptNote[] — feature-spec 43's back-relation
+  // target, added by that spec's own migration once GoodsReceiptNote exists
+  // (the identical forward-note pattern SalesOrder used for DeliveryChallan).
+
+  @@unique([companyId, financialYearId, orderNumber])
+  @@index([companyId, supplierId])
+  @@index([companyId, status])
+}
+
+model PurchaseOrderItem {
+  id               String        @id @default(uuid())
+  purchaseOrderId  String
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  lineNumber       Int
+  productId        String
+  product          Product       @relation(fields: [productId], references: [id])
+  quantity         Decimal       @db.Decimal(14, 4)
+  receivedQuantity Decimal       @default(0) @db.Decimal(14, 4)
+  rate             Decimal       @db.Decimal(14, 2)
+  discountPercent  Decimal       @default(0) @db.Decimal(5, 2)
+  discountAmount   Decimal       @default(0) @db.Decimal(14, 2)
+  ratePercent      Decimal       @db.Decimal(5, 2)
+  cessPercent      Decimal       @default(0) @db.Decimal(5, 2)
+  taxableAmount    Decimal       @db.Decimal(14, 2)
+  cgst             Decimal       @db.Decimal(14, 2)
+  sgst             Decimal       @db.Decimal(14, 2)
+  igst             Decimal       @db.Decimal(14, 2)
+  cess             Decimal       @db.Decimal(14, 2)
+  totalAmount      Decimal       @db.Decimal(14, 2)
+
+  @@unique([purchaseOrderId, lineNumber])
+  @@index([productId])
 }
 
 model SalesOrder {

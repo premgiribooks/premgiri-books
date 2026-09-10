@@ -11,6 +11,19 @@ import {
 
 const WEBSITE_REGEX = /^https?:\/\/.+/i;
 
+// The company's own GST state code (01-38, GST_STATE_CODES) — needed by the
+// GST Engine's determineSupplyType() to decide intra- vs inter-state tax on
+// every GST-taxed document (first consumer: Quotation, feature-spec 35; also
+// needed by Purchase Order, feature-spec 42). Validated against the
+// statutory list, never a free-text guess.
+const STATE_CODE_SCHEMA = z
+  .string()
+  .trim()
+  .optional()
+  .refine((value) => !value || isValidGstStateCode(value), {
+    message: "Select a valid GST state",
+  });
+
 function optionalText(): z.ZodOptional<z.ZodString> {
   return z.string().trim().optional();
 }
@@ -22,18 +35,6 @@ function optionalPattern(regex: RegExp, message: string) {
     .optional()
     .refine((value) => !value || regex.test(value), { message });
 }
-
-// The company's own GST state code (01-38, GST_STATE_CODES) — the GST
-// Engine's determineSupplyType() needs this to decide intra- vs inter-state
-// tax on every future document (first consumer: Quotation, feature-spec 35).
-// Validated against the statutory list, never a free-text guess.
-const STATE_CODE_SCHEMA = z
-  .string()
-  .trim()
-  .optional()
-  .refine((value) => !value || isValidGstStateCode(value), {
-    message: "Select a valid GST state",
-  });
 
 export const companySchema = z.object({
   companyName: z.string().trim().min(2, "Company name must be at least 2 characters"),

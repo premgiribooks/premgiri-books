@@ -3,6 +3,12 @@
 // back to a capitalized version of the raw segment, and a UUID-shaped
 // segment (a resource id) is dropped from the visible trail entirely rather
 // than showing a raw id, per BREADCRUMB_ID_PATTERN below.
+//
+// A key may be either a bare segment ("purchase") or a "parent/segment" pair
+// ("purchase/orders") — the latter disambiguates a segment reused by more
+// than one section (e.g. Sales' own future "/sales/orders" vs this module's
+// "/purchase/orders"), checked first by the Breadcrumb Bar before falling
+// back to the bare segment.
 export const BREADCRUMB_LABELS: Record<string, string> = {
   masters: "Masters",
   profile: "My Profile",
@@ -18,6 +24,8 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   "credit-notes": "Credit Notes",
   "debit-notes": "Debit Notes",
   "sales-ledgers": "Sales & GST Ledgers",
+  purchase: "Purchase",
+  "purchase/orders": "Purchase Orders",
   accounting: "Accounting",
   "ledger-groups": "Ledger Groups",
   ledgers: "Ledgers",

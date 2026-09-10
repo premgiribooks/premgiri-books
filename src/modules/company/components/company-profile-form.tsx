@@ -291,7 +291,8 @@ export function CompanyProfileForm({ companyId, defaultValues }: CompanyProfileF
                   </Select>
                 </FormControl>
                 <p className="text-xs text-muted-foreground">
-                  Required before you can create a Quotation or other GST-taxed document —
+                  Required before you can create a Quotation, Purchase Order, or other
+                  GST-taxed document —
                   determines whether tax is CGST/SGST or IGST.
                 </p>
                 <FormMessage />

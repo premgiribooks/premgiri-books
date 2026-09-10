@@ -14,8 +14,13 @@ interface Crumb {
   href: string;
 }
 
-function toLabel(segment: string): string {
-  const known = BREADCRUMB_LABELS[segment];
+// `previousSegment` lets a "parent/segment" composite key
+// (BREADCRUMB_LABELS's own doc comment) disambiguate a segment reused by
+// more than one section — checked before the bare segment, which stays the
+// fallback for every segment that is not ambiguous.
+function toLabel(segment: string, previousSegment: string | undefined): string {
+  const composite = previousSegment ? BREADCRUMB_LABELS[`${previousSegment}/${segment}`] : undefined;
+  const known = composite ?? BREADCRUMB_LABELS[segment];
   if (known) {
     return known;
   }
@@ -29,6 +34,7 @@ function buildTrail(pathname: string): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   const crumbs: Crumb[] = [];
   let href = "";
+  let previousSegment: string | undefined;
 
   for (const segment of segments) {
     href += `/${segment}`;
@@ -39,7 +45,8 @@ function buildTrail(pathname: string): Crumb[] {
     if (BREADCRUMB_ID_PATTERN.test(segment)) {
       continue;
     }
-    crumbs.push({ label: toLabel(segment), href });
+    crumbs.push({ label: toLabel(segment, previousSegment), href });
+    previousSegment = segment;
   }
 
   return crumbs;
