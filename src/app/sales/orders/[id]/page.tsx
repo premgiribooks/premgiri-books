@@ -38,10 +38,11 @@ export default async function SalesOrderDetailPage({ params }: SalesOrderDetailP
     notFound();
   }
 
-  const [isAdmin, canEdit, canApprove] = await Promise.all([
+  const [isAdmin, canEdit, canApprove, canCreateDeliveryChallan] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "edit"),
     hasPermission(user, "sales", "approve"),
+    hasPermission(user, "sales", "create"),
   ]);
 
   const isEditable = salesOrder.status === "DRAFT";
@@ -71,7 +72,12 @@ export default async function SalesOrderDetailPage({ params }: SalesOrderDetailP
                 }
               />
             ) : null}
-            <SalesOrderStatusActions salesOrder={salesOrder} canEdit={canEdit} canApprove={canApprove} />
+            <SalesOrderStatusActions
+              salesOrder={salesOrder}
+              canEdit={canEdit}
+              canApprove={canApprove}
+              canCreateDeliveryChallan={canCreateDeliveryChallan}
+            />
           </div>
         </div>
 

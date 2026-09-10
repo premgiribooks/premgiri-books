@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -19,18 +20,27 @@ interface SalesOrderStatusActionsProps {
   canEdit: boolean;
   /** Gated on "sales"/"approve" — Cancel-while-CONFIRMED. */
   canApprove: boolean;
+  /** Gated on "sales"/"create" — Create Delivery Challan (feature-spec 37),
+   * the same permission the "New Sales Order"/"New Delivery Challan" buttons
+   * use. Just a link to /sales/challans/new?salesOrderId=; the challan form
+   * itself pre-fills from the order's remaining quantities. */
+  canCreateDeliveryChallan: boolean;
 }
 
 type TransitionAction = (id: string) => Promise<ActionResult<SalesOrderDetail>>;
 
 /**
- * The detail page's status-transition button row — no "Create Delivery
- * Challan" here (feature-spec 37 owns that; mirrors
- * quotation-status-actions.tsx's identical forward-note for "Convert to
- * Sales Order"). Each button is only rendered when both the current status
- * permits the transition and the caller holds the matching permission.
+ * The detail page's status-transition button row, including "Create
+ * Delivery Challan" (feature-spec 37). Each button is only rendered when
+ * both the current status permits the transition and the caller holds the
+ * matching permission.
  */
-export function SalesOrderStatusActions({ salesOrder, canEdit, canApprove }: SalesOrderStatusActionsProps) {
+export function SalesOrderStatusActions({
+  salesOrder,
+  canEdit,
+  canApprove,
+  canCreateDeliveryChallan,
+}: SalesOrderStatusActionsProps) {
   const router = useRouter();
   const [pending, setPending] = React.useState<SalesOrderStatus | null>(null);
 
@@ -85,6 +95,16 @@ export function SalesOrderStatusActions({ salesOrder, canEdit, canApprove }: Sal
         >
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
+      ) : null}
+
+      {canCreateDeliveryChallan &&
+      (salesOrder.status === "CONFIRMED" || salesOrder.status === "PARTIALLY_DELIVERED") ? (
+        <Button
+          size="sm"
+          variant="outline"
+          nativeButton={false}
+          render={<Link href={`/sales/challans/new?salesOrderId=${salesOrder.id}`}>Create Delivery Challan</Link>}
+        />
       ) : null}
     </div>
   );
