@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
+import { installApplicationMenu } from "./menu";
 
 const DEV_SERVER_URL = "http://localhost:3000";
 
@@ -9,7 +10,7 @@ function createMainWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -69,6 +70,7 @@ function registerBackForwardNavigation(window: BrowserWindow): void {
 }
 
 app.whenReady().then(() => {
+  installApplicationMenu();
   createMainWindow();
 
   app.on("activate", () => {
