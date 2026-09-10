@@ -294,7 +294,7 @@ export function QuotationForm({ options, quotation }: QuotationFormProps) {
           />
         </FormSection>
 
-        <FormSection title="Lines">
+        <FormSection title="Lines" columns={1}>
           <QuotationLineEditor
             products={options.products}
             computations={preview.lines}

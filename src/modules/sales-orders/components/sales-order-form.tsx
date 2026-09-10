@@ -288,7 +288,7 @@ export function SalesOrderForm({ options, salesOrder }: SalesOrderFormProps) {
           />
         </FormSection>
 
-        <FormSection title="Lines">
+        <FormSection title="Lines" columns={1}>
           <SalesOrderLineEditor
             products={options.products}
             computations={preview.lines}
