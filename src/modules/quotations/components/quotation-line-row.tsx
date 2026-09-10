@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { numericFieldWidth } from "@/lib/utils";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import { resolveLinePriceAction } from "@/modules/quotations/actions/quotation-actions";
 import type { CreateQuotationInput } from "@/modules/quotations/validation/quotation-schema";
@@ -90,7 +91,7 @@ export function QuotationLineRow({
         />
       </TableCell>
 
-      <TableCell className="w-28">
+      <TableCell>
         <FormField
           control={control}
           name={`lines.${index}.quantity`}
@@ -101,6 +102,7 @@ export function QuotationLineRow({
                   type="number"
                   min={0.0001}
                   step="0.0001"
+                  style={{ width: numericFieldWidth(field.value) }}
                   {...field}
                   onChange={(event) => field.onChange(toNumberOrZero(event.target.valueAsNumber))}
                 />
@@ -111,7 +113,7 @@ export function QuotationLineRow({
         />
       </TableCell>
 
-      <TableCell className="w-32">
+      <TableCell>
         <FormField
           control={control}
           name={`lines.${index}.rate`}
@@ -122,6 +124,7 @@ export function QuotationLineRow({
                   type="number"
                   min={0}
                   step="0.01"
+                  style={{ width: numericFieldWidth(field.value) }}
                   {...field}
                   onChange={(event) => field.onChange(toNumberOrZero(event.target.valueAsNumber))}
                 />
@@ -132,7 +135,7 @@ export function QuotationLineRow({
         />
       </TableCell>
 
-      <TableCell className="w-24">
+      <TableCell>
         <FormField
           control={control}
           name={`lines.${index}.discountPercent`}
@@ -145,6 +148,7 @@ export function QuotationLineRow({
                   max={100}
                   step="0.01"
                   value={field.value ?? ""}
+                  style={{ width: numericFieldWidth(field.value) }}
                   onChange={(event) =>
                     field.onChange(
                       Number.isNaN(event.target.valueAsNumber) ? undefined : event.target.valueAsNumber
@@ -158,7 +162,7 @@ export function QuotationLineRow({
         />
       </TableCell>
 
-      <TableCell className="w-28">
+      <TableCell>
         <FormField
           control={control}
           name={`lines.${index}.discountAmount`}
@@ -170,6 +174,7 @@ export function QuotationLineRow({
                   min={0}
                   step="0.01"
                   value={field.value ?? ""}
+                  style={{ width: numericFieldWidth(field.value) }}
                   onChange={(event) =>
                     field.onChange(
                       Number.isNaN(event.target.valueAsNumber) ? undefined : event.target.valueAsNumber
@@ -184,11 +189,20 @@ export function QuotationLineRow({
       </TableCell>
 
       {/* Read-only, server-computed — never calculated in the browser
-          (35-quotations.md's UI). Blank until the debounced preview lands. */}
-      <TableCell className="text-right font-financial">
+          (35-quotations.md's UI). Blank until the debounced preview lands.
+          Same grow-with-content treatment as the inputs above, so the
+          numeric columns don't visually jump in width relative to each
+          other. */}
+      <TableCell
+        className="text-right font-financial"
+        style={{ minWidth: numericFieldWidth(computation ? computation.taxableAmount.toFixed(2) : "") }}
+      >
         {computation ? computation.taxableAmount.toFixed(2) : "—"}
       </TableCell>
-      <TableCell className="text-right font-financial">
+      <TableCell
+        className="text-right font-financial"
+        style={{ minWidth: numericFieldWidth(computation ? computation.totalAmount.toFixed(2) : "") }}
+      >
         {computation ? computation.totalAmount.toFixed(2) : "—"}
       </TableCell>
 
