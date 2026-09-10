@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FileText } from "lucide-react";
+import { ClipboardCheck, FileText } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,12 @@ const SALES_MODULES = [
     icon: FileText,
     title: "Quotations",
     description: "Create and track priced offers to customers, from draft through acceptance.",
+  },
+  {
+    href: "/sales/orders",
+    icon: ClipboardCheck,
+    title: "Sales Orders",
+    description: "Confirmed customer commitments, tracked through to delivery.",
   },
 ] as const;
 

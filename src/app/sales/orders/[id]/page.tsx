@@ -14,17 +14,17 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
-import { QuotationStatusActions } from "@/modules/quotations/components/quotation-status-actions";
-import { QuotationStatusBadge } from "@/modules/quotations/components/quotation-status-badge";
-import { QuotationTotalsSummary } from "@/modules/quotations/components/quotation-totals-summary";
-import { formatQuotationDate } from "@/modules/quotations/utils/format-quotation-date";
-import { quotationService } from "@/modules/quotations/services/quotation-service";
+import { SalesOrderStatusActions } from "@/modules/sales-orders/components/sales-order-status-actions";
+import { SalesOrderStatusBadge } from "@/modules/sales-orders/components/sales-order-status-badge";
+import { SalesOrderTotalsSummary } from "@/modules/sales-orders/components/sales-order-totals-summary";
+import { formatSalesOrderDate } from "@/modules/sales-orders/utils/format-sales-order-date";
+import { salesOrderService } from "@/modules/sales-orders/services/sales-order-service";
 
-interface QuotationDetailPageProps {
+interface SalesOrderDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-export default async function QuotationDetailPage({ params }: QuotationDetailPageProps) {
+export default async function SalesOrderDetailPage({ params }: SalesOrderDetailPageProps) {
   const { id } = await params;
 
   const user = await getCurrentCompanyUser();
@@ -33,19 +33,18 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
     redirect("/");
   }
 
-  const quotation = await quotationService.getQuotation(id);
-  if (!quotation) {
+  const salesOrder = await salesOrderService.getSalesOrder(id);
+  if (!salesOrder) {
     notFound();
   }
 
-  const [isAdmin, canEdit, canApprove, canCreateSalesOrder] = await Promise.all([
+  const [isAdmin, canEdit, canApprove] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "edit"),
     hasPermission(user, "sales", "approve"),
-    hasPermission(user, "sales", "create"),
   ]);
 
-  const isEditable = quotation.status === "DRAFT" || quotation.status === "SENT";
+  const isEditable = salesOrder.status === "DRAFT";
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -53,10 +52,10 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-foreground">{quotation.quotationNumber}</h1>
-              <QuotationStatusBadge status={quotation.status} />
+              <h1 className="text-xl font-semibold text-foreground">{salesOrder.orderNumber}</h1>
+              <SalesOrderStatusBadge status={salesOrder.status} />
             </div>
-            <p className="text-sm text-muted-foreground">{quotation.customer.name}</p>
+            <p className="text-sm text-muted-foreground">{salesOrder.customer.name}</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -65,43 +64,36 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
                 variant="outline"
                 nativeButton={false}
                 render={
-                  <Link href={`/sales/quotations/${quotation.id}/edit`}>
+                  <Link href={`/sales/orders/${salesOrder.id}/edit`}>
                     <Pencil size={16} />
                     Edit
                   </Link>
                 }
               />
             ) : null}
-            <QuotationStatusActions
-              quotation={quotation}
-              canEdit={canEdit}
-              canApprove={canApprove}
-              canCreateSalesOrder={canCreateSalesOrder}
-            />
+            <SalesOrderStatusActions salesOrder={salesOrder} canEdit={canEdit} canApprove={canApprove} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border p-4 sm:grid-cols-3">
           <div>
-            <p className="text-xs text-muted-foreground">Quotation Date</p>
-            <p className="font-financial text-sm text-foreground">
-              {formatQuotationDate(quotation.quotationDate)}
-            </p>
+            <p className="text-xs text-muted-foreground">Order Date</p>
+            <p className="font-financial text-sm text-foreground">{formatSalesOrderDate(salesOrder.orderDate)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Valid Until</p>
+            <p className="text-xs text-muted-foreground">Expected Delivery Date</p>
             <p className="font-financial text-sm text-foreground">
-              {quotation.validUntil ? formatQuotationDate(quotation.validUntil) : "—"}
+              {salesOrder.expectedDeliveryDate ? formatSalesOrderDate(salesOrder.expectedDeliveryDate) : "—"}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Place of Supply</p>
-            <p className="text-sm text-foreground">{quotation.placeOfSupplyStateCode}</p>
+            <p className="text-sm text-foreground">{salesOrder.placeOfSupplyStateCode}</p>
           </div>
         </div>
 
-        {quotation.narration ? (
-          <p className="text-sm text-muted-foreground">{quotation.narration}</p>
+        {salesOrder.narration ? (
+          <p className="text-sm text-muted-foreground">{salesOrder.narration}</p>
         ) : null}
 
         <div className="overflow-x-auto rounded-2xl border border-border">
@@ -110,6 +102,8 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Delivered</TableHead>
+                <TableHead className="text-right">Pending</TableHead>
                 <TableHead className="text-right">Rate</TableHead>
                 <TableHead className="text-right">Discount</TableHead>
                 <TableHead className="text-right">Taxable</TableHead>
@@ -117,7 +111,7 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
               </TableRow>
             </TableHeader>
             <TableBody>
-              {quotation.items.map((item) => (
+              {salesOrder.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     {item.product.name} ({item.product.productCode})
@@ -126,6 +120,8 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
                     ) : null}
                   </TableCell>
                   <TableCell className="text-right font-financial">{item.quantity}</TableCell>
+                  <TableCell className="text-right font-financial">{item.deliveredQuantity}</TableCell>
+                  <TableCell className="text-right font-financial">{item.quantity - item.deliveredQuantity}</TableCell>
                   <TableCell className="text-right font-financial">{item.rate.toFixed(2)}</TableCell>
                   <TableCell className="text-right font-financial">
                     {item.discountAmount > 0 || item.discountPercent > 0
@@ -140,16 +136,16 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
           </Table>
         </div>
 
-        <QuotationTotalsSummary
+        <SalesOrderTotalsSummary
           totals={{
-            subtotal: quotation.subtotal,
-            totalDiscount: quotation.totalDiscount,
-            taxableAmount: quotation.taxableAmount,
-            totalCgst: quotation.totalCgst,
-            totalSgst: quotation.totalSgst,
-            totalIgst: quotation.totalIgst,
-            totalCess: quotation.totalCess,
-            grandTotal: quotation.grandTotal,
+            subtotal: salesOrder.subtotal,
+            totalDiscount: salesOrder.totalDiscount,
+            taxableAmount: salesOrder.taxableAmount,
+            totalCgst: salesOrder.totalCgst,
+            totalSgst: salesOrder.totalSgst,
+            totalIgst: salesOrder.totalIgst,
+            totalCess: salesOrder.totalCess,
+            grandTotal: salesOrder.grandTotal,
           }}
           groups={[]}
         />

@@ -11,6 +11,7 @@ import {
   rejectQuotationAction,
   sendQuotationAction,
 } from "@/modules/quotations/actions/quotation-actions";
+import { createSalesOrderFromQuotationAction } from "@/modules/sales-orders/actions/sales-order-actions";
 import type { ActionResult } from "@/types/api";
 import type { QuotationDetail, QuotationStatus } from "@/types/quotation";
 
@@ -20,20 +21,29 @@ interface QuotationStatusActionsProps {
   canEdit: boolean;
   /** Gated on "sales"/"approve" — Accept and Reject. */
   canApprove: boolean;
+  /** Gated on "sales"/"create" — Convert to Sales Order (creates a new
+   * document, the same permission the "New Quotation"/"New Sales Order"
+   * buttons use). */
+  canCreateSalesOrder: boolean;
 }
 
 type TransitionAction = (id: string) => Promise<ActionResult<QuotationDetail>>;
 
 /**
- * The detail page's status-transition button row — no "Convert to Sales
- * Order" here (feature-spec 36 owns that; see the forward note in
- * progress-tracker.md). Each button is only rendered when both the current
- * status permits the transition and the caller holds the matching
- * permission.
+ * The detail page's status-transition button row, including "Convert to
+ * Sales Order" (feature-spec 36) — `createFromQuotation` creates the new
+ * DRAFT order directly (re-resolving price/GST fresh), and this button
+ * redirects straight to that order's edit page so the user can review the
+ * re-resolved lines before confirming.
  */
-export function QuotationStatusActions({ quotation, canEdit, canApprove }: QuotationStatusActionsProps) {
+export function QuotationStatusActions({
+  quotation,
+  canEdit,
+  canApprove,
+  canCreateSalesOrder,
+}: QuotationStatusActionsProps) {
   const router = useRouter();
-  const [pending, setPending] = React.useState<QuotationStatus | null>(null);
+  const [pending, setPending] = React.useState<QuotationStatus | "CONVERTING" | null>(null);
 
   async function runTransition(action: TransitionAction, pendingKey: QuotationStatus, successMessage: string) {
     setPending(pendingKey);
@@ -47,6 +57,23 @@ export function QuotationStatusActions({ quotation, canEdit, canApprove }: Quota
       router.refresh();
     } catch {
       toast.error("Failed to update the quotation.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function convertToSalesOrder() {
+    setPending("CONVERTING");
+    try {
+      const result = await createSalesOrderFromQuotationAction(quotation.id);
+      if (!result.success || !result.data) {
+        toast.error(result.error ?? "Failed to convert to a sales order.");
+        return;
+      }
+      toast.success("Sales order created.");
+      router.push(`/sales/orders/${result.data.id}/edit`);
+    } catch {
+      toast.error("Failed to convert to a sales order.");
     } finally {
       setPending(null);
     }
@@ -95,6 +122,12 @@ export function QuotationStatusActions({ quotation, canEdit, canApprove }: Quota
           onClick={() => runTransition(cancelQuotationAction, "CANCELLED", "Quotation cancelled.")}
         >
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
+        </Button>
+      ) : null}
+
+      {canCreateSalesOrder && (quotation.status === "SENT" || quotation.status === "ACCEPTED") ? (
+        <Button size="sm" variant="outline" disabled={isBusy} onClick={() => void convertToSalesOrder()}>
+          {pending === "CONVERTING" ? "Converting…" : "Convert to Sales Order"}
         </Button>
       ) : null}
     </div>

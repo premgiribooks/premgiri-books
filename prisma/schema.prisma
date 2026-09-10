@@ -99,6 +99,7 @@ model Company {
   vouchers          Voucher[]
   stockTransactions StockTransaction[]
   quotations        Quotation[]
+  salesOrders       SalesOrder[]
 
   @@index([companyName])
 }
@@ -139,6 +140,7 @@ model FinancialYear {
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
   quotations        Quotation[]
+  salesOrders       SalesOrder[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -195,9 +197,10 @@ model User {
 
   company    Company?    @relation(fields: [companyId], references: [id])
   role       Role?       @relation(fields: [roleId], references: [id])
-  sessions   Session[]
-  vouchers   Voucher[]
-  quotations Quotation[]
+  sessions    Session[]
+  vouchers    Voucher[]
+  quotations  Quotation[]
+  salesOrders SalesOrder[]
 
   @@index([companyId])
   @@index([roleId])
@@ -618,6 +621,7 @@ model Product {
   priceListItems    PriceListItem[]
   stockTransactions StockTransaction[]
   quotationItems    QuotationItem[]
+  salesOrderItems   SalesOrderItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -790,7 +794,8 @@ model Customer {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  quotations Quotation[]
+  quotations  Quotation[]
+  salesOrders SalesOrder[]
 
   @@index([companyId])
   @@index([priceListId])
@@ -1098,11 +1103,9 @@ model StockTransaction {
 // editable, and simply not recomputed once terminal (mirrors Voucher.
 // totalAmount's "denormalized for list rendering only" convention).
 //
-// Deliberately does NOT yet have `salesOrders SalesOrder[]` (feature-spec
-// 36's back-relation target) — SalesOrder does not exist yet and Prisma
-// cannot reference a missing model. Feature-spec 36's own migration adds
-// that relation from its side (a purely additive change), together with
-// "Convert to Sales Order".
+// `salesOrders SalesOrder[]` below is feature-spec 36's back-relation,
+// added by that spec's own migration (a purely additive change) together
+// with "Convert to Sales Order" (Quotation.createFromQuotation's caller).
 //
 // No `branchId` — Branch Management (feature-spec 12) is implemented, but
 // every document in this chain (specs 36-41) is drafted around this header
@@ -1146,7 +1149,8 @@ model Quotation {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
-  items QuotationItem[]
+  items       QuotationItem[]
+  salesOrders SalesOrder[]
 
   @@unique([companyId, financialYearId, quotationNumber])
   @@index([companyId, customerId])
@@ -1175,5 +1179,92 @@ model QuotationItem {
 
   @@unique([quotationId, lineNumber])
   @@index([quotationId])
+  @@index([productId])
+}
+
+// Sales Order — the second, binding step of the Sales document chain
+// (36-sales-orders.md; architecture-context.md Document Driven: Quotation ->
+// Sales Order -> Delivery Challan -> Sales Invoice). Like Quotation, has no
+// financial or stock effect and no stock reservation (no such feature exists
+// in the Inventory Engine) — what it adds over Quotation is fulfillment
+// tracking via `SalesOrderItem.deliveredQuantity`, maintained exclusively by
+// `salesOrderService.applyDelivery`, the entry point Delivery Challan
+// (feature-spec 37) calls from its own posting flow.
+//
+// No `branchId` — see Quotation's identical note above; every document in
+// this chain (specs 35-41) is drafted branch-less by deliberate, recorded
+// scope decision.
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+model SalesOrder {
+  id                     String           @id @default(uuid())
+  companyId              String
+  company                Company          @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear    @relation(fields: [financialYearId], references: [id])
+  orderNumber            String
+  orderDate              DateTime         @db.Date
+  expectedDeliveryDate   DateTime?        @db.Date
+  customerId             String
+  customer               Customer         @relation(fields: [customerId], references: [id])
+  placeOfSupplyStateCode String
+  status                 SalesOrderStatus @default(DRAFT)
+  narration              String?
+  quotationId            String?
+  quotation              Quotation?       @relation(fields: [quotationId], references: [id])
+  subtotal               Decimal          @db.Decimal(14, 2)
+  totalDiscount          Decimal          @db.Decimal(14, 2)
+  taxableAmount          Decimal          @db.Decimal(14, 2)
+  totalCgst              Decimal          @db.Decimal(14, 2)
+  totalSgst              Decimal          @db.Decimal(14, 2)
+  totalIgst              Decimal          @db.Decimal(14, 2)
+  totalCess              Decimal          @db.Decimal(14, 2)
+  grandTotal             Decimal          @db.Decimal(14, 2)
+  createdByUserId        String?
+  createdBy              User?            @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  items SalesOrderItem[]
+  // deliveryChallans DeliveryChallan[] — feature-spec 37's back-relation
+  // target, added by that spec's own migration once DeliveryChallan exists
+  // (the identical forward-note pattern used above for Quotation.salesOrders).
+
+  @@unique([companyId, financialYearId, orderNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+  @@index([quotationId])
+}
+
+model SalesOrderItem {
+  id                String     @id @default(uuid())
+  salesOrderId      String
+  salesOrder        SalesOrder @relation(fields: [salesOrderId], references: [id])
+  lineNumber        Int
+  productId         String
+  product           Product    @relation(fields: [productId], references: [id])
+  quantity          Decimal    @db.Decimal(14, 4)
+  deliveredQuantity Decimal    @default(0) @db.Decimal(14, 4)
+  rate              Decimal    @db.Decimal(14, 2)
+  discountPercent   Decimal    @default(0) @db.Decimal(5, 2)
+  discountAmount    Decimal    @default(0) @db.Decimal(14, 2)
+  ratePercent       Decimal    @db.Decimal(5, 2)
+  cessPercent       Decimal    @default(0) @db.Decimal(5, 2)
+  taxableAmount     Decimal    @db.Decimal(14, 2)
+  cgst              Decimal    @db.Decimal(14, 2)
+  sgst              Decimal    @db.Decimal(14, 2)
+  igst              Decimal    @db.Decimal(14, 2)
+  cess              Decimal    @db.Decimal(14, 2)
+  totalAmount       Decimal    @db.Decimal(14, 2)
+
+  @@unique([salesOrderId, lineNumber])
+  @@index([salesOrderId])
   @@index([productId])
 }
