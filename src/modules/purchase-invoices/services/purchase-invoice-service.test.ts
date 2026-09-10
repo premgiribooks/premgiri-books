@@ -470,7 +470,22 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
 
     const entries = postVoucherMock.mock.calls[0][1].entries;
     const roundOffEntry = entries.find((e: { ledgerId: string }) => e.ledgerId === ROUND_OFF_LEDGER_ID);
-    expect(roundOffEntry).toBeDefined();
+    expect(roundOffEntry).toEqual({ ledgerId: ROUND_OFF_LEDGER_ID, entryType: "DEBIT", amount: 0.01 });
+  });
+
+  it("posts a CREDIT round-off entry when the exact total rounds down", async () => {
+    // 1 x 100.01 @ 18% -> exact total 118.01, rounds down to 118 -> a
+    // negative roundOff, the mirror of the DEBIT/rounds-up case above.
+    const row = invoiceRow({
+      items: [{ ...invoiceRow().items[0], quantity: 1, rate: 100.01 }],
+    });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+
+    await purchaseInvoiceService.postPurchaseInvoice("pinv-1");
+
+    const entries = postVoucherMock.mock.calls[0][1].entries;
+    const roundOffEntry = entries.find((e: { ledgerId: string }) => e.ledgerId === ROUND_OFF_LEDGER_ID);
+    expect(roundOffEntry).toEqual({ ledgerId: ROUND_OFF_LEDGER_ID, entryType: "CREDIT", amount: 0.01 });
   });
 
   it("posts no payment credit entries and full supplier remainder when no payments made", async () => {
@@ -490,6 +505,52 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
     const entries = postVoucherMock.mock.calls[0][1].entries;
     expect(entries.some((e: { ledgerId: string }) => e.ledgerId === SUPPLIER_LEDGER_ID)).toBe(false);
     expect(entries).toEqual(expect.arrayContaining([{ ledgerId: CASH_LEDGER_ID, entryType: "CREDIT", amount: 236 }]));
+  });
+
+  it("splits a partial payment between the payment ledger and the supplier's remainder, balanced", async () => {
+    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, amount: 100 }] });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+
+    await purchaseInvoiceService.postPurchaseInvoice("pinv-1");
+
+    const entries: { ledgerId: string; entryType: "DEBIT" | "CREDIT"; amount: number }[] =
+      postVoucherMock.mock.calls[0][1].entries;
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { ledgerId: CASH_LEDGER_ID, entryType: "CREDIT", amount: 100 },
+        { ledgerId: SUPPLIER_LEDGER_ID, entryType: "CREDIT", amount: 136 },
+      ])
+    );
+    const debitTotal = entries.filter((e) => e.entryType === "DEBIT").reduce((sum, e) => sum + e.amount, 0);
+    const creditTotal = entries.filter((e) => e.entryType === "CREDIT").reduce((sum, e) => sum + e.amount, 0);
+    expect(debitTotal).toBe(creditTotal);
+    expect(creditTotal).toBe(236);
+  });
+
+  it("splits a payment across two different ledgers plus the supplier's remainder, balanced", async () => {
+    const row = invoiceRow({
+      payments: [
+        { ledgerId: CASH_LEDGER_ID, amount: 100 },
+        { ledgerId: BANK_LEDGER_ID, amount: 50 },
+      ],
+    });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+
+    await purchaseInvoiceService.postPurchaseInvoice("pinv-1");
+
+    const entries: { ledgerId: string; entryType: "DEBIT" | "CREDIT"; amount: number }[] =
+      postVoucherMock.mock.calls[0][1].entries;
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { ledgerId: CASH_LEDGER_ID, entryType: "CREDIT", amount: 100 },
+        { ledgerId: BANK_LEDGER_ID, entryType: "CREDIT", amount: 50 },
+        { ledgerId: SUPPLIER_LEDGER_ID, entryType: "CREDIT", amount: 86 },
+      ])
+    );
+    const debitTotal = entries.filter((e) => e.entryType === "DEBIT").reduce((sum, e) => sum + e.amount, 0);
+    const creditTotal = entries.filter((e) => e.entryType === "CREDIT").reduce((sum, e) => sum + e.amount, 0);
+    expect(debitTotal).toBe(creditTotal);
+    expect(creditTotal).toBe(236);
   });
 
   it("rejects an overpayment, validated against the freshly recomputed total", async () => {

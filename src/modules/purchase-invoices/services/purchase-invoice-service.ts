@@ -353,9 +353,15 @@ async function verifySupplier(client: PrismaClientOrTransaction, companyId: stri
 // A client-supplied purchaseOrderId belonging to another company must be
 // rejected explicitly here, not left to an FK with no tenant awareness —
 // mirrors sales-invoice-service.ts's verifySalesOrderLinkable (security
-// review finding on that module, applied here from the start).
-async function verifyPurchaseOrderLinkable(purchaseOrderId: string): Promise<void> {
-  const purchaseOrder = await purchaseOrderService.getPurchaseOrder(purchaseOrderId);
+// review finding on that module, applied here from the start). Accepts the
+// caller's client (plain `prisma` for the pre-transaction create/update
+// path, `tx` inside postPurchaseInvoice) — same reasoning as verifySupplier
+// above: a posting-time read through the global `prisma` singleton would
+// read outside the Serializable transaction's own snapshot (code review
+// finding — purchaseOrderService.getPurchaseOrder gained this optional
+// client parameter specifically for this caller).
+async function verifyPurchaseOrderLinkable(client: PrismaClientOrTransaction, purchaseOrderId: string): Promise<void> {
+  const purchaseOrder = await purchaseOrderService.getPurchaseOrder(purchaseOrderId, client);
   if (!purchaseOrder) {
     throw new AppError(PURCHASE_ORDER_NOT_FOUND_MESSAGE);
   }
@@ -365,9 +371,10 @@ async function verifyPurchaseOrderLinkable(purchaseOrderId: string): Promise<voi
 // enforced by the `goodsReceiptNoteId` `@unique` constraint at persist time
 // (translated to a friendly error in persistNewPurchaseInvoice/
 // replaceItemsAndUpdate), mirrors sales-invoice-service.ts's
-// verifyDeliveryChallanLinkable exactly.
-async function verifyGoodsReceiptNoteLinkable(goodsReceiptNoteId: string): Promise<void> {
-  const grn = await goodsReceiptNoteService.getGoodsReceiptNote(goodsReceiptNoteId);
+// verifyDeliveryChallanLinkable exactly. Same tx-client threading as
+// verifyPurchaseOrderLinkable above, for the same reason.
+async function verifyGoodsReceiptNoteLinkable(client: PrismaClientOrTransaction, goodsReceiptNoteId: string): Promise<void> {
+  const grn = await goodsReceiptNoteService.getGoodsReceiptNote(goodsReceiptNoteId, client);
   if (!grn) {
     throw new AppError(GRN_NOT_FOUND_MESSAGE);
   }
@@ -801,10 +808,10 @@ export const purchaseInvoiceService = {
 
     await verifySupplier(prisma, user.companyId, data.supplierId);
     if (data.purchaseOrderId) {
-      await verifyPurchaseOrderLinkable(data.purchaseOrderId);
+      await verifyPurchaseOrderLinkable(prisma, data.purchaseOrderId);
     }
     if (data.goodsReceiptNoteId) {
-      await verifyGoodsReceiptNoteLinkable(data.goodsReceiptNoteId);
+      await verifyGoodsReceiptNoteLinkable(prisma, data.goodsReceiptNoteId);
     }
 
     const supplyType = await resolveSupplyType(user.companyId, data.placeOfSupplyStateCode);
@@ -851,10 +858,10 @@ export const purchaseInvoiceService = {
     const data = updatePurchaseInvoiceSchema.parse(input);
     await verifySupplier(prisma, user.companyId, data.supplierId);
     if (data.purchaseOrderId) {
-      await verifyPurchaseOrderLinkable(data.purchaseOrderId);
+      await verifyPurchaseOrderLinkable(prisma, data.purchaseOrderId);
     }
     if (data.goodsReceiptNoteId) {
-      await verifyGoodsReceiptNoteLinkable(data.goodsReceiptNoteId);
+      await verifyGoodsReceiptNoteLinkable(prisma, data.goodsReceiptNoteId);
     }
 
     const supplyType = await resolveSupplyType(user.companyId, data.placeOfSupplyStateCode);
@@ -946,7 +953,7 @@ export const purchaseInvoiceService = {
         // sales-invoice-service.ts's identical posture for its own linked
         // Sales Order.
         if (current.purchaseOrderId) {
-          await verifyPurchaseOrderLinkable(current.purchaseOrderId);
+          await verifyPurchaseOrderLinkable(tx, current.purchaseOrderId);
         }
 
         const supplyType = await resolveSupplyType(user.companyId, current.placeOfSupplyStateCode);
@@ -993,7 +1000,7 @@ export const purchaseInvoiceService = {
 
         // Step 1: Goods Receipt Note identity/line consistency.
         if (current.goodsReceiptNoteId) {
-          const grn = await goodsReceiptNoteService.getGoodsReceiptNote(current.goodsReceiptNoteId);
+          const grn = await goodsReceiptNoteService.getGoodsReceiptNote(current.goodsReceiptNoteId, tx);
           if (!grn) {
             throw new AppError(GRN_NOT_FOUND_MESSAGE);
           }

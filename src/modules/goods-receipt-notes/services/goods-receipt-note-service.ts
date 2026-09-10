@@ -273,11 +273,15 @@ export const goodsReceiptNoteService = {
   },
 
   // Company-scoped only (not FY-scoped) — mirrors deliveryChallanService.getDeliveryChallan.
-  async getGoodsReceiptNote(id: string): Promise<GoodsReceiptNoteDetail | null> {
+  // Accepts an optional transaction client so a posting-time caller (e.g.
+  // purchaseInvoiceService.postPurchaseInvoice) can re-verify this row
+  // through its own Serializable transaction's snapshot rather than the
+  // global `prisma` singleton (code review finding on purchase-invoice-service.ts).
+  async getGoodsReceiptNote(id: string, client: PrismaClientOrTransaction = prisma): Promise<GoodsReceiptNoteDetail | null> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "purchase", "view");
 
-    const grn = await goodsReceiptNoteRepository.findById(id);
+    const grn = await goodsReceiptNoteRepository.findById(id, client);
     if (!grn || grn.companyId !== user.companyId) {
       return null;
     }
