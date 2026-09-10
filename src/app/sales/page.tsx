@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardCheck, FileText, Receipt, RotateCcw, Truck } from "lucide-react";
+import { ClipboardCheck, FileMinus, FileText, Receipt, RotateCcw, Truck } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,12 @@ const SALES_MODULES = [
     icon: RotateCcw,
     title: "Sales Returns",
     description: "Physical, quantity-based reversals of posted invoices — stock back in, liability reduced.",
+  },
+  {
+    href: "/sales/credit-notes",
+    icon: FileMinus,
+    title: "Credit Notes",
+    description: "Pure financial adjustments reducing what a customer owes — no stock movement.",
   },
 ] as const;
 
