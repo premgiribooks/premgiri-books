@@ -43,13 +43,14 @@ Build the reusable ERP platform before implementing business modules.
 | 10  | Role & Permission Management       | ✅     |
 | 11  | Branch Management                  | ✅     |
 
-> ⚠️ **Status discrepancy (recorded 2026-07-14, needs user confirmation):** #11 Branch
-> Management is marked ✅ above, but no `src/modules/branches` module or `/branch` route
-> exists in the codebase — `context/feature-specs/12-branch-management.md` was drafted
-> 2026-07-12 and never implemented, and `phase-01-closure-notes.md` says "Branch Management
-> begins Phase 02." Only the `Branch` Prisma table (Database Foundation) exists. Warehouse
-> Management (#22 below) depends on Branch. The ✅ has been left as-is pending explicit user
-> direction; see `context/progress-tracker.md`.
+> ✅ **Status discrepancy resolved 2026-09-10:** #11 Branch Management's ✅ above was
+> premature when first recorded (2026-07-14) — `context/feature-specs/12-branch-management.md`
+> was drafted 2026-07-12 but not implemented until now. `src/modules/branch/` (Master
+> CRUD: Create/Edit/View/Activate/Deactivate — no delete), `src/app/branch/**` (list, new,
+> edit, and the optional `/branch/select` picker), and `src/lib/current-branch.ts` (the
+> context helper) are implemented, code-reviewed, and security-reviewed with zero findings.
+> The ✅ is now accurate. See `context/progress-tracker.md`'s Completed entry for the full
+> implementation record.
 
 Phase Status
 

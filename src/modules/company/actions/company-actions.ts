@@ -7,6 +7,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { assertPermission } from "@/lib/permissions";
 import { setCurrentCompany } from "@/lib/current-company";
+import { clearCurrentBranch } from "@/lib/current-branch";
 import { companyService } from "@/modules/company/services/company-service";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { saveCompanyLogo } from "@/modules/company/services/company-logo-service";
@@ -71,6 +72,11 @@ export async function uploadCompanyLogoAction(
 export async function selectCompanyAction(companyId: string): Promise<ActionResult> {
   try {
     await setCurrentCompany(companyId);
+    // A branch selected under a different company must never silently
+    // persist into this one (12-branch-management.md's Branch Selection
+    // rules). This is defence-in-depth on top of getCurrentBranch()'s own
+    // companyId check — it just avoids a lingering dead cookie.
+    await clearCurrentBranch();
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
   }

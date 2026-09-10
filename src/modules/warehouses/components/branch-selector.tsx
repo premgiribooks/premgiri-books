@@ -15,9 +15,9 @@ const NO_BRANCH_LABEL = "No branch";
 interface BranchSelectorProps {
   /**
    * The pickable branches — the company's active branches, plus (on edit) the
-   * warehouse's current branch even if since deactivated. Empty until Branch
-   * Management (12-branch-management.md) is implemented; that renders as
-   * "No branches" below, not an error (24-warehouse-management.md's UI).
+   * warehouse's current branch even if since deactivated. Empty for a
+   * zero-branch company (a fully-supported state per 12-branch-management.md);
+   * that renders as "No branches" below, not an error (24-warehouse-management.md's UI).
    */
   branches: WarehouseBranchOption[];
   value: string | undefined;

@@ -36,8 +36,8 @@ interface WarehouseFormProps {
    * set/unset default row actions) — so one component serves both screens,
    * mirroring gst-rate-form.tsx. */
   warehouse?: Warehouse;
-  /** The branch picker's options (the company's active branches; empty until
-   * Branch Management is implemented — a normal state, not an error). */
+  /** The branch picker's options (the company's active branches; empty for a
+   * zero-branch company — a normal state, not an error). */
   branchOptions: WarehouseBranchOption[];
 }
 
