@@ -1,0 +1,97 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
+
+import { AppShell } from "@/components/layout/app-shell";
+import { Button } from "@/components/ui/button";
+import { getCurrentCompanyUser } from "@/lib/current-user";
+import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { customerService } from "@/modules/customers/services/customer-service";
+import { SalesInvoiceFilterBar } from "@/modules/sales-invoices/components/sales-invoice-filter-bar";
+import { SalesInvoiceTable } from "@/modules/sales-invoices/components/sales-invoice-table";
+import { salesInvoiceService } from "@/modules/sales-invoices/services/sales-invoice-service";
+import { SALES_INVOICE_STATUS_VALUES } from "@/modules/sales-invoices/validation/sales-invoice-schema";
+import type { SalesInvoiceListFilters, SalesInvoiceStatusFilter } from "@/types/sales-invoice";
+
+interface SalesInvoiceListPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseFilters(params: Record<string, string | string[] | undefined>): SalesInvoiceListFilters {
+  const filters: SalesInvoiceListFilters = {};
+
+  const search = firstValue(params.search)?.trim();
+  if (search) {
+    filters.search = search;
+  }
+
+  const status = firstValue(params.status);
+  if (status && (SALES_INVOICE_STATUS_VALUES as readonly string[]).includes(status)) {
+    filters.status = status as SalesInvoiceStatusFilter;
+  }
+
+  const customerId = firstValue(params.customerId);
+  if (customerId) {
+    filters.customerId = customerId;
+  }
+
+  return filters;
+}
+
+export default async function SalesInvoiceListPage({ searchParams }: SalesInvoiceListPageProps) {
+  const user = await getCurrentCompanyUser();
+  const canView = await hasPermission(user, "sales", "view");
+  if (!canView) {
+    redirect("/");
+  }
+
+  const filters = parseFilters(await searchParams);
+
+  const [salesInvoices, customers, isAdmin, canCreate] = await Promise.all([
+    salesInvoiceService.listSalesInvoices(filters),
+    customerService.listSelectableCustomers(),
+    isCurrentUserCompanyAdmin(),
+    hasPermission(user, "sales", "create"),
+  ]);
+
+  return (
+    <AppShell isAdmin={isAdmin}>
+      <div className="flex flex-col gap-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Sales Invoices</h1>
+            <p className="text-sm text-muted-foreground">
+              GST-compliant tax invoices that post accounting entries and stock movement.
+            </p>
+          </div>
+          {canCreate ? (
+            <Button
+              nativeButton={false}
+              render={
+                <Link href="/sales/invoices/new">
+                  <Plus size={18} />
+                  New Sales Invoice
+                </Link>
+              }
+            />
+          ) : null}
+        </div>
+
+        <SalesInvoiceFilterBar
+          customers={customers.map((customer) => ({
+            id: customer.id,
+            name: customer.ledger.name,
+            isActive: customer.isActive,
+            creditLimit: customer.creditLimit,
+          }))}
+        />
+
+        <SalesInvoiceTable salesInvoices={salesInvoices} />
+      </div>
+    </AppShell>
+  );
+}

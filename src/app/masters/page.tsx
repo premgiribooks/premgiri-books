@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  Building,
   Building2,
   CalendarRange,
   FolderTree,
@@ -32,6 +33,12 @@ const MASTERS_MODULES = [
     icon: CalendarRange,
     title: "Financial Year Management",
     description: "Manage financial years, current year, and closing.",
+  },
+  {
+    href: "/branch",
+    icon: Building,
+    title: "Branch Management",
+    description: "Manage the company's branches and the branch you are working in.",
   },
   {
     href: "/masters/units",

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Hash, ShieldCheck, Users as UsersIcon } from "lucide-react";
+import { Hash, Receipt, ShieldCheck, Users as UsersIcon } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,12 @@ const SETTINGS_MODULES = [
     icon: Hash,
     title: "Document Numbering",
     description: "Configure the prefix and padding each document type uses when numbering.",
+  },
+  {
+    href: "/settings/sales-ledgers",
+    icon: Receipt,
+    title: "Sales & GST Ledgers",
+    description: "Map the ledgers Sales Invoice posting uses for sale, tax, and round-off entries.",
   },
 ] as const;
 

@@ -42,7 +42,8 @@ interface CompanyProfileFormProps {
 // Base UI's Select decides controlled-vs-uncontrolled on the first render by
 // checking whether `value` is `undefined` — NONE_VALUE (a distinct, defined
 // "controlled, nothing selected yet" sentinel) keeps it controlled for the
-// component's entire lifetime.
+// component's entire lifetime; see branch-selector.tsx/
+// product-option-selector.tsx for the reference fix this mirrors.
 const NONE_VALUE = "__none__";
 
 const BASE_DEFAULT_VALUES: CompanyProfileInput = {
@@ -290,7 +291,8 @@ export function CompanyProfileForm({ companyId, defaultValues }: CompanyProfileF
                   </Select>
                 </FormControl>
                 <p className="text-xs text-muted-foreground">
-                  Required before you can create a Purchase Order or other GST-taxed document —
+                  Required before you can create a Quotation, Purchase Order, or other
+                  GST-taxed document —
                   determines whether tax is CGST/SGST or IGST.
                 </p>
                 <FormMessage />

@@ -33,6 +33,7 @@ function clearStaleAuthCookies(response: NextResponse): NextResponse {
   response.cookies.delete(COOKIE_KEYS.SESSION_TOKEN);
   response.cookies.delete(COOKIE_KEYS.ACTIVE_COMPANY_ID);
   response.cookies.delete(COOKIE_KEYS.ACTIVE_FINANCIAL_YEAR_ID);
+  response.cookies.delete(COOKIE_KEYS.ACTIVE_BRANCH_ID);
   return response;
 }
 

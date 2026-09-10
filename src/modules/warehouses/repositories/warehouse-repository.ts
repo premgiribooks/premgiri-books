@@ -107,8 +107,8 @@ export const warehouseRepository = {
    * `includeBranchId` names a same-company branch that is inactive (an edited
    * warehouse's current, since-deactivated branch), it is included anyway so
    * the stored value stays visible and re-selectable, mirroring the category
-   * parent picker's identical convention. Until Branch Management is
-   * implemented this list is simply empty — a valid, fully-supported state.
+   * parent picker's identical convention. Simply empty for a zero-branch
+   * company — a valid, fully-supported state (12-branch-management.md).
    */
   async findSelectableBranches(
     companyId: string,

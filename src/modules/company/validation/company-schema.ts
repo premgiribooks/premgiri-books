@@ -13,8 +13,9 @@ const WEBSITE_REGEX = /^https?:\/\/.+/i;
 
 // The company's own GST state code (01-38, GST_STATE_CODES) — needed by the
 // GST Engine's determineSupplyType() to decide intra- vs inter-state tax on
-// every GST-taxed document (first consumer: Purchase Order, feature-spec 42).
-// Validated against the statutory list, never a free-text guess.
+// every GST-taxed document (first consumer: Quotation, feature-spec 35; also
+// needed by Purchase Order, feature-spec 42). Validated against the
+// statutory list, never a free-text guess.
 const STATE_CODE_SCHEMA = z
   .string()
   .trim()
@@ -93,3 +94,19 @@ export const companySettingsSchema = z.object({
 });
 
 export type CompanySettingsInput = z.infer<typeof companySettingsSchema>;
+
+// Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — a
+// separate schema/action/permission gate from companySettingsSchema above:
+// this section is gated by "settings"/"edit" (spec 34's precedent), not
+// "company"/"edit". All six optional so a partial save is allowed while
+// drafting the mapping — postSalesInvoice itself enforces completeness.
+export const salesLedgerMappingSchema = z.object({
+  salesLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputCgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputSgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputIgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  outputCessLedgerId: z.uuid("Select a valid ledger").optional(),
+  roundOffLedgerId: z.uuid("Select a valid ledger").optional(),
+});
+
+export type SalesLedgerMappingInput = z.infer<typeof salesLedgerMappingSchema>;

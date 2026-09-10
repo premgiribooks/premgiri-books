@@ -5,11 +5,13 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { CompanyProvider } from "@/components/providers/company-provider";
 import { FinancialYearProvider } from "@/components/providers/financial-year-provider";
+import { BranchProvider } from "@/components/providers/branch-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { getCurrentUserOrNull } from "@/lib/current-user";
 import { getCurrentCompany } from "@/lib/current-company";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import { getCurrentBranch } from "@/lib/current-branch";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +36,7 @@ export default async function RootLayout({
   const currentUser = await getCurrentUserOrNull();
   const currentCompany = await getCurrentCompany();
   const currentFinancialYear = await getCurrentFinancialYear();
+  const currentBranch = await getCurrentBranch();
 
   return (
     <html
@@ -46,8 +49,10 @@ export default async function RootLayout({
           <AuthProvider initialUser={currentUser}>
             <CompanyProvider initialCompany={currentCompany}>
               <FinancialYearProvider initialFinancialYear={currentFinancialYear}>
-                <TooltipProvider>{children}</TooltipProvider>
-                <Toaster />
+                <BranchProvider initialBranch={currentBranch}>
+                  <TooltipProvider>{children}</TooltipProvider>
+                  <Toaster />
+                </BranchProvider>
               </FinancialYearProvider>
             </CompanyProvider>
           </AuthProvider>

@@ -50,12 +50,13 @@ model Company {
   state            String?
   // The company's own GST state code (01-38, GST_STATE_CODES) — needed by
   // the GST Engine's determineSupplyType() to decide intra- vs inter-state
-  // tax on every GST-taxed document (first consumer: Purchase Order,
-  // feature-spec 42). Deliberately a real, explicit column rather than
-  // derived from `gstin`'s prefix or a fuzzy match against the free-text
-  // `state` name — an existing company's stateCode is null until a Company
-  // Admin sets it via Company Profile; the first document-creating call
-  // blocks with a friendly error until it is set, never guesses.
+  // tax on every GST-taxed document (first consumer: Quotation, feature-spec
+  // 35; also needed by Purchase Order, feature-spec 42). Deliberately a real,
+  // explicit column rather than derived from `gstin`'s prefix or a fuzzy
+  // match against the free-text `state` name — an existing company's
+  // stateCode is null until a Company Admin sets it via Company Profile; the
+  // first document-creating call blocks with a friendly error until it is
+  // set, never guesses.
   stateCode        String?
   district         String?
   country          String   @default("India")
@@ -99,6 +100,13 @@ model Company {
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
   stockTransactions StockTransaction[]
+  quotations        Quotation[]
+  salesOrders       SalesOrder[]
+  deliveryChallans  DeliveryChallan[]
+  salesInvoices     SalesInvoice[]
+  salesReturns      SalesReturn[]
+  creditNotes       CreditNote[]
+  debitNotes        DebitNote[]
 
   @@index([companyName])
 }
@@ -117,6 +125,24 @@ model CompanySettings {
   // zero is rejected; when true, it is allowed and stock reads back
   // negative.
   allowNegativeStock Boolean  @default(false)
+  // Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — six
+  // optional nullable FKs rather than auto-detection ("explicit over
+  // clever," this codebase's posture since the Document Number Engine's
+  // prefix map). Posting a Sales Invoice requires all six configured;
+  // drafting/editing does not. outputIgstLedgerId/outputCessLedgerId stay
+  // required even for an intra-state-only company for the same reason.
+  salesLedgerId      String?
+  salesLedger        Ledger?  @relation("CompanySettingsSalesLedger", fields: [salesLedgerId], references: [id])
+  outputCgstLedgerId String?
+  outputCgstLedger   Ledger?  @relation("CompanySettingsOutputCgst", fields: [outputCgstLedgerId], references: [id])
+  outputSgstLedgerId String?
+  outputSgstLedger   Ledger?  @relation("CompanySettingsOutputSgst", fields: [outputSgstLedgerId], references: [id])
+  outputIgstLedgerId String?
+  outputIgstLedger   Ledger?  @relation("CompanySettingsOutputIgst", fields: [outputIgstLedgerId], references: [id])
+  outputCessLedgerId String?
+  outputCessLedger   Ledger?  @relation("CompanySettingsOutputCess", fields: [outputCessLedgerId], references: [id])
+  roundOffLedgerId   String?
+  roundOffLedger     Ledger?  @relation("CompanySettingsRoundOff", fields: [roundOffLedgerId], references: [id])
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -138,6 +164,13 @@ model FinancialYear {
 
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
+  quotations        Quotation[]
+  salesOrders       SalesOrder[]
+  deliveryChallans  DeliveryChallan[]
+  salesInvoices     SalesInvoice[]
+  salesReturns      SalesReturn[]
+  creditNotes       CreditNote[]
+  debitNotes        DebitNote[]
   purchaseOrders    PurchaseOrder[]
 
   @@unique([companyId, name])
@@ -193,11 +226,19 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company        Company?        @relation(fields: [companyId], references: [id])
-  role           Role?           @relation(fields: [roleId], references: [id])
-  sessions       Session[]
-  vouchers       Voucher[]
-  purchaseOrders PurchaseOrder[]
+  company                   Company?           @relation(fields: [companyId], references: [id])
+  role                      Role?              @relation(fields: [roleId], references: [id])
+  sessions                  Session[]
+  vouchers                  Voucher[]
+  quotations                Quotation[]
+  salesOrders               SalesOrder[]
+  deliveryChallans          DeliveryChallan[]
+  salesInvoices             SalesInvoice[]
+  salesInvoiceItemOverrides SalesInvoiceItem[]
+  salesReturns              SalesReturn[]
+  creditNotes               CreditNote[]
+  debitNotes                DebitNote[]
+  purchaseOrders            PurchaseOrder[]
 
   @@index([companyId])
   @@index([roleId])
@@ -316,6 +357,16 @@ model Ledger {
   customer       Customer?
   supplier       Supplier?
   voucherEntries VoucherEntry[]
+
+  salesInvoicePayments              SalesInvoicePayment[]
+  salesReturnsAsRefundLedger        SalesReturn[]         @relation("SalesReturnRefundLedger")
+  creditNotesAsRefundLedger         CreditNote[]          @relation("CreditNoteRefundLedger")
+  companySettingsAsSalesLedger      CompanySettings[]     @relation("CompanySettingsSalesLedger")
+  companySettingsAsOutputCgstLedger CompanySettings[]     @relation("CompanySettingsOutputCgst")
+  companySettingsAsOutputSgstLedger CompanySettings[]     @relation("CompanySettingsOutputSgst")
+  companySettingsAsOutputIgstLedger CompanySettings[]     @relation("CompanySettingsOutputIgst")
+  companySettingsAsOutputCessLedger CompanySettings[]     @relation("CompanySettingsOutputCess")
+  companySettingsAsRoundOffLedger   CompanySettings[]     @relation("CompanySettingsRoundOff")
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -541,8 +592,10 @@ model Warehouse {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  products          Product[]
-  stockTransactions StockTransaction[]
+  products             Product[]
+  stockTransactions    StockTransaction[]
+  deliveryChallanItems DeliveryChallanItem[]
+  salesInvoiceItems    SalesInvoiceItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, code])
@@ -615,9 +668,13 @@ model Product {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
-  priceListItems     PriceListItem[]
-  stockTransactions  StockTransaction[]
-  purchaseOrderItems PurchaseOrderItem[]
+  priceListItems       PriceListItem[]
+  stockTransactions    StockTransaction[]
+  quotationItems       QuotationItem[]
+  salesOrderItems      SalesOrderItem[]
+  deliveryChallanItems DeliveryChallanItem[]
+  salesInvoiceItems    SalesInvoiceItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -789,6 +846,13 @@ model Customer {
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+
+  quotations       Quotation[]
+  salesOrders      SalesOrder[]
+  deliveryChallans DeliveryChallan[]
+  salesInvoices    SalesInvoice[]
+  creditNotes      CreditNote[]
+  debitNotes       DebitNote[]
 
   @@index([companyId])
   @@index([priceListId])
@@ -999,7 +1063,11 @@ model Voucher {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  entries VoucherEntry[]
+  entries      VoucherEntry[]
+  salesInvoice SalesInvoice?
+  salesReturn  SalesReturn?
+  creditNote   CreditNote?
+  debitNote    DebitNote?
 
   @@unique([companyId, financialYearId, voucherType, voucherNumber])
   @@index([companyId, voucherDate])
@@ -1108,6 +1176,115 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+// Quotation — the first, non-binding step of the Sales document chain
+// (35-quotations.md; architecture-context.md Document Driven: Quotation ->
+// Sales Order -> Delivery Challan -> Sales Invoice). A priced offer with no
+// financial or stock effect: no Voucher, no stock movement, no GST register
+// entry. Header totals are a denormalized snapshot, recomputed from `items`
+// via the GST Engine's calculateDocument every time lines are saved while
+// editable, and simply not recomputed once terminal (mirrors Voucher.
+// totalAmount's "denormalized for list rendering only" convention).
+//
+// `salesOrders SalesOrder[]` below is feature-spec 36's back-relation,
+// added by that spec's own migration (a purely additive change) together
+// with "Convert to Sales Order" (Quotation.createFromQuotation's caller).
+//
+// No `branchId` — Branch Management (feature-spec 12) is implemented, but
+// every document in this chain (specs 36-41) is drafted around this header
+// shape without a branch dimension, and Voucher/DocumentSequence/
+// StockTransaction are all still branch-less too; adding it only here would
+// make Quotation the sole branch-aware document. Revisit as one deliberate
+// cross-cutting migration later, not per-document.
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model Quotation {
+  id                     String          @id @default(uuid())
+  companyId              String
+  company                Company         @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear   @relation(fields: [financialYearId], references: [id])
+  quotationNumber        String
+  quotationDate          DateTime        @db.Date
+  validUntil             DateTime?       @db.Date
+  customerId             String
+  customer               Customer        @relation(fields: [customerId], references: [id])
+  placeOfSupplyStateCode String
+  status                 QuotationStatus @default(DRAFT)
+  narration              String?
+  subtotal               Decimal         @db.Decimal(14, 2)
+  totalDiscount          Decimal         @db.Decimal(14, 2)
+  taxableAmount          Decimal         @db.Decimal(14, 2)
+  totalCgst              Decimal         @db.Decimal(14, 2)
+  totalSgst              Decimal         @db.Decimal(14, 2)
+  totalIgst              Decimal         @db.Decimal(14, 2)
+  totalCess              Decimal         @db.Decimal(14, 2)
+  grandTotal             Decimal         @db.Decimal(14, 2)
+  createdByUserId        String?
+  createdBy              User?           @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  items       QuotationItem[]
+  salesOrders SalesOrder[]
+
+  @@unique([companyId, financialYearId, quotationNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+}
+
+model QuotationItem {
+  id              String    @id @default(uuid())
+  quotationId     String
+  quotation       Quotation @relation(fields: [quotationId], references: [id])
+  lineNumber      Int
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  quantity        Decimal   @db.Decimal(14, 4)
+  rate            Decimal   @db.Decimal(14, 2)
+  discountPercent Decimal   @default(0) @db.Decimal(5, 2)
+  discountAmount  Decimal   @default(0) @db.Decimal(14, 2)
+  ratePercent     Decimal   @db.Decimal(5, 2)
+  cessPercent     Decimal   @default(0) @db.Decimal(5, 2)
+  taxableAmount   Decimal   @db.Decimal(14, 2)
+  cgst            Decimal   @db.Decimal(14, 2)
+  sgst            Decimal   @db.Decimal(14, 2)
+  igst            Decimal   @db.Decimal(14, 2)
+  cess            Decimal   @db.Decimal(14, 2)
+  totalAmount     Decimal   @db.Decimal(14, 2)
+
+  @@unique([quotationId, lineNumber])
+  @@index([quotationId])
+  @@index([productId])
+}
+
+// Sales Order — the second, binding step of the Sales document chain
+// (36-sales-orders.md; architecture-context.md Document Driven: Quotation ->
+// Sales Order -> Delivery Challan -> Sales Invoice). Like Quotation, has no
+// financial or stock effect and no stock reservation (no such feature exists
+// in the Inventory Engine) — what it adds over Quotation is fulfillment
+// tracking via `SalesOrderItem.deliveredQuantity`, maintained exclusively by
+// `salesOrderService.applyDelivery`, the entry point Delivery Challan
+// (feature-spec 37) calls from its own posting flow.
+//
+// No `branchId` — see Quotation's identical note above; every document in
+// this chain (specs 35-41) is drafted branch-less by deliberate, recorded
+// scope decision.
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
 model PurchaseOrder {
   id                     String              @id @default(uuid())
   companyId              String
@@ -1168,4 +1345,511 @@ model PurchaseOrderItem {
 
   @@unique([purchaseOrderId, lineNumber])
   @@index([productId])
+}
+
+model SalesOrder {
+  id                     String           @id @default(uuid())
+  companyId              String
+  company                Company          @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear    @relation(fields: [financialYearId], references: [id])
+  orderNumber            String
+  orderDate              DateTime         @db.Date
+  expectedDeliveryDate   DateTime?        @db.Date
+  customerId             String
+  customer               Customer         @relation(fields: [customerId], references: [id])
+  placeOfSupplyStateCode String
+  status                 SalesOrderStatus @default(DRAFT)
+  narration              String?
+  quotationId            String?
+  quotation              Quotation?       @relation(fields: [quotationId], references: [id])
+  subtotal               Decimal          @db.Decimal(14, 2)
+  totalDiscount          Decimal          @db.Decimal(14, 2)
+  taxableAmount          Decimal          @db.Decimal(14, 2)
+  totalCgst              Decimal          @db.Decimal(14, 2)
+  totalSgst              Decimal          @db.Decimal(14, 2)
+  totalIgst              Decimal          @db.Decimal(14, 2)
+  totalCess              Decimal          @db.Decimal(14, 2)
+  grandTotal             Decimal          @db.Decimal(14, 2)
+  createdByUserId        String?
+  createdBy              User?            @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  items            SalesOrderItem[]
+  deliveryChallans DeliveryChallan[]
+  salesInvoices    SalesInvoice[]
+
+  @@unique([companyId, financialYearId, orderNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+  @@index([quotationId])
+}
+
+model SalesOrderItem {
+  id                String     @id @default(uuid())
+  salesOrderId      String
+  salesOrder        SalesOrder @relation(fields: [salesOrderId], references: [id])
+  lineNumber        Int
+  productId         String
+  product           Product    @relation(fields: [productId], references: [id])
+  quantity          Decimal    @db.Decimal(14, 4)
+  deliveredQuantity Decimal    @default(0) @db.Decimal(14, 4)
+  rate              Decimal    @db.Decimal(14, 2)
+  discountPercent   Decimal    @default(0) @db.Decimal(5, 2)
+  discountAmount    Decimal    @default(0) @db.Decimal(14, 2)
+  ratePercent       Decimal    @db.Decimal(5, 2)
+  cessPercent       Decimal    @default(0) @db.Decimal(5, 2)
+  taxableAmount     Decimal    @db.Decimal(14, 2)
+  cgst              Decimal    @db.Decimal(14, 2)
+  sgst              Decimal    @db.Decimal(14, 2)
+  igst              Decimal    @db.Decimal(14, 2)
+  cess              Decimal    @db.Decimal(14, 2)
+  totalAmount       Decimal    @db.Decimal(14, 2)
+
+  deliveryChallanItems DeliveryChallanItem[]
+
+  @@unique([salesOrderId, lineNumber])
+  @@index([salesOrderId])
+  @@index([productId])
+}
+
+// Delivery Challan (feature-spec 37) — the dispatch/goods-movement record
+// between a confirmed Sales Order and the eventual Sales Invoice (spec 38).
+// Deliberately carries NO pricing or GST fields (quantity and source
+// warehouse only) and does NOT call the Inventory Engine — per the tracker's
+// own Depends On column, stock only moves at Sales Invoice posting time.
+// `salesOrderId` is optional at the header (a challan may be raised
+// directly), but linkage is conditional per line: every line must carry a
+// `salesOrderItemId` of that same order when set, and none may when it
+// isn't — enforced in delivery-challan-schema.ts/delivery-challan-service.ts,
+// not expressible as a schema-level constraint.
+enum DeliveryChallanStatus {
+  DRAFT
+  DISPATCHED
+  INVOICED
+  CANCELLED
+}
+
+model DeliveryChallan {
+  id              String                @id @default(uuid())
+  companyId       String
+  company         Company               @relation(fields: [companyId], references: [id])
+  financialYearId String
+  financialYear   FinancialYear         @relation(fields: [financialYearId], references: [id])
+  challanNumber   String
+  challanDate     DateTime              @db.Date
+  customerId      String
+  customer        Customer              @relation(fields: [customerId], references: [id])
+  salesOrderId    String?
+  salesOrder      SalesOrder?           @relation(fields: [salesOrderId], references: [id])
+  status          DeliveryChallanStatus @default(DRAFT)
+  narration       String?
+  createdByUserId String?
+  createdBy       User?                 @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  items        DeliveryChallanItem[]
+  salesInvoice SalesInvoice?
+
+  @@unique([companyId, financialYearId, challanNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+  @@index([salesOrderId])
+}
+
+model DeliveryChallanItem {
+  id                String          @id @default(uuid())
+  deliveryChallanId String
+  deliveryChallan   DeliveryChallan @relation(fields: [deliveryChallanId], references: [id])
+  lineNumber        Int
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  warehouseId       String
+  warehouse         Warehouse       @relation(fields: [warehouseId], references: [id])
+  quantity          Decimal         @db.Decimal(14, 4)
+  salesOrderItemId  String?
+  salesOrderItem    SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id])
+
+  @@unique([deliveryChallanId, lineNumber])
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([salesOrderItemId])
+}
+
+// Sales Invoice (feature-spec 38) — the GST-compliant tax invoice that turns
+// a sale into accounting entries (Voucher Engine), stock movement
+// (Inventory Engine), and GST-correct totals (GST Engine), atomically, at
+// posting time. The pivotal Phase 3 document: every document before it in
+// this chain (Quotation, Sales Order, Delivery Challan) is display-only/
+// non-stock-moving; this is the first real consumer of all three engines
+// together. `voucherId` is `@unique` (one Voucher per invoice); `Voucher.
+// referenceType`/`referenceId` (spec 31's polymorphic pair) also point back,
+// belt-and-suspenders per this spec's Data Model decision.
+enum SalesInvoiceStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+// PERMANENT requires customerId; QUICK requires quickCustomerName (mobile/
+// GSTIN/address optional) and forbids customerId; WALK_IN forbids both
+// customerId and every quickCustomer* field except an optional
+// quickCustomerName for display only. Enforced in
+// sales-invoice-schema.ts/sales-invoice-service.ts, not a DB constraint.
+enum CustomerMode {
+  PERMANENT
+  QUICK
+  WALK_IN
+}
+
+model SalesInvoice {
+  id                     String             @id @default(uuid())
+  companyId              String
+  company                Company            @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear      @relation(fields: [financialYearId], references: [id])
+  invoiceNumber          String
+  invoiceDate            DateTime           @db.Date
+  customerMode           CustomerMode
+  customerId             String?
+  customer               Customer?          @relation(fields: [customerId], references: [id])
+  quickCustomerName      String?
+  quickCustomerMobile    String?
+  quickCustomerGstin     String?
+  quickCustomerAddress   String?
+  placeOfSupplyStateCode String
+  salesOrderId           String?
+  salesOrder             SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  deliveryChallanId      String?            @unique
+  deliveryChallan        DeliveryChallan?   @relation(fields: [deliveryChallanId], references: [id])
+  status                 SalesInvoiceStatus @default(DRAFT)
+  narration              String?
+  subtotal               Decimal            @db.Decimal(14, 2)
+  totalDiscount          Decimal            @db.Decimal(14, 2)
+  taxableAmount          Decimal            @db.Decimal(14, 2)
+  totalCgst              Decimal            @db.Decimal(14, 2)
+  totalSgst              Decimal            @db.Decimal(14, 2)
+  totalIgst              Decimal            @db.Decimal(14, 2)
+  totalCess              Decimal            @db.Decimal(14, 2)
+  roundOff               Decimal            @default(0) @db.Decimal(14, 2)
+  grandTotal             Decimal            @db.Decimal(14, 2)
+  amountPaid             Decimal            @default(0) @db.Decimal(14, 2)
+  voucherId              String?            @unique
+  voucher                Voucher?           @relation(fields: [voucherId], references: [id])
+  createdByUserId        String?
+  createdBy              User?              @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  items        SalesInvoiceItem[]
+  payments     SalesInvoicePayment[]
+  salesReturns SalesReturn[]
+  creditNotes  CreditNote[]
+  debitNotes   DebitNote[]
+
+  @@unique([companyId, financialYearId, invoiceNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+  @@index([salesOrderId])
+}
+
+model SalesInvoiceItem {
+  id                 String       @id @default(uuid())
+  salesInvoiceId     String
+  salesInvoice       SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  lineNumber         Int
+  productId          String
+  product            Product      @relation(fields: [productId], references: [id])
+  warehouseId        String
+  warehouse          Warehouse    @relation(fields: [warehouseId], references: [id])
+  quantity           Decimal      @db.Decimal(14, 4)
+  rate               Decimal      @db.Decimal(14, 2)
+  discountPercent    Decimal      @default(0) @db.Decimal(5, 2)
+  discountAmount     Decimal      @default(0) @db.Decimal(14, 2)
+  ratePercent        Decimal      @db.Decimal(5, 2)
+  cessPercent        Decimal      @default(0) @db.Decimal(5, 2)
+  taxableAmount      Decimal      @db.Decimal(14, 2)
+  cgst               Decimal      @db.Decimal(14, 2)
+  sgst               Decimal      @db.Decimal(14, 2)
+  igst               Decimal      @db.Decimal(14, 2)
+  cess               Decimal      @db.Decimal(14, 2)
+  totalAmount        Decimal      @db.Decimal(14, 2)
+  // The spec-33 forward-note, implemented literally: cgst/sgst/igst/cess
+  // above always hold the SYSTEM-COMPUTED values (never overwritten);
+  // overridden* holds the USED values only when isTaxOverridden is true,
+  // alongside a required overrideReason — both remain readable forever
+  // (the audit trail). The posted voucher uses overridden* when present.
+  isTaxOverridden    Boolean      @default(false)
+  overriddenCgst     Decimal?     @db.Decimal(14, 2)
+  overriddenSgst     Decimal?     @db.Decimal(14, 2)
+  overriddenIgst     Decimal?     @db.Decimal(14, 2)
+  overriddenCess     Decimal?     @db.Decimal(14, 2)
+  overrideReason     String?
+  overriddenByUserId String?
+  overriddenBy       User?        @relation(fields: [overriddenByUserId], references: [id])
+
+  salesReturnItems SalesReturnItem[]
+
+  @@unique([salesInvoiceId, lineNumber])
+  @@index([productId])
+  @@index([warehouseId])
+}
+
+// Cash/bank payment lines — ledgerId references any active company Ledger
+// directly (typically "Cash-in-Hand" or a BankAccount-linked Ledger), no new
+// Company Settings mapping needed (chosen explicitly per payment line, like
+// every other transaction in this codebase picks its own ledgers).
+model SalesInvoicePayment {
+  id             String       @id @default(uuid())
+  salesInvoiceId String
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  ledgerId       String
+  ledger         Ledger       @relation(fields: [ledgerId], references: [id])
+  amount         Decimal      @db.Decimal(14, 2)
+  reference      String?
+
+  @@index([salesInvoiceId])
+  @@index([ledgerId])
+}
+
+// 39-sales-return.md — the physical, quantity-based reversal of a posted
+// Sales Invoice: goods come back into stock (StockTransactionType.
+// SALES_RETURN, direction IN) and the customer's liability decreases
+// (VoucherType.SALES_RETURN). Distinct from Credit Note (spec 40, pure
+// financial, no stock) and Debit Note (spec 41) — see that spec's Goal
+// section for the full three-way split. No independent product/rate entry:
+// every line references a SalesInvoiceItem directly and derives its
+// rate/tax from it (the overridden values when the source line was
+// overridden) — only quantity is entered.
+enum SalesReturnStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+// LEDGER_ADJUSTMENT (default): reduces the customer's outstanding ledger
+// balance, no cash moves — the common PERMANENT/converted-QUICK case.
+// CASH_REFUND: cash/bank actually leaves the business, requiring
+// refundLedgerId. A WALK_IN-sourced invoice has no customer ledger, so its
+// returns are forced to CASH_REFUND regardless of this column's default
+// (enforced in sales-return-service.ts, not a DB constraint).
+enum RefundMode {
+  LEDGER_ADJUSTMENT
+  CASH_REFUND
+}
+
+model SalesReturn {
+  id              String            @id @default(uuid())
+  companyId       String
+  company         Company           @relation(fields: [companyId], references: [id])
+  financialYearId String
+  financialYear   FinancialYear     @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postSalesReturn (39-sales-return.md's
+  // Decisions) — a DRAFT row has no committed identity yet. Postgres unique
+  // indexes treat NULL as distinct, so multiple DRAFT rows coexist safely
+  // under the @@unique below.
+  returnNumber    String?
+  returnDate      DateTime          @db.Date
+  salesInvoiceId  String
+  salesInvoice    SalesInvoice      @relation(fields: [salesInvoiceId], references: [id])
+  refundMode      RefundMode        @default(LEDGER_ADJUSTMENT)
+  refundLedgerId  String?
+  refundLedger    Ledger?           @relation("SalesReturnRefundLedger", fields: [refundLedgerId], references: [id])
+  status          SalesReturnStatus @default(DRAFT)
+  reason          String?
+  taxableAmount   Decimal           @db.Decimal(14, 2)
+  totalCgst       Decimal           @db.Decimal(14, 2)
+  totalSgst       Decimal           @db.Decimal(14, 2)
+  totalIgst       Decimal           @db.Decimal(14, 2)
+  totalCess       Decimal           @db.Decimal(14, 2)
+  grandTotal      Decimal           @db.Decimal(14, 2)
+  voucherId       String?           @unique
+  voucher         Voucher?          @relation(fields: [voucherId], references: [id])
+  createdByUserId String?
+  createdBy       User?             @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  items SalesReturnItem[]
+
+  @@unique([companyId, financialYearId, returnNumber])
+  @@index([companyId, salesInvoiceId])
+  @@index([companyId, status])
+}
+
+model SalesReturnItem {
+  id                 String           @id @default(uuid())
+  salesReturnId      String
+  salesReturn        SalesReturn      @relation(fields: [salesReturnId], references: [id])
+  lineNumber         Int
+  salesInvoiceItemId String
+  salesInvoiceItem   SalesInvoiceItem @relation(fields: [salesInvoiceItemId], references: [id])
+  quantity           Decimal          @db.Decimal(14, 4)
+  taxableAmount      Decimal          @db.Decimal(14, 2)
+  cgst               Decimal          @db.Decimal(14, 2)
+  sgst               Decimal          @db.Decimal(14, 2)
+  igst               Decimal          @db.Decimal(14, 2)
+  cess               Decimal          @db.Decimal(14, 2)
+  totalAmount        Decimal          @db.Decimal(14, 2)
+
+  // Prevents the same invoice line from being listed twice within one
+  // return — a business returning more of the same line increases that
+  // one line's quantity, never adds a second row for the same
+  // salesInvoiceItemId (39-sales-return.md's Decisions).
+  @@unique([salesReturnId, lineNumber])
+  @@unique([salesReturnId, salesInvoiceItemId])
+  @@index([salesInvoiceItemId])
+}
+
+// 40-credit-note.md — a PURE FINANCIAL adjustment reducing what a customer
+// owes, with NO stock movement (price correction, post-invoice discount,
+// rate dispute, or the optional GST-document-labeled complement to a return
+// SalesReturn already posted on its own). Distinct from SalesReturn (always
+// quantity/stock-based) and Debit Note (spec 41, the mirror increasing what
+// a customer owes). Lines are freeform (description + taxableAmount +
+// ratePercent/cessPercent), not derived from a product or invoice line —
+// deliberately looser than SalesReturnItem's invoice-anchored shape, since a
+// Credit Note's purpose is adjustments that don't map onto "N units of
+// product X".
+enum CreditNoteStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model CreditNote {
+  id                     String           @id @default(uuid())
+  companyId              String
+  company                Company          @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear    @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postCreditNote — mirrors SalesReturn's own
+  // returnNumber lifecycle (40-credit-note.md's Business Rules).
+  noteNumber             String?
+  noteDate               DateTime         @db.Date
+  // Always required — a Credit Note always adjusts a specific customer's
+  // liability, unlike salesInvoiceId (optional: a discount can cover an
+  // account's overall history, not one particular invoice).
+  customerId             String
+  customer               Customer         @relation(fields: [customerId], references: [id])
+  salesInvoiceId         String?
+  salesInvoice           SalesInvoice?    @relation(fields: [salesInvoiceId], references: [id])
+  placeOfSupplyStateCode String
+  // Reuses SalesReturn's RefundMode enum and identical conditional-
+  // refundLedgerId rule — a Credit Note may reduce the customer's ledger
+  // balance or trigger an actual cash refund, for the same reason.
+  refundMode             RefundMode       @default(LEDGER_ADJUSTMENT)
+  refundLedgerId         String?
+  refundLedger           Ledger?          @relation("CreditNoteRefundLedger", fields: [refundLedgerId], references: [id])
+  status                 CreditNoteStatus @default(DRAFT)
+  // Required (unlike SalesReturn's optional reason) — a Credit Note with no
+  // linked invoice has no other context explaining why it exists.
+  reason                 String
+  taxableAmount          Decimal          @db.Decimal(14, 2)
+  totalCgst              Decimal          @db.Decimal(14, 2)
+  totalSgst              Decimal          @db.Decimal(14, 2)
+  totalIgst              Decimal          @db.Decimal(14, 2)
+  totalCess              Decimal          @db.Decimal(14, 2)
+  grandTotal             Decimal          @db.Decimal(14, 2)
+  voucherId              String?          @unique
+  voucher                Voucher?         @relation(fields: [voucherId], references: [id])
+  createdByUserId        String?
+  createdBy              User?            @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  items CreditNoteItem[]
+
+  @@unique([companyId, financialYearId, noteNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+  @@index([salesInvoiceId])
+}
+
+model CreditNoteItem {
+  id            String     @id @default(uuid())
+  creditNoteId  String
+  creditNote    CreditNote @relation(fields: [creditNoteId], references: [id])
+  lineNumber    Int
+  description   String
+  taxableAmount Decimal    @db.Decimal(14, 2)
+  ratePercent   Decimal    @db.Decimal(5, 2)
+  cessPercent   Decimal    @default(0) @db.Decimal(5, 2)
+  cgst          Decimal    @db.Decimal(14, 2)
+  sgst          Decimal    @db.Decimal(14, 2)
+  igst          Decimal    @db.Decimal(14, 2)
+  cess          Decimal    @db.Decimal(14, 2)
+  totalAmount   Decimal    @db.Decimal(14, 2)
+
+  @@unique([creditNoteId, lineNumber])
+}
+
+// 41-debit-note.md — the mirror of CreditNote: a PURE FINANCIAL adjustment
+// that INCREASES what a customer owes, with NO stock movement (under-billing
+// correction, additional post-invoice charges, interest/late-fee assessment).
+// Identical shape to CreditNote except: no refundMode/refundLedgerId (a
+// Debit Note only ever increases the customer's ledger balance — there is no
+// cash-leaving-the-business direction to model).
+enum DebitNoteStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model DebitNote {
+  id                     String          @id @default(uuid())
+  companyId              String
+  company                Company         @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear   @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postDebitNote — mirrors CreditNote's own
+  // noteNumber lifecycle.
+  noteNumber             String?
+  noteDate               DateTime        @db.Date
+  customerId             String
+  customer               Customer        @relation(fields: [customerId], references: [id])
+  salesInvoiceId         String?
+  salesInvoice           SalesInvoice?   @relation(fields: [salesInvoiceId], references: [id])
+  placeOfSupplyStateCode String
+  status                 DebitNoteStatus @default(DRAFT)
+  reason                 String
+  taxableAmount          Decimal         @db.Decimal(14, 2)
+  totalCgst              Decimal         @db.Decimal(14, 2)
+  totalSgst              Decimal         @db.Decimal(14, 2)
+  totalIgst              Decimal         @db.Decimal(14, 2)
+  totalCess              Decimal         @db.Decimal(14, 2)
+  grandTotal             Decimal         @db.Decimal(14, 2)
+  voucherId              String?         @unique
+  voucher                Voucher?        @relation(fields: [voucherId], references: [id])
+  createdByUserId        String?
+  createdBy              User?           @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  items DebitNoteItem[]
+
+  @@unique([companyId, financialYearId, noteNumber])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+  @@index([salesInvoiceId])
+}
+
+model DebitNoteItem {
+  id            String    @id @default(uuid())
+  debitNoteId   String
+  debitNote     DebitNote @relation(fields: [debitNoteId], references: [id])
+  lineNumber    Int
+  description   String
+  taxableAmount Decimal   @db.Decimal(14, 2)
+  ratePercent   Decimal   @db.Decimal(5, 2)
+  cessPercent   Decimal   @default(0) @db.Decimal(5, 2)
+  cgst          Decimal   @db.Decimal(14, 2)
+  sgst          Decimal   @db.Decimal(14, 2)
+  igst          Decimal   @db.Decimal(14, 2)
+  cess          Decimal   @db.Decimal(14, 2)
+  totalAmount   Decimal   @db.Decimal(14, 2)
+
+  @@unique([debitNoteId, lineNumber])
 }

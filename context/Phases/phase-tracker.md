@@ -43,13 +43,14 @@ Build the reusable ERP platform before implementing business modules.
 | 10  | Role & Permission Management       | ✅     |
 | 11  | Branch Management                  | ✅     |
 
-> ⚠️ **Status discrepancy (recorded 2026-07-14, needs user confirmation):** #11 Branch
-> Management is marked ✅ above, but no `src/modules/branches` module or `/branch` route
-> exists in the codebase — `context/feature-specs/12-branch-management.md` was drafted
-> 2026-07-12 and never implemented, and `phase-01-closure-notes.md` says "Branch Management
-> begins Phase 02." Only the `Branch` Prisma table (Database Foundation) exists. Warehouse
-> Management (#22 below) depends on Branch. The ✅ has been left as-is pending explicit user
-> direction; see `context/progress-tracker.md`.
+> ✅ **Status discrepancy resolved 2026-09-10:** #11 Branch Management's ✅ above was
+> premature when first recorded (2026-07-14) — `context/feature-specs/12-branch-management.md`
+> was drafted 2026-07-12 but not implemented until now. `src/modules/branch/` (Master
+> CRUD: Create/Edit/View/Activate/Deactivate — no delete), `src/app/branch/**` (list, new,
+> edit, and the optional `/branch/select` picker), and `src/lib/current-branch.ts` (the
+> context helper) are implemented, code-reviewed, and security-reviewed with zero findings.
+> The ✅ is now accurate. See `context/progress-tracker.md`'s Completed entry for the full
+> implementation record.
 
 Phase Status
 
@@ -178,17 +179,17 @@ remains unimplemented — each records a forward-note migration:
 
 | #   | Feature           | Depends On                        | Status |
 | --- | ----------------- | --------------------------------- | ------ |
-| 33  | Quotations        | Customer + Products + Pricing     | ⬜     |
-| 34  | Sales Orders      | Quotations                        | ⬜     |
-| 35  | Delivery Challans | Sales Orders                      | ⬜     |
-| 36  | Sales Invoice     | Voucher + Inventory + GST Engines | ⬜     |
-| 37  | Sales Return      | Sales Invoice                     | ⬜     |
-| 38  | Credit Note       | Sales Invoice                     | ⬜     |
-| 39  | Debit Note        | Sales Invoice                     | ⬜     |
+| 33  | Quotations        | Customer + Products + Pricing     | ✅     |
+| 34  | Sales Orders      | Quotations                        | ✅     |
+| 35  | Delivery Challans | Sales Orders                      | ✅     |
+| 36  | Sales Invoice     | Voucher + Inventory + GST Engines | ✅     |
+| 37  | Sales Return      | Sales Invoice                     | ✅     |
+| 38  | Credit Note       | Sales Invoice                     | ✅     |
+| 39  | Debit Note        | Sales Invoice                     | ✅     |
 
 Phase Status
 
-⬜ Not Started
+✅ Complete — Quotations (#33, feature-spec 35), Sales Orders (#34, feature-spec 36), Delivery Challans (#35, feature-spec 37), Sales Invoice (#36, feature-spec 38), Sales Return (#37, feature-spec 39), Credit Note (#38, feature-spec 40), and Debit Note (#39, feature-spec 41) all implemented 2026-09-10 — all seven Phase 3 documents. Establishes the `/sales` hub and the shared header/line-item/engine-composition conventions the whole set reuses. "Convert to Sales Order" (Quotation's entry point into #34), "Create Delivery Challan" (Sales Order's entry point into #35), "Create Invoice" (Delivery Challan's entry point into #36), and "Create Return" (Sales Invoice's entry point into #37) are all wired up — see `context/progress-tracker.md`'s Completed entries for the full record. Sales Invoice is the first document in this chain to actually post to the Voucher/Inventory/GST Engines (every document before it is deliberately display-only/non-stock-moving) and closes the conversion chain; Sales Return is the first of three post-invoice adjustment documents, reusing Sales Invoice's Company Settings ledger mapping and posting conventions rather than re-deriving them. Credit Note is the second — a pure financial adjustment with freeform lines and no stock movement, reusing Sales Return's `RefundMode` enum. Debit Note is the third and last — the mirror of Credit Note, ledger direction reversed (Debit customer / Credit sales+tax), no refund-mode concept. Per `phases.md`, Phase 4 — Purchase Management (#40–#43) is next.
 
 ---
 
@@ -317,7 +318,7 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **25 - Supplier Management** (Business Parties group) — spec drafted 2026-07-18 as `context/feature-specs/27-supplier-management.md`, written as a mirror of spec 26. **#24 Customer Management was implemented 2026-07-19** (git branch `new-features`; see `context/progress-tracker.md`'s Completed entry), so #25 is the recommended next item per the recorded order (26 → 27; Pricing 28 → 29 → 30; engines: 34 → 31, with 32/33 independent). All remaining Phase 2 items have drafted specs (2026-07-18). Feature-spec 12 (Branch Management) remains drafted-but-unimplemented from a prior session (see the Phase 1 status-discrepancy note above); per `ai-workflow-rules.md` only one feature is worked at a time and the next feature awaits explicit user direction.
+➡ **39 - Debit Note** (Phase 3 — Sales Management) — spec drafted 2026-07-19 as `context/feature-specs/41-debit-note.md`. **#33 Quotations, #34 Sales Orders, #35 Delivery Challans, #36 Sales Invoice, #37 Sales Return, and #38 Credit Note were all implemented 2026-09-10** (git branch `36-sales-orders`; see `context/progress-tracker.md`'s Completed entries), six of the seven Phase 3 documents, closing the Quotation → Sales Order → Delivery Challan → Sales Invoice conversion chain and adding Sales Return and Credit Note, the first two of three post-invoice adjustment documents. Debit Note is next and last — the mirror of Credit Note, increasing what the customer owes, with **no stock movement**, reusing Sales Invoice's Company Settings ledger mapping and Sales Return's `RefundMode` enum (read Sales Return's spec Goal section's "Relationship to Credit Note and Debit Note" note before implementing). Phase 1/2 are both fully complete (Branch Management, #11, implemented 2026-09-10 — see the Phase 1 status-discrepancy note above, now resolved). Per `ai-workflow-rules.md` only one feature is worked at a time and the next feature awaits explicit user direction.
 
 ---
 
