@@ -95,11 +95,14 @@ export const companySettingsSchema = z.object({
 
 export type CompanySettingsInput = z.infer<typeof companySettingsSchema>;
 
-// Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — a
-// separate schema/action/permission gate from companySettingsSchema above:
-// this section is gated by "settings"/"edit" (spec 34's precedent), not
-// "company"/"edit". All six optional so a partial save is allowed while
-// drafting the mapping — postSalesInvoice itself enforces completeness.
+// Sales Invoice's (38-sales-invoice.md) and Purchase Invoice's
+// (44-purchase-invoice.md) posting-time ledger mappings, combined into one
+// "Sales & Purchase GST Ledgers" section/schema/action — a separate
+// permission gate from companySettingsSchema above: this section is gated
+// by "settings"/"edit" (spec 34's precedent), not "company"/"edit". All
+// eleven optional so a partial save is allowed while drafting the mapping —
+// postSalesInvoice/postPurchaseInvoice themselves enforce completeness of
+// their own six fields each (roundOffLedgerId is shared between both).
 export const salesLedgerMappingSchema = z.object({
   salesLedgerId: z.uuid("Select a valid ledger").optional(),
   outputCgstLedgerId: z.uuid("Select a valid ledger").optional(),
@@ -107,6 +110,11 @@ export const salesLedgerMappingSchema = z.object({
   outputIgstLedgerId: z.uuid("Select a valid ledger").optional(),
   outputCessLedgerId: z.uuid("Select a valid ledger").optional(),
   roundOffLedgerId: z.uuid("Select a valid ledger").optional(),
+  purchaseLedgerId: z.uuid("Select a valid ledger").optional(),
+  inputCgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  inputSgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  inputIgstLedgerId: z.uuid("Select a valid ledger").optional(),
+  inputCessLedgerId: z.uuid("Select a valid ledger").optional(),
 });
 
 export type SalesLedgerMappingInput = z.infer<typeof salesLedgerMappingSchema>;

@@ -37,9 +37,10 @@ export default async function GoodsReceiptNoteDetailPage({ params }: GoodsReceip
     notFound();
   }
 
-  const [isAdmin, canEdit] = await Promise.all([
+  const [isAdmin, canEdit, canCreateInvoice] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "edit"),
+    hasPermission(user, "purchase", "create"),
   ]);
 
   const isEditable = goodsReceiptNote.status === "DRAFT";
@@ -69,7 +70,11 @@ export default async function GoodsReceiptNoteDetailPage({ params }: GoodsReceip
                 }
               />
             ) : null}
-            <GoodsReceiptNoteStatusActions goodsReceiptNote={goodsReceiptNote} canEdit={canEdit} />
+            <GoodsReceiptNoteStatusActions
+              goodsReceiptNote={goodsReceiptNote}
+              canEdit={canEdit}
+              canCreateInvoice={canCreateInvoice}
+            />
           </div>
         </div>
 

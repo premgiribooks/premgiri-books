@@ -23,9 +23,10 @@ export const companySettingsRepository = {
     }
   },
 
-  /** Sales Invoice's ledger mapping (38-sales-invoice.md) — a partial update
-   * of just these six fields, separate from `update` above's full-shape
-   * write (a different form, gated by a different permission). */
+  /** Sales Invoice's (38-sales-invoice.md) and Purchase Invoice's
+   * (44-purchase-invoice.md) combined ledger mapping — a partial update of
+   * these eleven fields, separate from `update` above's full-shape write (a
+   * different form, gated by a different permission). */
   async updateSalesLedgerMapping(companyId: string, data: SalesLedgerMappingInput): Promise<CompanySettings | null> {
     try {
       return await prisma.companySettings.update({
@@ -37,6 +38,11 @@ export const companySettingsRepository = {
           outputIgstLedgerId: data.outputIgstLedgerId ?? null,
           outputCessLedgerId: data.outputCessLedgerId ?? null,
           roundOffLedgerId: data.roundOffLedgerId ?? null,
+          purchaseLedgerId: data.purchaseLedgerId ?? null,
+          inputCgstLedgerId: data.inputCgstLedgerId ?? null,
+          inputSgstLedgerId: data.inputSgstLedgerId ?? null,
+          inputIgstLedgerId: data.inputIgstLedgerId ?? null,
+          inputCessLedgerId: data.inputCessLedgerId ?? null,
         },
       });
     } catch (error) {

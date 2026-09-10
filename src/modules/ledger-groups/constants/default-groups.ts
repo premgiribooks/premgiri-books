@@ -22,6 +22,13 @@ export const DIRECT_EXPENSES_GROUP_NAME = "Direct Expenses";
 export const INDIRECT_EXPENSES_GROUP_NAME = "Indirect Expenses";
 export const DIRECT_INCOMES_GROUP_NAME = "Direct Incomes";
 export const INDIRECT_INCOMES_GROUP_NAME = "Indirect Incomes";
+// Purchase Invoice's ledger-mapping group requirements
+// (44-purchase-invoice.md's Ledger Mapping Validation): purchaseLedgerId must
+// be under "Purchase Accounts" (or a descendant), the four input-tax
+// mappings under "Duties & Taxes" (or a descendant) — the same subtree this
+// group already seeds SUNDRY_CREDITORS_GROUP_NAME under.
+export const PURCHASE_ACCOUNTS_GROUP_NAME = "Purchase Accounts";
+export const DUTIES_AND_TAXES_GROUP_NAME = "Duties & Taxes";
 
 // The three ledger groups a Ledger may only be created under through its
 // owning module's paired transaction (Bank Management, Customer Management,
