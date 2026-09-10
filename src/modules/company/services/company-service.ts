@@ -202,6 +202,16 @@ export const companyService = {
       addressLine2: blankToNull(data.addressLine2),
       city: blankToNull(data.city),
       state: blankToNull(data.state),
+      // Not in NULLABLE_FIELDS (stateCode is a real optional string, not a
+      // blank-to-null text field) — spelled out explicitly rather than left
+      // to the `...existing, ...data` spread above, since `data.stateCode`
+      // is an OPTIONAL property (Zod's `.optional()`): TS's spread-type
+      // inference for an optional property on the later operand widens the
+      // merged key's type to include the earlier operand's type too
+      // (`existing.stateCode: string | null`), which doesn't satisfy
+      // CompanyPersistData's `string | undefined`. An explicit property
+      // assignment forces the type to `data.stateCode`'s own shape.
+      stateCode: data.stateCode,
       district: blankToNull(data.district),
       pinCode: blankToNull(data.pinCode),
       logo: blankToNull(data.logo),

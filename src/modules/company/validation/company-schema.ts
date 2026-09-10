@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isValidGstStateCode } from "@/engines/gst/state-codes";
 import {
   EMAIL_REGEX,
   GSTIN_REGEX,
@@ -9,6 +10,18 @@ import {
 } from "@/lib/validation-patterns";
 
 const WEBSITE_REGEX = /^https?:\/\/.+/i;
+
+// The company's own GST state code (01-38, GST_STATE_CODES) — needed by the
+// GST Engine's determineSupplyType() to decide intra- vs inter-state tax on
+// every GST-taxed document (first consumer: Purchase Order, feature-spec 42).
+// Validated against the statutory list, never a free-text guess.
+const STATE_CODE_SCHEMA = z
+  .string()
+  .trim()
+  .optional()
+  .refine((value) => !value || isValidGstStateCode(value), {
+    message: "Select a valid GST state",
+  });
 
 function optionalText(): z.ZodOptional<z.ZodString> {
   return z.string().trim().optional();
@@ -39,6 +52,7 @@ export const companySchema = z.object({
   addressLine2: optionalText(),
   city: optionalText(),
   state: optionalText(),
+  stateCode: STATE_CODE_SCHEMA,
   district: optionalText(),
   country: z.string().trim().min(1, "Country is required"),
   pinCode: optionalPattern(PIN_CODE_REGEX, "Enter a valid 6-digit PIN code"),
