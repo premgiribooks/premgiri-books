@@ -39,6 +39,13 @@ interface CompanyProfileFormProps {
   defaultValues: Partial<CompanyProfileInput>;
 }
 
+// Base UI's Select decides controlled-vs-uncontrolled on the first render by
+// checking whether `value` is `undefined` — NONE_VALUE (a distinct, defined
+// "controlled, nothing selected yet" sentinel) keeps it controlled for the
+// component's entire lifetime; see branch-selector.tsx/
+// product-option-selector.tsx for the reference fix this mirrors.
+const NONE_VALUE = "__none__";
+
 const BASE_DEFAULT_VALUES: CompanyProfileInput = {
   companyName: "",
   country: "India",
@@ -258,15 +265,20 @@ export function CompanyProfileForm({ companyId, defaultValues }: CompanyProfileF
                 <FormLabel>GST State</FormLabel>
                 <FormControl>
                   <Select
-                    value={field.value || undefined}
-                    onValueChange={(next) => field.onChange(next ?? undefined)}
+                    value={field.value || NONE_VALUE}
+                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? undefined : next)}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select your company's GST state">
-                        {(current: string | null) =>
-                          GST_STATE_CODES.find((entry) => entry.code === current)?.name ??
-                          "Select your company's GST state"
-                        }
+                        {(current: string | null) => {
+                          if (!current || current === NONE_VALUE) {
+                            return "Select your company's GST state";
+                          }
+                          return (
+                            GST_STATE_CODES.find((entry) => entry.code === current)?.name ??
+                            "Select your company's GST state"
+                          );
+                        }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>

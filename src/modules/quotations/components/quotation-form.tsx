@@ -41,6 +41,14 @@ import type { QuotationDetail, QuotationFormOptions, QuotationPreview } from "@/
 const LIST_PATH = "/sales/quotations";
 const PREVIEW_DEBOUNCE_MS = 300;
 
+// Base UI's Select decides controlled-vs-uncontrolled on the first render by
+// checking whether `value` is `undefined` — NONE_VALUE (a distinct, defined
+// "controlled, nothing selected yet" sentinel) keeps it controlled for the
+// component's entire lifetime, even while the underlying field value is ""
+// (react-hook-form's default). See branch-selector.tsx/
+// product-option-selector.tsx for the reference fix this mirrors.
+const NONE_VALUE = "__none__";
+
 const EMPTY_PREVIEW: QuotationPreview = {
   lines: [],
   totals: {
@@ -174,13 +182,21 @@ export function QuotationForm({ options, quotation }: QuotationFormProps) {
               <FormItem>
                 <FormLabel>Customer *</FormLabel>
                 <FormControl>
-                  <Select value={field.value || undefined} onValueChange={(next) => field.onChange(next ?? "")}>
+                  <Select
+                    value={field.value || NONE_VALUE}
+                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a customer">
-                        {(current: string | null) =>
-                          options.customers.find((customer) => customer.id === current)?.name ??
-                          "Select a customer"
-                        }
+                        {(current: string | null) => {
+                          if (!current || current === NONE_VALUE) {
+                            return "Select a customer";
+                          }
+                          return (
+                            options.customers.find((customer) => customer.id === current)?.name ??
+                            "Select a customer"
+                          );
+                        }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -232,12 +248,18 @@ export function QuotationForm({ options, quotation }: QuotationFormProps) {
               <FormItem>
                 <FormLabel>Place of Supply *</FormLabel>
                 <FormControl>
-                  <Select value={field.value || undefined} onValueChange={(next) => field.onChange(next ?? "")}>
+                  <Select
+                    value={field.value || NONE_VALUE}
+                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a state">
-                        {(current: string | null) =>
-                          GST_STATE_CODES.find((entry) => entry.code === current)?.name ?? "Select a state"
-                        }
+                        {(current: string | null) => {
+                          if (!current || current === NONE_VALUE) {
+                            return "Select a state";
+                          }
+                          return GST_STATE_CODES.find((entry) => entry.code === current)?.name ?? "Select a state";
+                        }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
