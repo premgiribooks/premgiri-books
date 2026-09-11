@@ -1,12 +1,12 @@
 # 55 - Journal Voucher
 
 > Feature-spec file number 55 (spec-file numbers are sequential and never reused). This
-> feature is `context/Phases/phase-tracker.md`'s **Phase 6 — Accounting** item **#53
-> Journal Voucher** — the fourth and last of the four manual voucher screens (#50–#53).
+> feature is `context/Phases/phase-tracker.md`'s **Phase 7 — Accounting** item **#54
+> Journal Voucher** — the fourth and last of the four manual voucher screens (#51–#54).
 > Depends on the Voucher Engine (feature-spec 31, implemented) and the Document Number
 > Engine (feature-spec 34, implemented). **Read `52-payment-voucher.md` first in full**
 > for the shared design resolution and module structure — this spec is the *least*
-> restrictive of the four, and closes out Phase 6.
+> restrictive of the four, and closes out Phase 7.
 
 ## Goal
 
@@ -222,7 +222,7 @@ Verify
 - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and `next build` all
   pass; `/accounting/journal-vouchers*` appears in the build route table.
 
-Feature-spec 55 (this spec) is `context/Phases/phase-tracker.md`'s Phase 6 item #53 — the
-last item in Phase 6 (Accounting). Completing specs 52–55 completes Phase 6 and its
-`/accounting` hub in full. Per `phases.md`/`phase-tracker.md`, Phase 7 (GST — GST
-Registers, GSTR-1, GSTR-3B, HSN Summary, #54–#57) is next.
+Feature-spec 55 (this spec) is `context/Phases/phase-tracker.md`'s Phase 7 item #54 — the
+last item in Phase 7 (Accounting). Completing specs 52–55 completes Phase 7 and its
+`/accounting` hub in full. Per `phase-tracker.md`, Phase 8 (GST — GST
+Registers, GSTR-1, GSTR-3B, HSN Summary, #55–#58) is next.

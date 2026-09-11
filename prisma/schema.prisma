@@ -91,6 +91,7 @@ model Company {
   gstRates              GstRate[]
   warehouses            Warehouse[]
   products              Product[]
+  productBatches        ProductBatch[]
   marginProfiles        MarginProfile[]
   priceLists            PriceList[]
   customers             Customer[]
@@ -685,6 +686,13 @@ enum ProductType {
 // nothing to check against yet. No isSystemDefined and no seeding, same
 // reasoning as every Inventory Master since Unit. No delete anywhere —
 // Activate/Deactivate only.
+// `isBatchTracked` (50-batch-tracking.md) — opt-in, TRADING-only (Zod-gated),
+// immutable once the product has any StockTransaction (mirrors the
+// unitId/productType rule above, enforced in product-repository.ts). Mutually
+// exclusive with the future `isSerialTracked` (feature-spec 51, not yet
+// implemented) — the spec's DB-level CHECK constraint for that exclusion is
+// deferred to spec 51's own migration since `isSerialTracked` does not exist
+// yet; see context/progress-tracker.md for the exact deferred statement.
 model Product {
   id                 String         @id @default(uuid())
   companyId          String
@@ -711,6 +719,7 @@ model Product {
   sellingPrice       Decimal?       @db.Decimal(14, 2)
   purchasePrice      Decimal?       @db.Decimal(14, 2)
   minStockLevel      Decimal?       @db.Decimal(14, 4)
+  isBatchTracked     Boolean        @default(false)
   description        String?
   isActive           Boolean        @default(true)
   createdAt          DateTime       @default(now())
@@ -728,6 +737,7 @@ model Product {
   stockAdjustmentItems      StockAdjustmentItem[]
   stockTransferItems        StockTransferItem[]
   physicalVerificationItems PhysicalVerificationItem[]
+  batches                   ProductBatch[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -737,6 +747,37 @@ model Product {
   @@index([brandId])
   @@index([unitId])
   @@index([marginProfileId])
+}
+
+// Batch/lot catalog for a batch-tracked product (50-batch-tracking.md) — an
+// opt-in per-product capability for perishable/regulated/lot-controlled
+// goods. Batch quantity is NEVER stored here: current stock per batch is
+// always Sigma IN - Sigma OUT of StockTransaction rows scoped to batchId
+// (inventory-queries.ts's getBatchStock), the same aggregation-only
+// invariant 32-inventory-engine.md established for product/warehouse stock,
+// applied one dimension further. `batchNumber` uniqueness is scoped to
+// (companyId, productId) — two different products may share a supplier's lot
+// number. No update/delete beyond isActive once any StockTransaction
+// references the batch (deactivate, don't delete — mirrors every other
+// master); before any movement exists, an ordinary update (batch-number
+// typo, date correction) is fine.
+model ProductBatch {
+  id              String    @id @default(uuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id])
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id])
+  batchNumber     String
+  manufactureDate DateTime? @db.Date
+  expiryDate      DateTime? @db.Date
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  stockTransactions StockTransaction[]
+
+  @@unique([companyId, productId, batchNumber])
+  @@index([companyId, productId])
 }
 
 // Named, reusable percentage-based pricing rule (28-margin-profiles.md,
@@ -1189,6 +1230,10 @@ enum StockDirection {
 // Purchase Cost reads `Product.purchasePrice` instead); kept for a future
 // FIFO/Weighted-Average costing method that cannot be computed
 // retroactively without per-movement cost history.
+// `batchId` (50-batch-tracking.md, additive amendment) — optional; required
+// when the movement's product is isBatchTracked, forbidden otherwise
+// (enforced in inventory-engine.ts, never left to the caller). Batch
+// quantity is never stored — see ProductBatch's doc comment.
 model StockTransaction {
   id              String               @id @default(uuid())
   companyId       String
@@ -1205,6 +1250,8 @@ model StockTransaction {
   referenceType   String?
   referenceId     String?
   transferGroupId String?
+  batchId         String?
+  batch           ProductBatch?        @relation(fields: [batchId], references: [id])
   narration       String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -1213,6 +1260,7 @@ model StockTransaction {
   @@index([companyId, transactionDate])
   @@index([referenceType, referenceId])
   @@index([transferGroupId])
+  @@index([batchId])
 }
 
 enum StockAdjustmentStatus {

@@ -67,6 +67,7 @@ const BASE_PERSIST_DATA: ProductPersistData = {
   sellingPrice: null,
   purchasePrice: null,
   minStockLevel: null,
+  isBatchTracked: false,
   description: null,
 };
 
@@ -75,6 +76,7 @@ const EXISTING_PRODUCT = {
   companyId: COMPANY_ID,
   unitId: UNIT_A,
   productType: "TRADING" as const,
+  isBatchTracked: false,
   categoryId: null,
   brandId: null,
   hsnCodeId: null,
@@ -121,10 +123,53 @@ describe("productRepository.update — unitId/productType immutability once move
     expect(FAKE_TX.product.update).toHaveBeenCalled();
   });
 
-  it("never checks for movements when neither unitId nor productType changed", async () => {
+  it("never checks for movements when neither unitId, productType, nor isBatchTracked changed", async () => {
     await productRepository.update(PRODUCT_ID, COMPANY_ID, { ...BASE_PERSIST_DATA, name: "Renamed Widget" });
 
     expect(FAKE_TX.stockTransaction.findFirst).not.toHaveBeenCalled();
     expect(FAKE_TX.product.update).toHaveBeenCalled();
+  });
+});
+
+describe("productRepository.update — isBatchTracked immutability once movements exist", () => {
+  beforeEach(() => {
+    FAKE_TX.product.findUnique.mockReset().mockResolvedValue(EXISTING_PRODUCT);
+    FAKE_TX.product.update
+      .mockReset()
+      .mockResolvedValue({ id: PRODUCT_ID, mrp: null, sellingPrice: null, purchasePrice: null, minStockLevel: null });
+    FAKE_TX.stockTransaction.findFirst.mockReset();
+  });
+
+  it("rejects flipping isBatchTracked once the product has a recorded stock movement", async () => {
+    FAKE_TX.stockTransaction.findFirst.mockResolvedValue({ id: "txn-1" });
+
+    await expect(
+      productRepository.update(PRODUCT_ID, COMPANY_ID, { ...BASE_PERSIST_DATA, isBatchTracked: true })
+    ).rejects.toThrow("batch tracking can no longer be turned on or off");
+    expect(FAKE_TX.product.update).not.toHaveBeenCalled();
+  });
+
+  it("allows flipping isBatchTracked when the product has no recorded stock movement", async () => {
+    FAKE_TX.stockTransaction.findFirst.mockResolvedValue(null);
+
+    await expect(
+      productRepository.update(PRODUCT_ID, COMPANY_ID, { ...BASE_PERSIST_DATA, isBatchTracked: true })
+    ).resolves.toBeTruthy();
+    expect(FAKE_TX.product.update).toHaveBeenCalled();
+  });
+
+  it("only checks for movements once when isBatchTracked is unchanged and other fields change", async () => {
+    await productRepository.update(PRODUCT_ID, COMPANY_ID, { ...BASE_PERSIST_DATA, name: "Renamed Widget" });
+
+    expect(FAKE_TX.stockTransaction.findFirst).not.toHaveBeenCalled();
+    expect(FAKE_TX.product.update).toHaveBeenCalled();
+  });
+
+  it("keeps the unitId/productType immutability message unchanged when those fields change instead", async () => {
+    FAKE_TX.stockTransaction.findFirst.mockResolvedValue({ id: "txn-1" });
+
+    await expect(
+      productRepository.update(PRODUCT_ID, COMPANY_ID, { ...BASE_PERSIST_DATA, productType: "SERVICE" })
+    ).rejects.toThrow("its unit and product type can no longer be changed");
   });
 });

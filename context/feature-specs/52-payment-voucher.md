@@ -1,8 +1,8 @@
 # 52 - Payment Voucher
 
 > Feature-spec file number 52 (spec-file numbers are sequential and never reused). This
-> feature is `context/Phases/phase-tracker.md`'s **Phase 6 — Accounting** item **#50
-> Payment Voucher** — the first of the four manual voucher screens (#50–#53). Depends on
+> feature is `context/Phases/phase-tracker.md`'s **Phase 7 — Accounting** item **#51
+> Payment Voucher** — the first of the four manual voucher screens (#51–#54). Depends on
 > the Voucher Engine (feature-spec 31, implemented) and the Document Number Engine
 > (feature-spec 34, implemented) — both are consumed as-is, with **no engine changes**.
 > **Read `31-voucher-engine.md` first in full** — this spec is a thin, permission-gated
@@ -18,8 +18,8 @@ supplier outside of billing time, paying an expense directly, repaying a loan, o
 other cash/bank outflow. `VoucherType.PAYMENT` and `DocumentType.PAYMENT_VOUCHER` already
 exist (specs 31, 34) with no consumer — this is what they were reserved for.
 
-**Design resolution carried across all four manual-voucher specs (#50–#53), decided
-here and referenced, not re-derived, in #51/#52/#53**: none of these four screens
+**Design resolution carried across all four manual-voucher specs (#51–#54), decided
+here and referenced, not re-derived, in #52/#53/#54**: none of these four screens
 introduces its own Prisma document model. `Voucher` already carries everything a manual
 voucher needs — its own `voucherType`, an engine-generated `voucherNumber`, `voucherDate`,
 `narration`, and its `entries`. Unlike Sales Invoice or Purchase Invoice — which needed a
@@ -59,7 +59,7 @@ Before implementation, review
   `src/lib/ledger-class.ts` or similar — implementer's choice of location, but it must be
   one shared function, not a third copy) **and have both Purchase Invoice and this spec
   call it**, since a fourth near-identical copy would land with Receipt/Contra Voucher
-  (#51/#52) immediately after)
+  (#52/#53) immediately after)
 
 ---
 
@@ -80,7 +80,7 @@ The Payment Voucher module is **not** responsible for
 - Any new Prisma model, migration, or repository (see Goal — there is nothing to persist
   beyond what `Voucher`/`VoucherEntry` already store)
 - Balance/trial-balance/ledger-statement queries (Voucher Engine's own query APIs;
-  Reports #61–#64 render them)
+  Reports #62–#65 render them)
 - Purchase Invoice's own payment lines (`PurchaseInvoicePayment`) — a settled invoice
   payment stays exactly where it is; this screen is for payments outside that flow
 
@@ -136,7 +136,7 @@ src/modules/manual-vouchers/components/…
 
 **No repository file** — there is no table this module owns; all persistence goes
 through `voucherEngine`'s own repository. `src/modules/manual-vouchers/` is a shared
-module home for all four manual-voucher screens (#50–#53) — see `55-journal-voucher.md`'s
+module home for all four manual-voucher screens (#51–#54) — see `55-journal-voucher.md`'s
 Service/Repository section for why one shared module was chosen over four near-identical
 ones, and for the shared ledger-class-restriction helper's exact location once decided.
 
@@ -254,5 +254,5 @@ Verify
 - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and `next build` all
   pass; `/accounting/payment-vouchers*` appears in the build route table.
 
-Feature-spec 52 (this spec) is `context/Phases/phase-tracker.md`'s Phase 6 item #50.
-Feature-spec 53 (Receipt Voucher, tracker #51) is its direct mirror.
+Feature-spec 52 (this spec) is `context/Phases/phase-tracker.md`'s Phase 7 item #51.
+Feature-spec 53 (Receipt Voucher, tracker #52) is its direct mirror.

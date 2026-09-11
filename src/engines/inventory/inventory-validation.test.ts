@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  aggregateBatchOutDemand,
   aggregateOutDemand,
+  batchKey,
+  batchRequirementError,
   directionErrorMessage,
   hasAtMostTwoDecimals,
   hasSufficientStock,
@@ -20,6 +23,8 @@ const PRODUCT_A = "11111111-1111-4111-8111-111111111111";
 const PRODUCT_B = "99999999-9999-4999-8999-999999999999";
 const WAREHOUSE_A = "22222222-2222-4222-8222-222222222222";
 const WAREHOUSE_B = "33333333-3333-4333-8333-333333333333";
+const BATCH_A = "44444444-4444-4444-8444-444444444444";
+const BATCH_B = "55555555-5555-4555-8555-555555555555";
 
 function validLine(overrides: Record<string, unknown> = {}) {
   return {
@@ -195,6 +200,81 @@ describe("pairKey", () => {
   });
 });
 
+describe("batchRequirementError", () => {
+  it("requires a batch when the product is batch-tracked and none was supplied", () => {
+    expect(batchRequirementError("Widget", true, undefined)).toMatch(/Widget/);
+    expect(batchRequirementError("Widget", true, undefined)).toMatch(/batch/i);
+  });
+
+  it("allows a batch-tracked product with a batch supplied", () => {
+    expect(batchRequirementError("Widget", true, BATCH_A)).toBeNull();
+  });
+
+  it("rejects a batch on a non-batch-tracked product", () => {
+    expect(batchRequirementError("Widget", false, BATCH_A)).toMatch(/not batch-tracked/i);
+  });
+
+  it("allows a non-batch-tracked product with no batch supplied", () => {
+    expect(batchRequirementError("Widget", false, undefined)).toBeNull();
+  });
+});
+
+describe("batchKey", () => {
+  it("is stable and distinct per (product, warehouse, batch) combination", () => {
+    expect(batchKey(PRODUCT_A, WAREHOUSE_A, BATCH_A)).toBe(batchKey(PRODUCT_A, WAREHOUSE_A, BATCH_A));
+    expect(batchKey(PRODUCT_A, WAREHOUSE_A, BATCH_A)).not.toBe(batchKey(PRODUCT_A, WAREHOUSE_A, BATCH_B));
+  });
+
+  it("never collides with a pairKey value", () => {
+    expect(batchKey(PRODUCT_A, WAREHOUSE_A, BATCH_A)).not.toBe(pairKey(PRODUCT_A, WAREHOUSE_A));
+  });
+});
+
+describe("aggregateBatchOutDemand", () => {
+  it("sums OUT quantities per (product, warehouse, batch) triple", () => {
+    const demand = aggregateBatchOutDemand([
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, direction: "OUT", quantity: 4 },
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, direction: "OUT", quantity: 4 },
+    ]);
+
+    expect(demand).toEqual([{ productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, quantity: 8 }]);
+  });
+
+  it("does not net IN lines against OUT lines", () => {
+    const demand = aggregateBatchOutDemand([
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, direction: "OUT", quantity: 10 },
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, direction: "IN", quantity: 100 },
+    ]);
+
+    expect(demand).toEqual([{ productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, quantity: 10 }]);
+  });
+
+  it("ignores lines with no batchId", () => {
+    const demand = aggregateBatchOutDemand([
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: undefined, direction: "OUT", quantity: 10 },
+    ]);
+
+    expect(demand).toEqual([]);
+  });
+
+  it("keeps two batches of the same product/warehouse independent", () => {
+    const demand = aggregateBatchOutDemand([
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, direction: "OUT", quantity: 4 },
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_B, direction: "OUT", quantity: 5 },
+    ]);
+
+    expect(demand).toHaveLength(2);
+  });
+
+  it("returns an empty array when there are no OUT lines", () => {
+    expect(
+      aggregateBatchOutDemand([
+        { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, direction: "IN", quantity: 5 },
+      ])
+    ).toEqual([]);
+  });
+});
+
 describe("stockMovementLineSchema", () => {
   it("accepts a well-formed line", () => {
     expect(stockMovementLineSchema.safeParse(validLine()).success).toBe(true);
@@ -220,6 +300,18 @@ describe("stockMovementLineSchema", () => {
         validLine({ referenceType: "SALES_INVOICE", referenceId: PRODUCT_B })
       ).success
     ).toBe(true);
+  });
+
+  it("accepts a valid uuid batchId", () => {
+    expect(stockMovementLineSchema.safeParse(validLine({ batchId: BATCH_A })).success).toBe(true);
+  });
+
+  it("rejects a non-uuid batchId", () => {
+    expect(stockMovementLineSchema.safeParse(validLine({ batchId: "not-a-uuid" })).success).toBe(false);
+  });
+
+  it("accepts batchId omitted", () => {
+    expect(stockMovementLineSchema.safeParse(validLine()).success).toBe(true);
   });
 });
 
@@ -253,5 +345,17 @@ describe("transferStockInputSchema", () => {
     expect(
       transferStockInputSchema.safeParse(validTransfer({ destinationWarehouseId: WAREHOUSE_A })).success
     ).toBe(false);
+  });
+
+  it("accepts a valid uuid batchId", () => {
+    expect(transferStockInputSchema.safeParse(validTransfer({ batchId: BATCH_A })).success).toBe(true);
+  });
+
+  it("rejects a non-uuid batchId", () => {
+    expect(transferStockInputSchema.safeParse(validTransfer({ batchId: "not-a-uuid" })).success).toBe(false);
+  });
+
+  it("accepts batchId omitted", () => {
+    expect(transferStockInputSchema.safeParse(validTransfer()).success).toBe(true);
   });
 });

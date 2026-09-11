@@ -4,8 +4,12 @@ import { AppError } from "@/lib/app-error";
 import { prisma } from "@/lib/prisma";
 import { stockTransactionRepository } from "@/modules/stock-transactions/repositories/stock-transaction-repository";
 import type {
+  BatchLedgerResult,
+  BatchStockFilters,
+  BatchStockRow,
   CurrentStockFilters,
   CurrentStockRow,
+  RecordedStockTransaction,
   StockLedgerFilters,
   StockLedgerLine,
   StockLedgerResult,
@@ -57,6 +61,29 @@ export async function getCurrentStock(
   return stockTransactionRepository.aggregateCurrentStock(companyId, filters);
 }
 
+/** Running-balance mapping shared by getStockLedger and getBatchLedger — they differ only by filter and return envelope. */
+function toLedgerLines(transactions: readonly RecordedStockTransaction[]): { lines: StockLedgerLine[]; closingBalance: number } {
+  let running = 0;
+  const lines: StockLedgerLine[] = transactions.map((transaction) => {
+    running = round(running + (transaction.direction === "IN" ? transaction.quantity : -transaction.quantity), 4);
+    return {
+      id: transaction.id,
+      transactionType: transaction.transactionType,
+      direction: transaction.direction,
+      quantity: transaction.quantity,
+      unitCost: transaction.unitCost,
+      transactionDate: transaction.transactionDate,
+      warehouseId: transaction.warehouseId,
+      referenceType: transaction.referenceType,
+      referenceId: transaction.referenceId,
+      batchId: transaction.batchId,
+      narration: transaction.narration,
+      runningBalance: running,
+    };
+  });
+  return { lines, closingBalance: running };
+}
+
 /**
  * Dated movements for one product with a running balance — the stock
  * register primitive (Inventory Reports #67 renders it). `companyId` is
@@ -72,26 +99,48 @@ export async function getStockLedger(
   await assertProductBelongsToCompany(companyId, productId);
 
   const transactions = await stockTransactionRepository.findLedgerTransactions(companyId, productId, filters);
+  const { lines, closingBalance } = toLedgerLines(transactions);
 
-  let running = 0;
-  const lines: StockLedgerLine[] = transactions.map((transaction) => {
-    running = round(running + (transaction.direction === "IN" ? transaction.quantity : -transaction.quantity), 4);
-    return {
-      id: transaction.id,
-      transactionType: transaction.transactionType,
-      direction: transaction.direction,
-      quantity: transaction.quantity,
-      unitCost: transaction.unitCost,
-      transactionDate: transaction.transactionDate,
-      warehouseId: transaction.warehouseId,
-      referenceType: transaction.referenceType,
-      referenceId: transaction.referenceId,
-      narration: transaction.narration,
-      runningBalance: running,
-    };
+  return { productId, lines, closingBalance };
+}
+
+/**
+ * Batch-scoped analog of `getCurrentStock` (50-batch-tracking.md) —
+ * deliberately does not validate that the ids exist, matching
+ * `getCurrentStock`'s stance: an unknown id simply yields no rows.
+ * Accepts an optional `tx` for the same same-Serializable-snapshot reason.
+ */
+export async function getBatchStock(
+  companyId: string,
+  filters: BatchStockFilters = {},
+  tx?: Prisma.TransactionClient
+): Promise<BatchStockRow[]> {
+  if (tx) {
+    return stockTransactionRepository.aggregateBatchStock(companyId, filters, tx);
+  }
+  return stockTransactionRepository.aggregateBatchStock(companyId, filters);
+}
+
+/**
+ * Batch-scoped analog of `getStockLedger` — dated movements for one batch of
+ * one product with a running balance. Same not-found-never-leaks posture on
+ * `productId`.
+ */
+export async function getBatchLedger(
+  companyId: string,
+  productId: string,
+  batchId: string,
+  filters: StockLedgerFilters = {}
+): Promise<BatchLedgerResult> {
+  await assertProductBelongsToCompany(companyId, productId);
+
+  const transactions = await stockTransactionRepository.findLedgerTransactions(companyId, productId, {
+    ...filters,
+    batchId,
   });
+  const { lines, closingBalance } = toLedgerLines(transactions);
 
-  return { productId, lines, closingBalance: running };
+  return { productId, batchId, lines, closingBalance };
 }
 
 /**
@@ -142,4 +191,6 @@ export const inventoryQueries = {
   getCurrentStock,
   getStockLedger,
   getStockValuation,
+  getBatchStock,
+  getBatchLedger,
 };

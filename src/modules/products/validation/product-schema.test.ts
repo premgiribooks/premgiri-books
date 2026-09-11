@@ -20,6 +20,7 @@ const VALID_INPUT = {
   sellingPrice: 199.99,
   purchasePrice: 150.5,
   minStockLevel: 10.25,
+  isBatchTracked: false,
   description: "200-page ruled notebook",
 };
 
@@ -39,12 +40,13 @@ describe("createProductSchema", () => {
     expect(result.sellingPrice).toBe(199.99);
   });
 
-  it("accepts the minimal field set — only name, code, type, and unit are required", () => {
+  it("accepts the minimal field set — only name, code, type, unit, and isBatchTracked are required", () => {
     const result = createProductSchema.parse({
       name: "Consulting",
       productCode: "SRV-01",
       productType: "SERVICE",
       unitId: UNIT_ID,
+      isBatchTracked: false,
     });
 
     expect(result.barcode).toBeUndefined();
@@ -138,5 +140,39 @@ describe("createProductSchema", () => {
     expect(
       createProductSchema.safeParse({ ...VALID_INPUT, description: "x".repeat(1001) }).success
     ).toBe(false);
+  });
+
+  describe("isBatchTracked", () => {
+    it("is required", () => {
+      const withoutFlag: Record<string, unknown> = { ...VALID_INPUT };
+      delete withoutFlag.isBatchTracked;
+      expect(createProductSchema.safeParse(withoutFlag).success).toBe(false);
+    });
+
+    it("accepts true for a TRADING product", () => {
+      expect(createProductSchema.parse({ ...VALID_INPUT, isBatchTracked: true }).isBatchTracked).toBe(true);
+    });
+
+    it("rejects true for a SERVICE product", () => {
+      const result = createProductSchema.safeParse({
+        name: "Consulting",
+        productCode: "SRV-01",
+        productType: "SERVICE",
+        unitId: UNIT_ID,
+        isBatchTracked: true,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects true for an EXPENSE product", () => {
+      const result = createProductSchema.safeParse({
+        name: "Office rent",
+        productCode: "EXP-01",
+        productType: "EXPENSE",
+        unitId: UNIT_ID,
+        isBatchTracked: true,
+      });
+      expect(result.success).toBe(false);
+    });
   });
 });

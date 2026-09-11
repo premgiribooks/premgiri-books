@@ -9,8 +9,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const {
   findProductsForMovementMock,
   findWarehousesForMovementMock,
+  findBatchesForMovementMock,
   findAllowNegativeStockMock,
   sumStockForPairsMock,
+  sumStockForBatchTriplesMock,
   createManyMock,
   createTransferPairMock,
   runInTransactionMock,
@@ -18,8 +20,10 @@ const {
 } = vi.hoisted(() => ({
   findProductsForMovementMock: vi.fn(),
   findWarehousesForMovementMock: vi.fn(),
+  findBatchesForMovementMock: vi.fn(),
   findAllowNegativeStockMock: vi.fn(),
   sumStockForPairsMock: vi.fn(),
+  sumStockForBatchTriplesMock: vi.fn(),
   createManyMock: vi.fn(),
   createTransferPairMock: vi.fn(),
   runInTransactionMock: vi.fn(),
@@ -30,8 +34,10 @@ vi.mock("@/modules/stock-transactions/repositories/stock-transaction-repository"
   stockTransactionRepository: {
     findProductsForMovement: findProductsForMovementMock,
     findWarehousesForMovement: findWarehousesForMovementMock,
+    findBatchesForMovement: findBatchesForMovementMock,
     findAllowNegativeStock: findAllowNegativeStockMock,
     sumStockForPairs: sumStockForPairsMock,
+    sumStockForBatchTriples: sumStockForBatchTriplesMock,
     createMany: createManyMock,
     createTransferPair: createTransferPairMock,
   },
@@ -58,12 +64,15 @@ const PRODUCT_B = "88888888-8888-4888-8888-888888888888";
 const WAREHOUSE_A = "33333333-3333-4333-8333-333333333333";
 const WAREHOUSE_B = "44444444-4444-4444-8444-444444444444";
 
+const BATCH_A = "55555555-5555-4555-8555-555555555555";
+
 const TRADING_PRODUCT_A = {
   id: PRODUCT_A,
   companyId: COMPANY_ID,
   name: "Widget",
   isActive: true,
   productType: "TRADING" as const,
+  isBatchTracked: false,
   unit: { decimalPlaces: 2 },
 };
 
@@ -73,11 +82,16 @@ const TRADING_PRODUCT_B = {
   name: "Gadget",
   isActive: true,
   productType: "TRADING" as const,
+  isBatchTracked: false,
   unit: { decimalPlaces: 0 },
 };
 
+const BATCH_TRACKED_PRODUCT_A = { ...TRADING_PRODUCT_A, isBatchTracked: true };
+
 const ACTIVE_WAREHOUSE_A = { id: WAREHOUSE_A, companyId: COMPANY_ID, name: "Main Store", isActive: true };
 const ACTIVE_WAREHOUSE_B = { id: WAREHOUSE_B, companyId: COMPANY_ID, name: "Branch Store", isActive: true };
+
+const ACTIVE_BATCH_A = { id: BATCH_A, companyId: COMPANY_ID, productId: PRODUCT_A, batchNumber: "B-001", isActive: true };
 
 function purchaseLine(overrides: Record<string, unknown> = {}) {
   return {
@@ -106,8 +120,10 @@ function salesLine(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   findProductsForMovementMock.mockReset().mockResolvedValue([TRADING_PRODUCT_A, TRADING_PRODUCT_B]);
   findWarehousesForMovementMock.mockReset().mockResolvedValue([ACTIVE_WAREHOUSE_A, ACTIVE_WAREHOUSE_B]);
+  findBatchesForMovementMock.mockReset().mockResolvedValue([]);
   findAllowNegativeStockMock.mockReset().mockResolvedValue(false);
   sumStockForPairsMock.mockReset().mockResolvedValue(new Map());
+  sumStockForBatchTriplesMock.mockReset().mockResolvedValue(new Map());
   createManyMock.mockReset().mockResolvedValue([{ id: "st-1" }]);
   createTransferPairMock.mockReset().mockResolvedValue({ outTransaction: { id: "out-1" }, inTransaction: { id: "in-1" } });
   runInTransactionMock.mockReset().mockImplementation(async (fn: (tx: unknown) => unknown) => fn(FAKE_TX));
@@ -248,6 +264,116 @@ describe("recordMovements — availability matrix", () => {
   });
 });
 
+describe("recordMovements — batch tracking", () => {
+  it("rejects a batch-tracked product's line with no batchId", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    await expect(recordMovements(COMPANY_ID, [purchaseLine()])).rejects.toThrow("batch-tracked");
+  });
+
+  it("rejects a non-batch-tracked product's line with a batchId", async () => {
+    await expect(recordMovements(COMPANY_ID, [purchaseLine({ batchId: BATCH_A })])).rejects.toThrow(
+      "not batch-tracked"
+    );
+  });
+
+  it("rejects a batchId belonging to a different product", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([{ ...ACTIVE_BATCH_A, productId: PRODUCT_B }]);
+    await expect(recordMovements(COMPANY_ID, [purchaseLine({ batchId: BATCH_A })])).rejects.toThrow(
+      "Batch not found."
+    );
+  });
+
+  it("rejects a cross-company batchId", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([{ ...ACTIVE_BATCH_A, companyId: OTHER_COMPANY_ID }]);
+    await expect(recordMovements(COMPANY_ID, [purchaseLine({ batchId: BATCH_A })])).rejects.toThrow(
+      "Batch not found."
+    );
+  });
+
+  it("rejects an inactive batch", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([{ ...ACTIVE_BATCH_A, isActive: false }]);
+    await expect(recordMovements(COMPANY_ID, [purchaseLine({ batchId: BATCH_A })])).rejects.toThrow(
+      "is inactive"
+    );
+  });
+
+  it("accepts a valid batch-tracked line and passes batchId through to createMany", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+
+    await recordMovements(COMPANY_ID, [purchaseLine({ batchId: BATCH_A })]);
+
+    expect(createManyMock).toHaveBeenCalledWith(
+      FAKE_TX,
+      COMPANY_ID,
+      expect.arrayContaining([expect.objectContaining({ batchId: BATCH_A })])
+    );
+  });
+
+  it("rejects an OUT movement exceeding that batch's own stock", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
+    sumStockForBatchTriplesMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}::${BATCH_A}::batch`, 0]]));
+
+    await expect(
+      recordMovements(COMPANY_ID, [salesLine({ batchId: BATCH_A, quantity: 4 })])
+    ).rejects.toThrow(/Insufficient stock in batch/);
+  });
+
+  it("allows an OUT movement against a batch with sufficient stock, even when a sibling batch is empty", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
+    sumStockForBatchTriplesMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}::${BATCH_A}::batch`, 6]]));
+
+    await expect(
+      recordMovements(COMPANY_ID, [salesLine({ batchId: BATCH_A, quantity: 4 })])
+    ).resolves.toBeDefined();
+  });
+
+  it("aggregates batch demand across lines before checking availability", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    // Product-level total (100) easily covers both lines — only the batch's own 6 units do not.
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
+    sumStockForBatchTriplesMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}::${BATCH_A}::batch`, 6]]));
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        salesLine({ batchId: BATCH_A, quantity: 4 }),
+        salesLine({ batchId: BATCH_A, quantity: 4 }),
+      ])
+    ).rejects.toThrow(/Insufficient stock in batch/);
+  });
+
+  it("skips the batch availability check when allowNegativeStock is on", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    findAllowNegativeStockMock.mockResolvedValue(true);
+
+    await expect(
+      recordMovements(COMPANY_ID, [salesLine({ batchId: BATCH_A, quantity: 4 })])
+    ).resolves.toBeDefined();
+    expect(sumStockForBatchTriplesMock).not.toHaveBeenCalled();
+  });
+
+  it("still enforces the product-level availability check independently of the batch check", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    // Batch has enough, but product-level (all-warehouse) total does not.
+    sumStockForBatchTriplesMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}::${BATCH_A}::batch`, 10]]));
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 2]]));
+
+    await expect(
+      recordMovements(COMPANY_ID, [salesLine({ batchId: BATCH_A, quantity: 4 })])
+    ).rejects.toThrow("Insufficient stock");
+  });
+});
+
 describe("recordMovements — isolation", () => {
   it("uses Serializable isolation with retry when the batch contains an OUT line", async () => {
     sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
@@ -334,6 +460,49 @@ describe("transferStock", () => {
     await expect(
       transferStock(COMPANY_ID, transferInput({ destinationWarehouseId: WAREHOUSE_A }))
     ).rejects.toThrow();
+  });
+
+  it("rejects a batch-tracked product's transfer with no batchId", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    await expect(transferStock(COMPANY_ID, transferInput())).rejects.toThrow("batch-tracked");
+  });
+
+  it("rejects a non-batch-tracked product's transfer with a batchId", async () => {
+    await expect(transferStock(COMPANY_ID, transferInput({ batchId: BATCH_A }))).rejects.toThrow(
+      "not batch-tracked"
+    );
+  });
+
+  it("passes batchId through to createTransferPair for a valid batch transfer", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
+    sumStockForBatchTriplesMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}::${BATCH_A}::batch`, 10]]));
+
+    await transferStock(COMPANY_ID, transferInput({ batchId: BATCH_A }));
+
+    expect(createTransferPairMock).toHaveBeenCalledWith(
+      FAKE_TX,
+      COMPANY_ID,
+      expect.objectContaining({ batchId: BATCH_A })
+    );
+  });
+
+  it("checks batch availability against the source warehouse only", async () => {
+    findProductsForMovementMock.mockResolvedValue([BATCH_TRACKED_PRODUCT_A]);
+    findBatchesForMovementMock.mockResolvedValue([ACTIVE_BATCH_A]);
+    // Plenty of product-level stock overall — only the batch itself is short.
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
+    sumStockForBatchTriplesMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}::${BATCH_A}::batch`, 0]]));
+
+    await expect(transferStock(COMPANY_ID, transferInput({ batchId: BATCH_A }))).rejects.toThrow(
+      "Insufficient stock"
+    );
+    expect(sumStockForBatchTriplesMock).toHaveBeenCalledWith(
+      FAKE_TX,
+      COMPANY_ID,
+      expect.arrayContaining([expect.objectContaining({ warehouseId: WAREHOUSE_A, batchId: BATCH_A })])
+    );
   });
 });
 

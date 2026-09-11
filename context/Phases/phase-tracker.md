@@ -282,22 +282,58 @@ acceptable given the deferred per-document retrofit cost it implies.
 | 45  | Stock Adjustment       | Inventory Engine   | ✅     |
 | 46  | Stock Transfer         | Warehouse          | ✅     |
 | 47  | Physical Verification  | Inventory Engine   | ✅     |
-| 48  | Batch Tracking         | Product Management | ⬜     |
+| 48  | Batch Tracking         | Product Management | ✅     |
 | 49  | Serial Number Tracking | Product Management | ⬜     |
 
 ---
 
-# Phase 6 — Accounting
+# Phase 6 — Product Detail Page
+
+Inserted 2026-09-11, ahead of Phase 5's own last item (#49 Serial Number Tracking), per
+explicit user direction: Product Management (feature-spec 25) shipped 2026-07-18 with
+only list/new/edit — no detail view. Batch Tracking (#48, feature-spec 50) already
+deferred its Batches tab for exactly this reason (see its known-deviation note in
+`context/progress-tracker.md`'s Current Phase entry), and Serial Number Tracking's own
+spec (`51-serial-number-tracking.md`, #49) assumes "the existing Product detail view" in
+its UI section — a page that does not exist yet. Rather than let a second feature defer
+the same missing page, this phase builds it once, as a dedicated phase inserted before
+the (renumbered) Accounting phase, and is implemented **before** #49 resumes so Serial
+Number Tracking's own Serial Numbers tab can be wired straight into it instead of
+deferring a second time. This is a deliberate, documented exception to strict phase order
+(Phase 5 remains open with #49 outstanding while this phase lands) — normal one-feature-
+at-a-time, in-order sequencing resumes immediately after.
+
+Feature-spec for this item was drafted 2026-09-11, spec-file number 56 (sequential,
+never reused — diverges from the tracker number as usual):
+
+| Tracker # | Feature              | Spec file                                          |
+| --------- | --------------------- | -------------------------------------------------- |
+| 50        | Product Detail Page   | `context/feature-specs/56-product-detail-page.md`  |
+
+| #   | Feature            | Depends On          | Status |
+| --- | ------------------ | -------------------- | ------ |
+| 50  | Product Detail Page | Product Management  | ⬜     |
+
+Phase Status
+
+⬜ Not Started — next feature to implement (ahead of Phase 5's #49; see the note above).
+
+---
+
+# Phase 7 — Accounting
 
 Feature-specs for all four items were drafted 2026-09-11 (documentation only, not
-implemented), on the same `docs/phase-5-6-feature-specs` branch:
+implemented), on the same `docs/phase-5-6-feature-specs` branch. Renumbered 2026-09-11
+(tracker #50–#53 → #51–#54) when Phase 6 — Product Detail Page was inserted ahead of this
+phase; this phase itself shifted from Phase 6 to Phase 7. Spec-file numbers (52–55) are
+unaffected — only tracker `#` numbers and the phase number moved:
 
 | Tracker # | Feature         | Spec file                                     |
 | --------- | --------------- | ---------------------------------------------- |
-| 50        | Payment Voucher | `context/feature-specs/52-payment-voucher.md`  |
-| 51        | Receipt Voucher | `context/feature-specs/53-receipt-voucher.md`  |
-| 52        | Contra Voucher  | `context/feature-specs/54-contra-voucher.md`   |
-| 53        | Journal Voucher | `context/feature-specs/55-journal-voucher.md`  |
+| 51        | Payment Voucher | `context/feature-specs/52-payment-voucher.md`  |
+| 52        | Receipt Voucher | `context/feature-specs/53-receipt-voucher.md`  |
+| 53        | Contra Voucher  | `context/feature-specs/54-contra-voucher.md`   |
+| 54        | Journal Voucher | `context/feature-specs/55-journal-voucher.md`  |
 
 All four are thin permission-gated UI/validation layers directly over the
 already-implemented Voucher Engine (feature-spec 31) — no engine changes, and
@@ -314,63 +350,63 @@ three do), since it has no structural safeguard against an arbitrary entry.
 
 | #   | Feature         | Depends On     | Status |
 | --- | --------------- | -------------- | ------ |
-| 50  | Payment Voucher | Voucher Engine | ⬜     |
-| 51  | Receipt Voucher | Voucher Engine | ⬜     |
-| 52  | Contra Voucher  | Voucher Engine | ⬜     |
-| 53  | Journal Voucher | Voucher Engine | ⬜     |
+| 51  | Payment Voucher | Voucher Engine | ⬜     |
+| 52  | Receipt Voucher | Voucher Engine | ⬜     |
+| 53  | Contra Voucher  | Voucher Engine | ⬜     |
+| 54  | Journal Voucher | Voucher Engine | ⬜     |
 
 ---
 
-# Phase 7 — GST
+# Phase 8 — GST
 
 | #   | Feature       | Depends On | Status |
 | --- | ------------- | ---------- | ------ |
-| 54  | GST Registers | GST Engine | ⬜     |
-| 55  | GSTR-1        | GST Engine | ⬜     |
-| 56  | GSTR-3B       | GST Engine | ⬜     |
-| 57  | HSN Summary   | GST Engine | ⬜     |
+| 55  | GST Registers | GST Engine | ⬜     |
+| 56  | GSTR-1        | GST Engine | ⬜     |
+| 57  | GSTR-3B       | GST Engine | ⬜     |
+| 58  | HSN Summary   | GST Engine | ⬜     |
 
 ---
 
-# Phase 8 — Employee Management
+# Phase 9 — Employee Management
 
 | #   | Feature         | Depends On | Status |
 | --- | --------------- | ---------- | ------ |
-| 58  | Employee Master | Company    | ⬜     |
-| 59  | Attendance      | Employee   | ⬜     |
-| 60  | Payroll         | Attendance | ⬜     |
+| 59  | Employee Master | Company    | ⬜     |
+| 60  | Attendance      | Employee   | ⬜     |
+| 61  | Payroll         | Attendance | ⬜     |
 
 ---
 
-# Phase 9 — Reporting
+# Phase 10 — Reporting
 
 | #   | Feature           | Depends On     | Status |
 | --- | ----------------- | -------------- | ------ |
-| 61  | Trial Balance     | Voucher Engine | ⬜     |
-| 62  | Profit & Loss     | Accounting     | ⬜     |
-| 63  | Balance Sheet     | Accounting     | ⬜     |
-| 64  | Cash Flow         | Accounting     | ⬜     |
-| 65  | Sales Reports     | Sales          | ⬜     |
-| 66  | Purchase Reports  | Purchase       | ⬜     |
-| 67  | Inventory Reports | Inventory      | ⬜     |
-| 68  | Customer Reports  | Customers      | ⬜     |
-| 69  | Supplier Reports  | Suppliers      | ⬜     |
-| 70  | Employee Reports  | Employees      | ⬜     |
-| 71  | GST Reports       | GST            | ⬜     |
+| 62  | Trial Balance     | Voucher Engine | ⬜     |
+| 63  | Profit & Loss     | Accounting     | ⬜     |
+| 64  | Balance Sheet     | Accounting     | ⬜     |
+| 65  | Cash Flow         | Accounting     | ⬜     |
+| 66  | Sales Reports     | Sales          | ⬜     |
+| 67  | Purchase Reports  | Purchase       | ⬜     |
+| 68  | Inventory Reports | Inventory      | ⬜     |
+| 69  | Customer Reports  | Customers      | ⬜     |
+| 70  | Supplier Reports  | Suppliers      | ⬜     |
+| 71  | Employee Reports  | Employees      | ⬜     |
+| 72  | GST Reports       | GST            | ⬜     |
 
 ---
 
-# Phase 10 — Productivity Features
+# Phase 11 — Productivity Features
 
 | #   | Feature          | Depends On | Status |
 | --- | ---------------- | ---------- | ------ |
-| 72  | Global Search    | Masters    | ⬜     |
-| 73  | Excel Import     | Masters    | ⬜     |
-| 74  | Excel Export     | Reports    | ⬜     |
-| 75  | PDF Generation   | Reports    | ⬜     |
-| 76  | Barcode Billing  | Sales      | ⬜     |
-| 77  | Audit Logs       | Platform   | ⬜     |
-| 78  | Backup & Restore | Database   | ⬜     |
+| 73  | Global Search    | Masters    | ⬜     |
+| 74  | Excel Import     | Masters    | ⬜     |
+| 75  | Excel Export     | Reports    | ⬜     |
+| 76  | PDF Generation   | Reports    | ⬜     |
+| 77  | Barcode Billing  | Sales      | ⬜     |
+| 78  | Audit Logs       | Platform   | ⬜     |
+| 79  | Backup & Restore | Database   | ⬜     |
 
 ---
 
@@ -401,12 +437,65 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 5 — Inventory: Batch Tracking (#48)**. Opening Stock (#44), Stock Adjustment
-(#45), Stock Transfer (#46), and Physical Verification (#47) were all implemented
-2026-09-11 — the first four of Phase 5's six documents are now done; only Batch
-Tracking (#48) and Serial Number Tracking (#49) remain, the two items that genuinely
-extend the Inventory Engine's own schema rather than sitting as a thin document/UI
-layer over it.
+➡ **Phase 6 — Product Detail Page (#50)**. Inserted 2026-09-11 ahead of Phase 5's own
+remaining item, per explicit user direction: build the Product detail view now, before
+resuming Serial Number Tracking (#49), so #49's Serial Numbers tab (and the Batches tab
+already deferred by Batch Tracking, #48 — see known deviation #2 below) have a page to
+land in instead of deferring a second time. Opening Stock (#44), Stock Adjustment (#45),
+Stock Transfer (#46), Physical Verification (#47), and Batch Tracking (#48) are all
+implemented; only Serial Number Tracking (#49), the last item of Phase 5, remains —
+**after this Phase 6 feature is complete, work resumes on #49**, then normal phase order
+continues at Phase 7 (Accounting, #51–#54).
+
+Batch Tracking (`feature/batch-tracking`) — the first of the two genuinely new
+engine-adjacent schema additions Phase 5 reserved (32-inventory-engine.md's own Do Not
+section deferred batch/serial tracking here). New `Product.isBatchTracked` (opt-in,
+TRADING-only, immutable once the product has any StockTransaction — the same rule/guard
+shape as unitId/productType), new `ProductBatch` catalog model (batch number, optional
+manufacture/expiry dates, `(companyId, productId, batchNumber)` unique — two products may
+share a lot number), and one additive nullable `StockTransaction.batchId` column
+(migration `20260911060923_batch_tracking`). Per the spec's Retrofit Decision, `batchId`
+was added ONLY to `StockTransaction` and threaded as an optional field through the
+Inventory Engine's existing `stockMovementLineSchema`/`transferStockInputSchema` and a new
+`assertBatchRequirement`/`assertUsableBatch` pair in `inventory-engine.ts` — required when
+`product.isBatchTracked`, forbidden otherwise, never a silent no-op. Batch-scoped
+availability is checked independently of (in addition to) the existing product-level
+check via new `sumStockForBatchTriples`/`aggregateBatchOutDemand`, so a business cannot
+oversell one batch using a sibling batch's stock even though the product's company-wide
+total covers it; batch quantity is never stored, only Sigma IN - Sigma OUT via the new
+`getBatchStock`/`getBatchLedger` queries (mirroring `getCurrentStock`/`getStockLedger`
+one dimension further). New `product-batches` module (repository/service/validation/
+actions/components) plus a `<BatchSelector>` component and an `isBatchTracked` toggle
+wired into the existing Product create/edit form. `npx tsc --noEmit`, `npx eslint src
+prisma`, `npx vitest run` (1253 tests), and `next build` all pass.
+
+**Known deviations/deferrals from the spec, recorded per `ai-workflow-rules.md`:**
+
+1. **The mutual-exclusion CHECK constraint (batch/serial) is deferred to feature-spec
+   51's own migration** — `Product.isSerialTracked` doesn't exist yet, so a Postgres
+   `CHECK` referencing it cannot be written now. The exact deferred SQL is documented as
+   a comment block at the end of `prisma/migrations/20260911060923_batch_tracking/migration.sql`;
+   spec 51 must add it. The two spec-mandated test cases for this ("mutual exclusion,
+   either order") are correspondingly not yet written — add them alongside spec 51.
+2. **The Batches tab / page route is on hold**, per explicit user decision during this
+   implementation, until a Product detail page exists (Product Management today only has
+   list/new/edit, no detail view). Everything else shipped: the `isBatchTracked` toggle on
+   the existing Product form, the full `product-batches` module (repository, service,
+   validation, actions), and the reusable UI components (`ProductBatchTable`,
+   `ProductBatchForm`, `<BatchSelector>`) — none are yet wired into a page. When a Product
+   detail page is built (this task or spec 51's own), reuse the same pattern for its
+   Serial Numbers tab.
+3. **Batch activate/deactivate use the `edit` permission action**, not this codebase's
+   usual `LIFECYCLE_ACTION = "delete"` convention every other master's toggle follows —
+   a deliberate deviation because the spec's own Security section enumerates only
+   view/create/edit for this feature. Flag if this drifts from `LIFECYCLE_ACTION` in a
+   future permission-catalog cleanup.
+4. **The retrofit list is still fully outstanding**: `<BatchSelector>` exists but is wired
+   into NONE of Purchase Invoice, Sales Invoice, Purchase Return, Sales Return, Opening
+   Stock, Stock Adjustment, Stock Transfer, or Physical Verification's line editors yet.
+   The moment a product is flipped to `isBatchTracked`, every one of those documents will
+   reject a movement against it (missing batchId) until its own line editor is retrofitted
+   — each is its own follow-up task, not automatic.
 
 Opening Stock (`feature/opening-stock`, merged into `main`) — the thin UI/service layer
 directly over the already-shipped Inventory Engine (feature-spec 32): no new Prisma
@@ -485,11 +574,29 @@ Phases 1–4 are fully complete: Phase 3 — Sales Management (#33–#39, all se
 documents) and Phase 4 — Purchase Management (#40–#43, all four documents, the last
 being Purchase Return implemented 2026-09-11) — see each phase's own status paragraph
 above and `context/progress-tracker.md`'s Completed entries for the full record.
-Feature-specs for the rest of Phase 5 (tracker #46–#49) and Phase 6 (Accounting — the
-four manual voucher screens, tracker #50–#53) were drafted 2026-09-11 per explicit user
-request, following the same batch-drafting-without-implementation precedent as the
-Phase 3/4 spec batches (drafted 2026-07-18/19, implemented much later, one at a time).
-Per `ai-workflow-rules.md` only one feature is *implemented* at a time.
+Feature-specs for the rest of Phase 5 (tracker #46–#49) and the former Phase 6
+(Accounting — the four manual voucher screens, drafted as tracker #50–#53, renumbered to
+#51–#54 and Phase 7 when Phase 6 — Product Detail Page was inserted, see below) were
+drafted 2026-09-11 per explicit user request, following the same
+batch-drafting-without-implementation precedent as the Phase 3/4 spec batches (drafted
+2026-07-18/19, implemented much later, one at a time). Per `ai-workflow-rules.md` only
+one feature is *implemented* at a time.
+
+**Phase 6 — Product Detail Page inserted 2026-09-11**, per explicit user direction,
+before any of its work began: Product Management (feature-spec 25, tracker #23) shipped
+list/new/edit only, with no detail view, and two later Phase 5 specs both need one —
+Batch Tracking (#48) deferred its Batches tab for exactly this reason (known deviation #2
+above), and Serial Number Tracking's own spec (`51-serial-number-tracking.md`, #49)
+assumes "the existing Product detail view" in its UI section. Inserting a dedicated phase
+for it — rather than building it as a side effect of #49 — keeps the same one-feature
+convention this project already follows (a distinct spec file, `56-product-detail-page.md`,
+tracker #50) and gives both existing batch UI components and the still-pending serial
+UI a single, deliberately-designed page to land in. The insertion pushed every
+tracker number and phase number from the old Phase 6 (Accounting) onward up by one: old
+#50–#78 are now #51–#79, and old Phase 6–10 are now Phase 7–11. No feature-spec **file**
+numbers changed — spec 56 is simply the next sequential file after 55, and specs 52–55
+(Payment/Receipt/Contra/Journal Voucher) keep their own file names, only their in-body
+tracker-number and phase-number references were updated to match.
 
 ---
 

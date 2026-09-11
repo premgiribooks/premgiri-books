@@ -1,8 +1,8 @@
 # 53 - Receipt Voucher
 
 > Feature-spec file number 53 (spec-file numbers are sequential and never reused). This
-> feature is `context/Phases/phase-tracker.md`'s **Phase 6 — Accounting** item **#51
-> Receipt Voucher** — the second of the four manual voucher screens (#50–#53), the direct
+> feature is `context/Phases/phase-tracker.md`'s **Phase 7 — Accounting** item **#52
+> Receipt Voucher** — the second of the four manual voucher screens (#51–#54), the direct
 > mirror of `52-payment-voucher.md` with the ledger direction reversed. Depends on the
 > Voucher Engine (feature-spec 31, implemented) and the Document Number Engine
 > (feature-spec 34, implemented). **Read `52-payment-voucher.md` first in full** — this
@@ -171,5 +171,5 @@ Verify
 - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and `next build` all
   pass; `/accounting/receipt-vouchers*` appears in the build route table.
 
-Feature-spec 53 (this spec) is `context/Phases/phase-tracker.md`'s Phase 6 item #51.
-Feature-spec 54 (Contra Voucher, tracker #52) is next.
+Feature-spec 53 (this spec) is `context/Phases/phase-tracker.md`'s Phase 7 item #52.
+Feature-spec 54 (Contra Voucher, tracker #53) is next.

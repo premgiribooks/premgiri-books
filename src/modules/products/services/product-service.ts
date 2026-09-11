@@ -56,6 +56,7 @@ function toPersistData(data: CreateProductInput): ProductPersistData {
     sellingPrice: data.sellingPrice ?? null,
     purchasePrice: data.purchasePrice ?? null,
     minStockLevel: data.minStockLevel ?? null,
+    isBatchTracked: data.isBatchTracked,
     description: data.description ?? null,
   };
 }
@@ -131,6 +132,13 @@ export const productService = {
       }
       translatePersistError(error);
     }
+  },
+
+  /** Courtesy read for the edit form's batch-tracking toggle state — see productRepository.hasStockTransactions. */
+  async hasStockTransactions(id: string): Promise<boolean> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return productRepository.hasStockTransactions(user.companyId, id);
   },
 
   async activateProduct(id: string): Promise<ProductWithRelations> {

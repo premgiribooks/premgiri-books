@@ -190,6 +190,7 @@ Responsibilities
 - Physical Verification
 - Stock Ledger
 - Stock Valuation
+- Batch Tracking (opt-in per product; `StockTransaction.batchId` optional, required only when the product is batch-tracked — see `50-batch-tracking.md`)
 
 ---
 

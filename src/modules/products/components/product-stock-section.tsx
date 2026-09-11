@@ -2,11 +2,19 @@
 
 import type { Control } from "react-hook-form";
 
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import { ProductNumberField } from "@/modules/products/components/product-number-field";
 import { ProductOptionSelector } from "@/modules/products/components/product-option-selector";
 import type { CreateProductInput } from "@/modules/products/validation/product-schema";
-import type { ProductMasterOption } from "@/types/product";
+import type { ProductMasterOption, ProductType } from "@/types/product";
 
 interface ProductStockSectionProps {
   control: Control<CreateProductInput>;
@@ -14,14 +22,23 @@ interface ProductStockSectionProps {
   /** The selected unit's decimalPlaces (0 when none picked yet) — drives the
    * input step and the helper text; the server re-verifies the precision. */
   unitDecimalPlaces: number;
+  productType: ProductType;
+  /** True once the product has any recorded StockTransaction — disables the
+   * batch-tracking toggle (50-batch-tracking.md's immutability rule; the
+   * server is the real authority, this is a courtesy). Always false on
+   * create. */
+  hasStockTransactions: boolean;
 }
 
-/** Stock: reorder threshold + default warehouse — no quantities here, every
- * movement is the Inventory Engine's (#30) job (Invariant 7). */
+/** Stock: reorder threshold + default warehouse + batch tracking opt-in — no
+ * quantities here, every movement is the Inventory Engine's (#30) job
+ * (Invariant 7). */
 export function ProductStockSection({
   control,
   warehouses,
   unitDecimalPlaces,
+  productType,
+  hasStockTransactions,
 }: ProductStockSectionProps) {
   const step = unitDecimalPlaces === 0 ? "1" : `0.${"0".repeat(unitDecimalPlaces - 1)}1`;
 
@@ -69,6 +86,35 @@ export function ProductStockSection({
           )}
         />
       </div>
+
+      <FormField
+        control={control}
+        name="isBatchTracked"
+        render={({ field }) => {
+          const disabled = productType !== "TRADING" || hasStockTransactions;
+          return (
+            <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel>Batch Tracking</FormLabel>
+                <FormDescription>
+                  {hasStockTransactions
+                    ? "This product has recorded stock movements — batch tracking can no longer be turned on or off."
+                    : productType !== "TRADING"
+                      ? "Only a trading product can be batch-tracked."
+                      : "Track stock in named batches (lot number, manufacture/expiry dates) for this product. Once enabled, every stock movement for it must select a batch — this must be wired into each document's line editor separately before it takes effect there."}
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={disabled}
+                />
+              </FormControl>
+            </FormItem>
+          );
+        }}
+      />
     </section>
   );
 }

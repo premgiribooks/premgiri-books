@@ -14,14 +14,14 @@
 Implement the **Voucher Engine** for **Premgiri Books ERP** — the double-entry accounting
 core (`architecture-context.md` Core Engines; Invariants 1, 2, 9; code-standards.md
 Financial Rules) that every future financial feature posts through: Sales Invoice (#36),
-Purchase Invoice (#42), Payment/Receipt/Contra/Journal Vouchers (#50–#53), returns and
-notes (#37–#39, #43), and that every financial report derives from (Trial Balance #61,
-P&L #62, Balance Sheet #63).
+Purchase Invoice (#42), Payment/Receipt/Contra/Journal Vouchers (#51–#54), returns and
+notes (#37–#39, #43), and that every financial report derives from (Trial Balance #62,
+P&L #63, Balance Sheet #64).
 
 The engine is a **service, not a screen** (the spec-30 engine convention): it exposes
 posting, cancellation, and balance/aggregation query APIs plus the voucher schema.
 **No transactional UI ships in this task** — nothing exists yet that creates vouchers.
-Voucher entry screens are Phase 6 (#50–#53); report screens are Phase 9.
+Voucher entry screens are Phase 7 (#51–#54); report screens are Phase 10.
 
 Financial data is immutable (code-standards.md): **posted vouchers are never edited and
 never deleted; cancellation creates a reversal**. This engine is where that rule becomes
@@ -36,8 +36,8 @@ Before implementation, review
 - PRD.md, architecture-context.md (Voucher Driven, Document Driven, Core Engines →
   Voucher Engine, Invariants 1–9), code-standards.md (Financial Rules — the exact rules
   this engine enforces), ai-workflow-rules.md, progress-tracker.md
-- `context/Phases/phase-tracker.md` (Shared ERP Engines; the Accounting #50–#53, Sales
-  #36, Purchase #42, and Reporting #61–#64 features that consume this engine)
+- `context/Phases/phase-tracker.md` (Shared ERP Engines; the Accounting #51–#54, Sales
+  #36, Purchase #42, and Reporting #62–#65 features that consume this engine)
 - `14-ledger-master.md` (the `Ledger` model entries post to; `openingBalance` semantics)
 - `09-financial-year.md` (FY date-range and closed-year semantics vouchers validate
   against)
@@ -57,12 +57,12 @@ The Voucher Engine is responsible for
 - `cancelVoucher` — reversal-based cancellation (never mutation)
 - Balance and aggregation queries: ledger closing balance, ledger statement (the Cash
   Book / Bank Book primitive), and trial-balance aggregation (the data primitive Reports
-  #61–#63 will render)
+  #62–#64 will render)
 
 The Voucher Engine is **not** responsible for
 
-- Any UI (voucher entry screens are #50–#53; Ledger Inquiry is the Accounting module;
-  report screens are Phase 9)
+- Any UI (voucher entry screens are #51–#54; Ledger Inquiry is the Accounting module;
+  report screens are Phase 10)
 - Deciding *which* entries a business document produces (Sales Invoice #36 knows its
   debit-customer/credit-sales/credit-GST breakup and passes finished entry lines here)
 - GST calculation (GST Engine), stock (Inventory Engine), document numbering beyond
@@ -157,7 +157,7 @@ Decisions
 - `referenceType`/`referenceId` — polymorphic link to the source document
   ("SALES_INVOICE", its id), no FK by design: voucher rows must outlive any referencing
   table's shape, and the source-document tables don't exist yet. Manual vouchers
-  (#50–#53) leave both null. Indexed for "find the voucher for this document".
+  (#51–#54) leave both null. Indexed for "find the voucher for this document".
 - `reversalOfId` — self-relation, `@unique` (a voucher is reversed at most once). The
   reversal voucher's entries mirror the original with DEBIT↔CREDIT swapped.
 - `createdByUserId` — the first use of the shared-field convention's optional
@@ -230,7 +230,7 @@ src/modules/vouchers/repositories/voucher-repository.ts  // the only Prisma acce
   precedent).
 - `getTrialBalance(companyId, financialYearId, asOfDate?)` returns per-ledger debit/
   credit totals + opening balances — aggregation via Prisma `groupBy` on entries. This
-  is a data primitive; rendering is Reports #61.
+  is a data primitive; rendering is Reports #62.
 - `getLedgerStatement(companyId, ledgerId, from, to)` returns dated entries with running
   balance — the Cash Book / Bank Book / Ledger Inquiry primitive.
 - No Server Actions, no permission checks in the engine (spec-30 convention — callers
@@ -284,7 +284,7 @@ Database Standards), vitest as a primary deliverable:
 
 Do not implement
 
-- Any voucher entry UI (#50–#53), ledger inquiry screen, or report page (#61–#64)
+- Any voucher entry UI (#51–#54), ledger inquiry screen, or report page (#62–#65)
 - Sales/Purchase documents or their entry-breakup logic (#36, #42 pass finished lines)
 - Stored/cached balances anywhere (computed only)
 - Editing or deleting posted vouchers (no API may exist)

@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto";
 import { Prisma, type ProductType, type StockDirection } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { pairKey } from "@/engines/inventory/inventory-validation";
+import { batchKey, pairKey } from "@/engines/inventory/inventory-validation";
 import type {
+  BatchStockFilters,
+  BatchStockRow,
   CurrentStockFilters,
   CurrentStockRow,
   RecordedStockTransaction,
@@ -21,6 +23,7 @@ export interface ProductForMovement {
   name: string;
   isActive: boolean;
   productType: ProductType;
+  isBatchTracked: boolean;
   unit: { decimalPlaces: number };
 }
 
@@ -28,6 +31,15 @@ export interface WarehouseForMovement {
   id: string;
   companyId: string;
   name: string;
+  isActive: boolean;
+}
+
+/** Batch lookup for the batch-required/forbidden and active checks recordMovements/transferStock enforce (50-batch-tracking.md). */
+export interface BatchForMovement {
+  id: string;
+  companyId: string;
+  productId: string;
+  batchNumber: string;
   isActive: boolean;
 }
 
@@ -96,6 +108,7 @@ function toRecordedStockTransaction(raw: {
   referenceType: string | null;
   referenceId: string | null;
   transferGroupId: string | null;
+  batchId: string | null;
   narration: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -113,6 +126,7 @@ function toRecordedStockTransaction(raw: {
     referenceType: raw.referenceType,
     referenceId: raw.referenceId,
     transferGroupId: raw.transferGroupId,
+    batchId: raw.batchId,
     narration: raw.narration,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
@@ -137,6 +151,7 @@ export const stockTransactionRepository = {
         name: true,
         isActive: true,
         productType: true,
+        isBatchTracked: true,
         unit: { select: { decimalPlaces: true } },
       },
     });
@@ -150,6 +165,17 @@ export const stockTransactionRepository = {
     return client.warehouse.findMany({
       where: { id: { in: [...warehouseIds] } },
       select: { id: true, companyId: true, name: true, isActive: true },
+    });
+  },
+
+  /** Batch lookup for the batch-scope/active checks (50-batch-tracking.md) — kept here, not in product-batch-repository.ts, so the engine keeps its single-repository dependency. */
+  async findBatchesForMovement(
+    client: PrismaClientOrTransaction,
+    batchIds: readonly string[]
+  ): Promise<BatchForMovement[]> {
+    return client.productBatch.findMany({
+      where: { id: { in: [...batchIds] } },
+      select: { id: true, companyId: true, productId: true, batchNumber: true, isActive: true },
     });
   },
 
@@ -203,6 +229,51 @@ export const stockTransactionRepository = {
   },
 
   /**
+   * Batch-scoped analog of `sumStockForPairs` — current stock (Sigma IN -
+   * Sigma OUT) for exactly the requested (product, warehouse, batch)
+   * triples, keyed by `batchKey` (50-batch-tracking.md's batch-scoped
+   * availability check). Same zero-prefill and same-transaction-snapshot
+   * contract as `sumStockForPairs`.
+   */
+  async sumStockForBatchTriples(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    triples: readonly { productId: string; warehouseId: string; batchId: string }[]
+  ): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    for (const triple of triples) {
+      result.set(batchKey(triple.productId, triple.warehouseId, triple.batchId), 0);
+    }
+    if (triples.length === 0) {
+      return result;
+    }
+
+    const rows = await tx.stockTransaction.groupBy({
+      by: ["productId", "warehouseId", "batchId", "direction"],
+      where: {
+        companyId,
+        OR: triples.map((triple) => ({
+          productId: triple.productId,
+          warehouseId: triple.warehouseId,
+          batchId: triple.batchId,
+        })),
+      },
+      _sum: { quantity: true },
+    });
+
+    for (const row of rows) {
+      if (!row.batchId) {
+        continue;
+      }
+      const key = batchKey(row.productId, row.warehouseId, row.batchId);
+      const signedQuantity = row.direction === "IN" ? toDecimalSum(row._sum.quantity) : -toDecimalSum(row._sum.quantity);
+      result.set(key, (result.get(key) ?? 0) + signedQuantity);
+    }
+
+    return result;
+  },
+
+  /**
    * Bulk-inserts every line atomically, always on the caller's transaction
    * (inventory-engine.ts never calls this outside one). Postgres's
    * multi-row `INSERT ... VALUES (...), (...) RETURNING` preserves the
@@ -225,6 +296,7 @@ export const stockTransactionRepository = {
         transactionDate: new Date(`${line.transactionDate}T00:00:00.000Z`),
         referenceType: line.referenceType ?? null,
         referenceId: line.referenceId ?? null,
+        batchId: line.batchId ?? null,
         narration: line.narration ?? null,
       })),
     });
@@ -246,6 +318,7 @@ export const stockTransactionRepository = {
       destinationWarehouseId: string;
       quantity: number;
       transactionDate: Date;
+      batchId: string | null;
       narration: string | null;
     }
   ): Promise<TransferStockResult> {
@@ -263,6 +336,7 @@ export const stockTransactionRepository = {
           unitCost: null,
           transactionDate: input.transactionDate,
           transferGroupId,
+          batchId: input.batchId,
           narration: input.narration,
         },
       }),
@@ -277,6 +351,7 @@ export const stockTransactionRepository = {
           unitCost: null,
           transactionDate: input.transactionDate,
           transferGroupId,
+          batchId: input.batchId,
           narration: input.narration,
         },
       }),
@@ -324,6 +399,50 @@ export const stockTransactionRepository = {
     return [...byPair.values()];
   },
 
+  /**
+   * Batch-scoped analog of `aggregateCurrentStock` — grouped Sigma IN -
+   * Sigma OUT per (product, warehouse, batch), optionally narrowed to one
+   * product/warehouse/batch (50-batch-tracking.md's getBatchStock). Rows
+   * with a null `batchId` (non-batch-tracked movements) are excluded.
+   */
+  async aggregateBatchStock(
+    companyId: string,
+    filters: BatchStockFilters = {},
+    client: PrismaClientOrTransaction = prisma
+  ): Promise<BatchStockRow[]> {
+    const rows = await client.stockTransaction.groupBy({
+      by: ["productId", "warehouseId", "batchId", "direction"],
+      where: {
+        companyId,
+        batchId: filters.batchId ? filters.batchId : { not: null },
+        ...(filters.productId ? { productId: filters.productId } : {}),
+        ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      },
+      _sum: { quantity: true },
+    });
+
+    const byTriple = new Map<string, BatchStockRow>();
+    for (const row of rows) {
+      if (!row.batchId) {
+        continue;
+      }
+      const key = batchKey(row.productId, row.warehouseId, row.batchId);
+      const signedQuantity = row.direction === "IN" ? toDecimalSum(row._sum.quantity) : -toDecimalSum(row._sum.quantity);
+      const existing = byTriple.get(key);
+      if (existing) {
+        existing.quantity += signedQuantity;
+      } else {
+        byTriple.set(key, {
+          productId: row.productId,
+          warehouseId: row.warehouseId,
+          batchId: row.batchId,
+          quantity: signedQuantity,
+        });
+      }
+    }
+    return [...byTriple.values()];
+  },
+
   /** Per-product Sigma IN - Sigma OUT across all warehouses, or within one when `warehouseId` is given — the getStockValuation aggregation. */
   async aggregateStockByProduct(
     companyId: string,
@@ -365,6 +484,7 @@ export const stockTransactionRepository = {
         companyId,
         productId,
         ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+        ...(filters.batchId ? { batchId: filters.batchId } : {}),
         ...(filters.from || filters.to
           ? {
               transactionDate: {

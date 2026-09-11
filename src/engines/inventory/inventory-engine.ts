@@ -4,7 +4,10 @@ import { AppError } from "@/lib/app-error";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
 import { runInTransaction } from "@/lib/transaction";
 import {
+  aggregateBatchOutDemand,
   aggregateOutDemand,
+  batchKey,
+  batchRequirementError,
   directionErrorMessage,
   hasSufficientStock,
   hasValidQuantityPrecision,
@@ -17,10 +20,11 @@ import {
   type StockMovementLineInput,
   type TransferStockInput,
 } from "@/engines/inventory/inventory-validation";
-import { getCurrentStock } from "@/engines/inventory/inventory-queries";
+import { getBatchStock, getCurrentStock } from "@/engines/inventory/inventory-queries";
 import type { RecordedStockTransaction, TransferStockResult } from "@/engines/inventory/types";
 import {
   stockTransactionRepository,
+  type BatchForMovement,
   type ProductForMovement,
   type WarehouseForMovement,
 } from "@/modules/stock-transactions/repositories/stock-transaction-repository";
@@ -75,6 +79,37 @@ function assertActiveWarehouse(
   return warehouse;
 }
 
+/**
+ * `batchId` is required when the product is `isBatchTracked`, and forbidden
+ * otherwise (50-batch-tracking.md's Business Rules) — checked against the
+ * loaded product's own flag, never the client's claim about it.
+ */
+function assertBatchRequirement(product: ProductForMovement, batchId: string | undefined): void {
+  const error = batchRequirementError(product.name, product.isBatchTracked, batchId);
+  if (error) {
+    throw new AppError(error);
+  }
+}
+
+/**
+ * A referenced batch must belong to the caller's company AND the same
+ * product, and be active at movement time — never leaking existence across
+ * company/product boundaries (mirrors assertMovableProduct/assertActiveWarehouse).
+ */
+function assertUsableBatch(
+  batch: BatchForMovement | undefined,
+  companyId: string,
+  productId: string
+): BatchForMovement {
+  if (!batch || batch.companyId !== companyId || batch.productId !== productId) {
+    throw new AppError("Batch not found.");
+  }
+  if (!batch.isActive) {
+    throw new AppError(`Batch "${batch.batchNumber}" is inactive and cannot record stock movements.`);
+  }
+  return batch;
+}
+
 /** Mirrors product-repository.ts's assertMinStockLevelPrecision / pricing-engine.ts's assertQuantityPrecision. */
 function assertQuantityPrecision(quantity: number, decimalPlaces: number): void {
   if (!hasValidQuantityPrecision(quantity, decimalPlaces)) {
@@ -98,18 +133,25 @@ function assertLinesWellFormed(lines: readonly StockMovementLineInput[], now: Da
   }
 }
 
-async function loadProductsAndWarehouses(
+async function loadMovementReferences(
   client: PrismaClientOrTransaction,
   productIds: readonly string[],
-  warehouseIds: readonly string[]
-): Promise<{ productById: Map<string, ProductForMovement>; warehouseById: Map<string, WarehouseForMovement> }> {
-  const [products, warehouses] = await Promise.all([
+  warehouseIds: readonly string[],
+  batchIds: readonly string[]
+): Promise<{
+  productById: Map<string, ProductForMovement>;
+  warehouseById: Map<string, WarehouseForMovement>;
+  batchById: Map<string, BatchForMovement>;
+}> {
+  const [products, warehouses, batches] = await Promise.all([
     stockTransactionRepository.findProductsForMovement(client, productIds),
     stockTransactionRepository.findWarehousesForMovement(client, warehouseIds),
+    batchIds.length > 0 ? stockTransactionRepository.findBatchesForMovement(client, batchIds) : Promise.resolve([]),
   ]);
   return {
     productById: new Map(products.map((product) => [product.id, product])),
     warehouseById: new Map(warehouses.map((warehouse) => [warehouse.id, warehouse])),
+    batchById: new Map(batches.map((batch) => [batch.id, batch])),
   };
 }
 
@@ -127,26 +169,59 @@ async function recordMovementsInTransaction(
 ): Promise<RecordedStockTransaction[]> {
   const productIds = [...new Set(lines.map((line) => line.productId))];
   const warehouseIds = [...new Set(lines.map((line) => line.warehouseId))];
-  const { productById, warehouseById } = await loadProductsAndWarehouses(tx, productIds, warehouseIds);
+  const batchIds = [...new Set(lines.flatMap((line) => (line.batchId ? [line.batchId] : [])))];
+  const { productById, warehouseById, batchById } = await loadMovementReferences(
+    tx,
+    productIds,
+    warehouseIds,
+    batchIds
+  );
 
   for (const line of lines) {
     const product = assertMovableProduct(productById.get(line.productId), companyId);
     assertQuantityPrecision(line.quantity, product.unit.decimalPlaces);
     assertActiveWarehouse(warehouseById.get(line.warehouseId), companyId);
+    assertBatchRequirement(product, line.batchId);
+    if (line.batchId) {
+      assertUsableBatch(batchById.get(line.batchId), companyId, line.productId);
+    }
   }
 
   const demand = aggregateOutDemand(lines);
-  if (demand.length > 0) {
+  const batchDemand = aggregateBatchOutDemand(lines);
+
+  if (demand.length > 0 || batchDemand.length > 0) {
     const allowNegativeStock = await stockTransactionRepository.findAllowNegativeStock(companyId);
     if (!allowNegativeStock) {
-      const currentStockByPair = await stockTransactionRepository.sumStockForPairs(tx, companyId, demand);
-      for (const item of demand) {
-        const currentStock = currentStockByPair.get(pairKey(item.productId, item.warehouseId)) ?? 0;
-        if (!hasSufficientStock(currentStock, item.quantity)) {
-          const product = productById.get(item.productId);
-          throw new AppError(
-            `Insufficient stock for "${product?.name ?? item.productId}" at the selected warehouse.`
-          );
+      if (demand.length > 0) {
+        const currentStockByPair = await stockTransactionRepository.sumStockForPairs(tx, companyId, demand);
+        for (const item of demand) {
+          const currentStock = currentStockByPair.get(pairKey(item.productId, item.warehouseId)) ?? 0;
+          if (!hasSufficientStock(currentStock, item.quantity)) {
+            const product = productById.get(item.productId);
+            throw new AppError(
+              `Insufficient stock for "${product?.name ?? item.productId}" at the selected warehouse.`
+            );
+          }
+        }
+      }
+
+      if (batchDemand.length > 0) {
+        const currentStockByBatchTriple = await stockTransactionRepository.sumStockForBatchTriples(
+          tx,
+          companyId,
+          batchDemand
+        );
+        for (const item of batchDemand) {
+          const currentStock =
+            currentStockByBatchTriple.get(batchKey(item.productId, item.warehouseId, item.batchId)) ?? 0;
+          if (!hasSufficientStock(currentStock, item.quantity)) {
+            const product = productById.get(item.productId);
+            const batch = batchById.get(item.batchId);
+            throw new AppError(
+              `Insufficient stock in batch "${batch?.batchNumber ?? item.batchId}" for "${product?.name ?? item.productId}" at the selected warehouse.`
+            );
+          }
         }
       }
     }
@@ -205,16 +280,22 @@ async function transferStockInTransaction(
   companyId: string,
   input: TransferStockInput
 ): Promise<TransferStockResult> {
-  const { productById, warehouseById } = await loadProductsAndWarehouses(
+  const batchIds = input.batchId ? [input.batchId] : [];
+  const { productById, warehouseById, batchById } = await loadMovementReferences(
     tx,
     [input.productId],
-    [input.sourceWarehouseId, input.destinationWarehouseId]
+    [input.sourceWarehouseId, input.destinationWarehouseId],
+    batchIds
   );
 
   const product = assertMovableProduct(productById.get(input.productId), companyId);
   assertQuantityPrecision(input.quantity, product.unit.decimalPlaces);
   assertActiveWarehouse(warehouseById.get(input.sourceWarehouseId), companyId);
   assertActiveWarehouse(warehouseById.get(input.destinationWarehouseId), companyId);
+  assertBatchRequirement(product, input.batchId);
+  if (input.batchId) {
+    assertUsableBatch(batchById.get(input.batchId), companyId, input.productId);
+  }
 
   const allowNegativeStock = await stockTransactionRepository.findAllowNegativeStock(companyId);
   if (!allowNegativeStock) {
@@ -225,6 +306,20 @@ async function transferStockInTransaction(
     if (!hasSufficientStock(currentStock, input.quantity)) {
       throw new AppError(`Insufficient stock for "${product.name}" at the source warehouse.`);
     }
+
+    if (input.batchId) {
+      const currentStockByBatchTriple = await stockTransactionRepository.sumStockForBatchTriples(tx, companyId, [
+        { productId: input.productId, warehouseId: input.sourceWarehouseId, batchId: input.batchId },
+      ]);
+      const batchStock =
+        currentStockByBatchTriple.get(batchKey(input.productId, input.sourceWarehouseId, input.batchId)) ?? 0;
+      if (!hasSufficientStock(batchStock, input.quantity)) {
+        const batch = batchById.get(input.batchId);
+        throw new AppError(
+          `Insufficient stock in batch "${batch?.batchNumber ?? input.batchId}" for "${product.name}" at the source warehouse.`
+        );
+      }
+    }
   }
 
   return stockTransactionRepository.createTransferPair(tx, companyId, {
@@ -233,6 +328,7 @@ async function transferStockInTransaction(
     destinationWarehouseId: input.destinationWarehouseId,
     quantity: input.quantity,
     transactionDate: toUtcDate(input.transactionDate),
+    batchId: input.batchId ?? null,
     narration: input.narration ?? null,
   });
 }
@@ -266,4 +362,5 @@ export const inventoryEngine = {
   recordMovements,
   transferStock,
   getCurrentStock,
+  getBatchStock,
 };

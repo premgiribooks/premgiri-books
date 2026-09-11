@@ -6,12 +6,14 @@ const {
   findLedgerTransactionsMock,
   aggregateStockByProductMock,
   findProductsForValuationMock,
+  aggregateBatchStockMock,
 } = vi.hoisted(() => ({
   findProductsForMovementMock: vi.fn(),
   aggregateCurrentStockMock: vi.fn(),
   findLedgerTransactionsMock: vi.fn(),
   aggregateStockByProductMock: vi.fn(),
   findProductsForValuationMock: vi.fn(),
+  aggregateBatchStockMock: vi.fn(),
 }));
 
 vi.mock("@/modules/stock-transactions/repositories/stock-transaction-repository", () => ({
@@ -21,6 +23,7 @@ vi.mock("@/modules/stock-transactions/repositories/stock-transaction-repository"
     findLedgerTransactions: findLedgerTransactionsMock,
     aggregateStockByProduct: aggregateStockByProductMock,
     findProductsForValuation: findProductsForValuationMock,
+    aggregateBatchStock: aggregateBatchStockMock,
   },
 }));
 
@@ -31,13 +34,20 @@ vi.mock("@/modules/stock-transactions/repositories/stock-transaction-repository"
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { AppError } from "@/lib/app-error";
-import { getCurrentStock, getStockLedger, getStockValuation } from "@/engines/inventory/inventory-queries";
+import {
+  getBatchLedger,
+  getBatchStock,
+  getCurrentStock,
+  getStockLedger,
+  getStockValuation,
+} from "@/engines/inventory/inventory-queries";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_COMPANY_ID = "99999999-9999-4999-8999-999999999999";
 const PRODUCT_A = "22222222-2222-4222-8222-222222222222";
 const PRODUCT_B = "88888888-8888-4888-8888-888888888888";
 const WAREHOUSE_A = "33333333-3333-4333-8333-333333333333";
+const BATCH_A = "44444444-4444-4444-8444-444444444444";
 
 beforeEach(() => {
   findProductsForMovementMock.mockReset();
@@ -45,6 +55,7 @@ beforeEach(() => {
   findLedgerTransactionsMock.mockReset();
   aggregateStockByProductMock.mockReset();
   findProductsForValuationMock.mockReset();
+  aggregateBatchStockMock.mockReset();
 });
 
 describe("getCurrentStock", () => {
@@ -82,6 +93,7 @@ describe("getStockLedger", () => {
         warehouseId: WAREHOUSE_A,
         referenceType: null,
         referenceId: null,
+        batchId: null,
         narration: null,
       },
       {
@@ -94,6 +106,7 @@ describe("getStockLedger", () => {
         warehouseId: WAREHOUSE_A,
         referenceType: null,
         referenceId: null,
+        batchId: null,
         narration: null,
       },
       {
@@ -106,6 +119,7 @@ describe("getStockLedger", () => {
         warehouseId: WAREHOUSE_A,
         referenceType: null,
         referenceId: null,
+        batchId: null,
         narration: null,
       },
     ]);
@@ -152,6 +166,74 @@ describe("getStockValuation", () => {
     await getStockValuation(COMPANY_ID, { warehouseId: WAREHOUSE_A });
 
     expect(aggregateStockByProductMock).toHaveBeenCalledWith(COMPANY_ID, WAREHOUSE_A);
+  });
+});
+
+describe("getBatchStock", () => {
+  it("delegates to the repository with the given filters", async () => {
+    aggregateBatchStockMock.mockResolvedValue([
+      { productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, quantity: 6 },
+    ]);
+
+    const result = await getBatchStock(COMPANY_ID, { productId: PRODUCT_A, batchId: BATCH_A });
+
+    expect(aggregateBatchStockMock).toHaveBeenCalledWith(COMPANY_ID, { productId: PRODUCT_A, batchId: BATCH_A });
+    expect(result).toEqual([{ productId: PRODUCT_A, warehouseId: WAREHOUSE_A, batchId: BATCH_A, quantity: 6 }]);
+  });
+
+  it("passes an explicit tx through to the repository", async () => {
+    aggregateBatchStockMock.mockResolvedValue([]);
+    const tx = {} as never;
+
+    await getBatchStock(COMPANY_ID, {}, tx);
+
+    expect(aggregateBatchStockMock).toHaveBeenCalledWith(COMPANY_ID, {}, tx);
+  });
+});
+
+describe("getBatchLedger", () => {
+  it("rejects a product that does not belong to the company", async () => {
+    findProductsForMovementMock.mockResolvedValue([{ id: PRODUCT_A, companyId: OTHER_COMPANY_ID }]);
+    await expect(getBatchLedger(COMPANY_ID, PRODUCT_A, BATCH_A)).rejects.toThrow("Product not found.");
+  });
+
+  it("computes a running balance scoped to the given batch, passing batchId through as a filter", async () => {
+    findProductsForMovementMock.mockResolvedValue([{ id: PRODUCT_A, companyId: COMPANY_ID }]);
+    findLedgerTransactionsMock.mockResolvedValue([
+      {
+        id: "t1",
+        transactionType: "PURCHASE",
+        direction: "IN",
+        quantity: 10,
+        unitCost: 100,
+        transactionDate: new Date("2026-07-01T00:00:00.000Z"),
+        warehouseId: WAREHOUSE_A,
+        referenceType: null,
+        referenceId: null,
+        batchId: BATCH_A,
+        narration: null,
+      },
+      {
+        id: "t2",
+        transactionType: "SALES",
+        direction: "OUT",
+        quantity: 3,
+        unitCost: null,
+        transactionDate: new Date("2026-07-02T00:00:00.000Z"),
+        warehouseId: WAREHOUSE_A,
+        referenceType: null,
+        referenceId: null,
+        batchId: BATCH_A,
+        narration: null,
+      },
+    ]);
+
+    const result = await getBatchLedger(COMPANY_ID, PRODUCT_A, BATCH_A);
+
+    expect(findLedgerTransactionsMock).toHaveBeenCalledWith(COMPANY_ID, PRODUCT_A, { batchId: BATCH_A });
+    expect(result.lines.map((line) => line.runningBalance)).toEqual([10, 7]);
+    expect(result.closingBalance).toBe(7);
+    expect(result.batchId).toBe(BATCH_A);
   });
 });
 

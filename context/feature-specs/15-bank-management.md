@@ -40,7 +40,7 @@ The Bank Management module is **not** responsible for
 
 - Ledger Groups or generic Ledger Master (`13`, `14` — already implemented)
 - Bank reconciliation, bank statement import, cheque management, or online banking integration (all Phase 12 — Future Features)
-- Payment Voucher, Receipt Voucher, Contra Voucher (Phase 6 — Accounting; these will debit/credit a bank Ledger once the Voucher Engine exists, not built here)
+- Payment Voucher, Receipt Voucher, Contra Voucher (Phase 7 — Accounting; these will debit/credit a bank Ledger once the Voucher Engine exists, not built here)
 
 ---
 
