@@ -519,7 +519,8 @@ Table 8 only. The security LOW (a check-then-write race on `markPeriodFiled`) wa
 accepted as-is — advisory-only, same-tenant, same-permission-level. Re-verified:
 1508/1508 tests, `tsc`/`eslint`/`build` all pass; `/gst/gstr-1` in the build route table.
 
-**GSTR-3B (#57) implemented 2026-09-11** on branch `feature/gstr-3b` (not yet merged).
+**GSTR-3B (#57) implemented 2026-09-11** on branch `feature/gstr-3b`, later merged into
+`main` (`--no-ff`, no conflicts, `77e88f9`) after code + security review.
 Computes the statutory Tables 3.1/3.2/4/5/5.1 from the same
 `getOutwardSupplyLines`/`getInwardSupplyLines` primitives (spec 57), reusing spec 58's
 `GstFilingRecord` model verbatim with `returnType: GSTR3B` — no new Prisma model or
@@ -589,7 +590,10 @@ fixed, one LOW accepted as-is**:
   vitest run` (1523/1523, 2 new regression tests — the state-code-invalid fallback and
   the Table 3.2 cross-check), and `next build` all pass.
 
-Still not yet merged to `main` — see progress-tracker.md's Open Questions/Next Up.
+**Merged into `main` 2026-09-11** (`--no-ff`, no conflicts, `77e88f9` — `tsc`/`eslint`/
+`vitest` (1523/1523)/`next build` all re-verified green against the merged result before
+pushing `main`). `feature/gstr-3b` deleted locally now that `main` has it. HSN Summary
+(#58/spec 60) is next — see progress-tracker.md's Next Up.
 
 ---
 

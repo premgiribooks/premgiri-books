@@ -73,7 +73,7 @@ Mapping so far:
 | 56           | Product Detail Page (`56-product-detail-page.md`)                               | `context/Phases/phase-tracker.md` **Phase 6 — Product Detail Page (#50)** — **implemented 2026-09-11** (git branch `feature/product-detail-page`); new phase inserted ahead of the (renumbered) Phase 7 — Accounting, and ahead of Phase 5's own remaining item (#49 Serial Number Tracking), because both Batch Tracking (spec 50) and Serial Number Tracking (spec 51) need a Product detail view; UI-only, no new Prisma model, composes the existing `productService`/`productBatchService` stack |
 | 57           | GST Registers (`57-gst-registers.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#55) — **spec drafted 2026-09-11, not implemented**; establishes the shared `getOutwardSupplyLines`/`getInwardSupplyLines` GST aggregation primitive in `src/engines/gst/` that specs 58–60 and Phase 10's GST Reports (#72/spec 74) all reuse |
 | 58           | GSTR-1 (`58-gstr-1.md`)                                                          | `context/Phases/phase-tracker.md` Phase 8 — GST (#56) — **spec drafted 2026-09-11, not implemented**; introduces the shared `GstFilingRecord` model (advisory "mark period filed," no hard lock), reused by spec 59 |
-| 59           | GSTR-3B (`59-gstr-3b.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#57) — **implemented 2026-09-11 on `feature/gstr-3b`, not yet merged**; renders every statutorily-required but uncomputable row as an explicit "not tracked" placeholder rather than guessing |
+| 59           | GSTR-3B (`59-gstr-3b.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#57) — **implemented, reviewed, and merged into `main` 2026-09-11** (`77e88f9`); renders every statutorily-required but uncomputable row as an explicit "not tracked" placeholder rather than guessing |
 | 60           | HSN Summary (`60-hsn-summary.md`)                                                | `context/Phases/phase-tracker.md` Phase 8 — GST (#58) — **spec drafted 2026-09-11, not implemented**; last of the four GST-phase specs, closing Phase 8's drafting; pure grouping over spec 57's outward lines, no new schema |
 | 61           | Employee Master (`61-employee-master.md`)                                       | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#59) — **spec drafted 2026-09-11, not implemented**; first genuinely new domain since Phase 5/6 — `Employee` linked to `User` via an optional nullable unique `userId`, no per-employee `Ledger` |
 | 62           | Attendance (`62-attendance.md`)                                                  | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#60) — **spec drafted 2026-09-11, not implemented**; one row per (employee, date), exposing `getAttendanceSummary` as the sole aggregation Payroll consumes |
@@ -102,7 +102,8 @@ Mapping so far:
 ## Current Phase
 
 - **Feature-spec 59 — GSTR-3B implemented 2026-09-11** on branch `feature/gstr-3b`,
-  branched from the updated `main` (not yet merged — pending code/security review).
+  branched from the updated `main`, later merged back (`--no-ff`, no conflicts,
+  `77e88f9`) after code + security review.
   Third item of Phase 8 — GST (#57). Computes the statutory Tables 3.1 (Outward
   Supplies), 3.2 (Inter-State to Unregistered/Composition/UIN), 4 (Eligible ITC), 5
   (Exempt/Nil-Rated/Non-GST Inward), and 5.1 (Interest/Late Fee) from the same
@@ -195,8 +196,10 @@ Mapping so far:
   - Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx
     vitest run` (1523/1523, 2 new regression tests), and `next build` all pass.
 
-  **Still not yet merged to `main`** — awaiting explicit instruction before merging
-  `feature/gstr-3b` and starting HSN Summary (#58/spec 60).
+  **Merged into `main` 2026-09-11** (`--no-ff`, no conflicts, `77e88f9` —
+  `tsc`/`eslint`/`vitest` (1523/1523)/`next build` all re-verified green against the
+  merged result before pushing `main`). `feature/gstr-3b` deleted locally now that
+  `main` has it.
 
 - **Feature-spec 58 — GSTR-1 implemented 2026-09-11** on branch `feature/gstr-1`,
   branched from the updated `main`, later merged back (`--no-ff`, no conflicts,
@@ -1528,13 +1531,13 @@ Mapping so far:
   is under way: GST Registers (#55/spec 57) and GSTR-1 (#56/spec 58) are both
   implemented, reviewed, and merged into `main`** (`feature/gst-registers`
   `ac10ffa`, `feature/gstr-1` `6f9274c` — both `--no-ff` merges, no
-  conflicts, checks re-verified green). **GSTR-3B (#57/spec 59) is now
-  implemented on `feature/gstr-3b`** (see the Current Phase entry above) —
-  awaiting code review, security review, and merge into `main`. Per
-  `phase-tracker.md`, **HSN Summary (#58/spec 60) remains after that** — per
+  conflicts, checks re-verified green). **GSTR-3B (#57/spec 59) is now also
+  implemented, reviewed, and merged into `main`** (`feature/gstr-3b`
+  `77e88f9` — `--no-ff` merge, no conflicts, checks re-verified green; see
+  the Current Phase entry above). Per `phase-tracker.md`, **HSN Summary
+  (#58/spec 60) is next** — the last item of Phase 8. Per
   `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a
-  time, and `feature/gstr-3b` should be reviewed and merged before HSN
-  Summary begins.
+  time — awaiting explicit instruction before starting HSN Summary.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
