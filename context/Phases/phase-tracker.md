@@ -280,8 +280,8 @@ acceptable given the deferred per-document retrofit cost it implies.
 | --- | ---------------------- | ------------------ | ------ |
 | 44  | Opening Stock          | Products           | ✅     |
 | 45  | Stock Adjustment       | Inventory Engine   | ✅     |
-| 46  | Stock Transfer         | Warehouse          | ⬜     |
-| 47  | Physical Verification  | Inventory Engine   | ⬜     |
+| 46  | Stock Transfer         | Warehouse          | ✅     |
+| 47  | Physical Verification  | Inventory Engine   | ✅     |
 | 48  | Batch Tracking         | Product Management | ⬜     |
 | 49  | Serial Number Tracking | Product Management | ⬜     |
 
@@ -401,9 +401,12 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 5 — Inventory: Stock Transfer (#46)**. Opening Stock (#44,
-`context/feature-specs/46-opening-stock.md`) and Stock Adjustment (#45,
-`context/feature-specs/47-stock-adjustment.md`) were both implemented 2026-09-11.
+➡ **Phase 5 — Inventory: Batch Tracking (#48)**. Opening Stock (#44), Stock Adjustment
+(#45), Stock Transfer (#46), and Physical Verification (#47) were all implemented
+2026-09-11 — the first four of Phase 5's six documents are now done; only Batch
+Tracking (#48) and Serial Number Tracking (#49) remain, the two items that genuinely
+extend the Inventory Engine's own schema rather than sitting as a thin document/UI
+layer over it.
 
 Opening Stock (`feature/opening-stock`, merged into `main`) — the thin UI/service layer
 directly over the already-shipped Inventory Engine (feature-spec 32): no new Prisma
@@ -438,6 +441,45 @@ plus two new company-scoped repository methods (`findProductsForLines`/
 `findWarehousesForLines`) and 3 new tests. `npx tsc --noEmit`, `npx eslint src prisma`,
 `npx vitest run` (1114 tests), and `next build` all pass; `/inventory/adjustments*`
 appears in the build route table.
+
+Stock Transfer (`feature/stock-transfer`, merged into `main`) — new `StockTransfer`/
+`StockTransferItem` models + `StockTransferStatus` enum (migration
+`20260911045614_stock_transfer`), numbered via the Document Number Engine
+(`DocumentType.STOCK_TRANSFER`, previously reserved with no consumer). Header-level
+`sourceWarehouseId`/`destinationWarehouseId` (two named relations on `Warehouse`, since
+both FKs target the same model); `StockTransferItem` carries only `productId`/`quantity`,
+unlike Stock Adjustment's per-line warehouse. `postStockTransfer` calls
+`inventoryEngine.transferStock` once per line — each call writes its own linked OUT
+(source)/IN (destination) row pair — sequentially inside one Serializable transaction;
+`cancelStockTransfer` reverses every line with source and destination swapped, also
+Serializable+retry. Single `POSTED` state, not an in-transit workflow — a deliberate
+simplification recorded in the spec, since the engine's `transferStock` already writes
+both rows atomically in one call. No GST/Voucher Engine call (zero net stock change
+company-wide). Added the third `/inventory` hub card. `npx tsc --noEmit`,
+`npx eslint src prisma`, `npx vitest run` (1146 tests), and `next build` all pass;
+`/inventory/transfers*` appears in the build route table.
+
+Physical Verification (`feature/physical-verification`, merged into `main`) — new
+`PhysicalVerification`/`PhysicalVerificationItem` models + `PhysicalVerificationStatus`
+enum (migration `20260911052817_physical_verification`), numbered via the Document
+Number Engine — this spec adds `DocumentType.PHYSICAL_VERIFICATION` as a brand-new enum
+value, resolving open sanity-check flag (a) above in favor of reserving it (spec 34's
+original list hadn't reserved it, unlike `STOCK_ADJUSTMENT`/`STOCK_TRANSFER`). Header-
+level `warehouseId`; each line snapshots `systemQuantity`/`countedQuantity`/
+`varianceQuantity`. The Inventory Engine's `getCurrentStock` (spec 32, previously
+unconsumed by any module) was extended with an optional transaction-client parameter so
+`completePhysicalVerification` can re-derive `systemQuantity` fresh *inside* the
+completing transaction rather than trusting the draft-time preview — variance is
+computed as `countedQuantity - systemQuantity`, and only non-zero-variance lines post a
+`StockTransactionType.PHYSICAL_VERIFICATION` movement (`IN`/`OUT` by sign); zero-variance
+lines stay on the record with no movement. Runs at Serializable isolation with bounded
+retry, identical contract to Stock Adjustment/Transfer's posting. No cancellation once
+`COMPLETED` — only `DRAFT -> CANCELLED`, a plain status flip with no engine call since
+nothing was ever posted for a draft; a miscounted completed verification is corrected via
+a subsequent Stock Adjustment instead. Added the fourth `/inventory` hub card. Both
+code-reviewer and security-reviewer returned zero CRITICAL/HIGH/MEDIUM findings
+(APPROVE). `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1184 tests),
+and `next build` all pass; `/inventory/verifications*` appears in the build route table.
 
 Phases 1–4 are fully complete: Phase 3 — Sales Management (#33–#39, all seven
 documents) and Phase 4 — Purchase Management (#40–#43, all four documents, the last
