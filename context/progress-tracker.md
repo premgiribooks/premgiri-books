@@ -1727,11 +1727,14 @@ Mapping so far:
   the GSTR-2 precedent): both **APPROVE, zero CRITICAL/HIGH/MEDIUM
   findings** — code-reviewer's one LOW (missing an explicitly-titled
   cross-company-isolation test) was fixed before merge rather than deferred,
-  since it was a one-test addition. **This closes out Phase 8 in full** — all
-  six items (#55–#58, #80–#81) are now implemented, reviewed, and merged.
-  Phase 9 onward remains entirely spec-drafted-but-not-implemented; per
-  `ai-workflow-rules.md`'s one-feature-at-a-time rule, the next feature
-  awaits explicit instruction.
+  since it was a one-test addition. **`feature/itc-register` has been merged
+  into `main`** (`--no-ff` merged `d1f8129`, no conflicts, checks re-verified
+  green — `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`
+  1547/1547, `next build`), branch deleted both locally and on origin. **This
+  closes out Phase 8 in full** — all six items (#55–#58, #80–#81) are now
+  implemented, reviewed, and merged. Phase 9 onward remains entirely
+  spec-drafted-but-not-implemented; per `ai-workflow-rules.md`'s
+  one-feature-at-a-time rule, the next feature awaits explicit instruction.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

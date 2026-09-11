@@ -1066,8 +1066,13 @@ layer), input validation via the shared `gstReportFiltersSchema`, no XSS/injecti
 risk in the new components, and no cross-company leakage through the reused
 `listPartyOptions("INWARD")` party dropdown — zero findings of any severity.
 
-**Merged into `main`** — see the merge record for commit/branch details once
-completed.
+**Merged into `main`** (`feature/itc-register` `--no-ff` merged `d1f8129`, no
+conflicts, checks re-verified green on the merged result — `npx tsc --noEmit`,
+`npx eslint src prisma` (0 errors, same 2 pre-existing unrelated warnings),
+`npx vitest run` 1547/1547, `next build` with `/gst/itc-register` confirmed in
+the route table). Branch deleted both locally and on origin. **This closes out
+ITC Register (#81) in full** — status above updated to ✅, and with it, **Phase
+8 — GST is now fully implemented (#55–#58, #80–#81), reviewed, and merged.**
 
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
