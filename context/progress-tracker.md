@@ -201,6 +201,27 @@ Mapping so far:
   merged result before pushing `main`). `feature/gstr-3b` deleted locally now that
   `main` has it.
 
+  **Post-merge runtime bugfix 2026-09-11** on branch `fix/gstr3b-client-boundary`,
+  merged into `main` (`--no-ff`, no conflicts, `7699db4`). Live use of `/gst/gstr-3b`
+  surfaced a runtime error: `"Attempted to call gstr3bFinancialCellClass() from the
+  server but gstr3bFinancialCellClass is on the client."` Root cause: the shared
+  cell-styling helper `gstr3bFinancialCellClass` lived in `gstr3b-row-note.tsx`, a
+  `"use client"` file (it renders the `Tooltip` primitive) — in Next.js's App Router,
+  every export of a `"use client"` module becomes an opaque client reference from a
+  Server Component's perspective, so calling a plain synchronous helper directly
+  (rather than rendering it as JSX) from the three Server Component table files threw
+  at request time. This slipped past `tsc`/`eslint`/`vitest`/`next build` entirely —
+  none of those catch this specific RSC client/server boundary violation, only an
+  actual render does. Fixed by extracting the helper into a new,
+  non-`"use client"` `src/modules/gst/utils/gstr3b-cell-class.ts` and updating the
+  three table components' imports accordingly — no behavior change, purely a module
+  placement fix. **Verified live this time** (not just via `tsc`/`eslint`/`vitest`/
+  `build`, learning from how this bug slipped through those the first time): started
+  the dev server, logged in as `admin`/`Admin@12345`, navigated to `/gst/gstr-3b` —
+  200 response, zero console/page errors (Playwright-driven check, screenshot
+  captured). `tsc`/`eslint`/`vitest` (1523/1523)/`next build` all re-verified green
+  against the merged result before pushing `main`.
+
 - **Feature-spec 58 — GSTR-1 implemented 2026-09-11** on branch `feature/gstr-1`,
   branched from the updated `main`, later merged back (`--no-ff`, no conflicts,
   `6f9274c`) after code + security review. Second item of Phase 8 — GST
@@ -1577,6 +1598,8 @@ Mapping so far:
 - **New, no admin-facing reseed/repair path exists for a company whose chart of accounts is damaged after creation** (recorded 2026-07-13, narrower successor to the entry above). `companyService.createCompany()` now reliably seeds every new company correctly, and the one known historical gap (companies bootstrapped outside that path) has been backfilled — but there is still no supported way to repair a company that somehow loses/corrupts its ledger group skeleton later (e.g. a future bulk-delete tool, a bad migration, manual DB surgery). Not fixed now since no such repair path has ever existed and nothing today can put a company into that state through normal application use; flagged so a future admin-tooling feature considers it rather than reinventing the ad hoc backfill script used this time.
 
 ## Architecture Decisions
+
+- **`tsc`/`eslint`/`vitest`/`next build` do not catch a Server Component calling a plain function exported from a `"use client"` module — a live render is the only check that does (2026-09-11).** Discovered when `/gst/gstr-3b` threw `"Attempted to call gstr3bFinancialCellClass() from the server but gstr3bFinancialCellClass is on the client"` in live use, despite every automated check having passed clean at merge time (see the GSTR-3B post-merge bugfix entry above). Next.js's App Router rule — every export of a `"use client"` module becomes an opaque client reference from a Server Component's perspective, regardless of whether the exported value is a component or a plain synchronous function — is a purely structural/runtime constraint that none of this project's static checks model. **Standing rule going forward**: any new shared helper that lives in the same file as a `"use client"` component, and that a Server Component will call directly (not render as JSX), must be split into its own plain module with no `"use client"` directive — and after any change touching a `"use client"` file's exports, actually load the affected page in a running server (dev server + browser/Playwright, matching `ai-workflow-rules.md`'s "start the dev server and use the feature in a browser before reporting the task as complete" rule) rather than relying on `tsc`/`eslint`/`vitest`/`next build` alone, since none of those exercise the RSC client/server boundary at runtime.
 
 - **An untracked "fixes applied" report must be independently re-verified, never trusted at face value (2026-07-14).** `context/current-error/10-review-batch-fixes.md` — written by a prior session, never committed — claimed 13 code/doc fixes were applied and 2 were deliberately skipped after re-verifying a batch of review comments. Reading the actual current code this session showed most of its claimed CODE changes were never actually made (the doc was aspirational, describing intended work rather than a real record of what shipped). **Standing rule going forward**: any status report, fix log, or "already handled" claim that isn't backed by a committed diff (`git log`/`git show` for the referenced files) must be re-verified against the live file content before being relied on — do not chain new work on top of an unverified prior report's claims. See the Completed entry "Review Batch Round 2" above for the full re-audit this triggered.
 

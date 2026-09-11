@@ -592,8 +592,26 @@ fixed, one LOW accepted as-is**:
 
 **Merged into `main` 2026-09-11** (`--no-ff`, no conflicts, `77e88f9` — `tsc`/`eslint`/
 `vitest` (1523/1523)/`next build` all re-verified green against the merged result before
-pushing `main`). `feature/gstr-3b` deleted locally now that `main` has it. HSN Summary
-(#58/spec 60) is next — see progress-tracker.md's Next Up.
+pushing `main`). `feature/gstr-3b` deleted locally now that `main` has it.
+
+**Post-merge runtime bugfix 2026-09-11** on branch `fix/gstr3b-client-boundary`, merged
+into `main` (`--no-ff`, no conflicts, `7699db4`). Live use of `/gst/gstr-3b` surfaced:
+"Attempted to call `gstr3bFinancialCellClass()` from the server but
+`gstr3bFinancialCellClass` is on the client." The shared cell-styling helper had been
+placed in `gstr3b-row-note.tsx`, a `"use client"` file (it renders the Tooltip
+primitive) — every export of a `"use client"` module becomes an opaque client reference
+from a Server Component's perspective, so a plain synchronous helper called directly
+(not rendered as JSX) from the three Server Component table files threw at request
+time. `next build`/`tsc`/`eslint`/`vitest` all stayed green throughout — none of those
+catch this specific RSC-boundary class of error, only a live render does. Fixed by
+extracting the helper into a new `src/modules/gst/utils/gstr3b-cell-class.ts` (no
+`"use client"` directive) and updating the three table components' imports. Verified
+live: started the dev server, logged in as `admin`, navigated to `/gst/gstr-3b` — 200
+response, zero console/page errors (Playwright-driven check). `tsc`/`eslint`/`vitest`
+(1523/1523)/`next build` all re-verified green against the merged result.
+
+Now that GSTR-3B (#57) is implemented, reviewed, merged, and this runtime bug fixed,
+**HSN Summary (#58/spec 60) is next** — see progress-tracker.md's Next Up.
 
 ---
 
