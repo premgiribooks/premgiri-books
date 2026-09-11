@@ -4,25 +4,12 @@ import type { GstSupplyLine } from "@/engines/gst/gst-report-types";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { matchesOptionalGstReportFilters } from "@/modules/gst/services/gst-supply-line-filters";
 import { GST_REPORT_DEFAULT_PAGE_SIZE } from "@/modules/gst/validation/gst-report-filters-schema";
 import type { GstPartyOption, GstRegisterResult, GstRegisterTotals, GstRegisterType, GstReportFilters } from "@/types/gst-report";
+import { ZERO_GST_REGISTER_TOTALS } from "@/types/gst-report";
 
 const DEFAULT_PAGE = 1;
-
-const ZERO_TOTALS: GstRegisterTotals = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
-
-function matchesOptionalFilters(line: GstSupplyLine, filters: GstReportFilters): boolean {
-  if (filters.partyId && line.partyId !== filters.partyId) {
-    return false;
-  }
-  if (filters.hsnCode && line.hsnCode !== filters.hsnCode) {
-    return false;
-  }
-  if (filters.ratePercent !== undefined && line.ratePercent !== filters.ratePercent) {
-    return false;
-  }
-  return true;
-}
 
 function sumTotals(lines: GstSupplyLine[]): GstRegisterTotals {
   return lines.reduce<GstRegisterTotals>(
@@ -34,7 +21,7 @@ function sumTotals(lines: GstSupplyLine[]): GstRegisterTotals {
       cess: totals.cess + line.cess,
       totalAmount: totals.totalAmount + line.totalAmount,
     }),
-    ZERO_TOTALS
+    ZERO_GST_REGISTER_TOTALS
   );
 }
 
@@ -44,7 +31,7 @@ async function buildRegister(
   filters: GstReportFilters
 ): Promise<GstRegisterResult> {
   const allLines = await getLines(companyId, filters.from, filters.to);
-  const filtered = allLines.filter((line) => matchesOptionalFilters(line, filters));
+  const filtered = allLines.filter((line) => matchesOptionalGstReportFilters(line, filters));
   const totals = sumTotals(filtered);
 
   const page = filters.page ?? DEFAULT_PAGE;

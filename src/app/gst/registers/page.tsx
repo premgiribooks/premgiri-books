@@ -10,13 +10,13 @@ import { GstRegisterTable } from "@/modules/gst/components/gst-register-table";
 import { GstRegisterTypeToggle } from "@/modules/gst/components/gst-register-type-toggle";
 import { gstRegisterService } from "@/modules/gst/services/gst-register-service";
 import { gstReportFiltersSchema, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
+import { ZERO_GST_REGISTER_TOTALS } from "@/types/gst-report";
 import type { GstRegisterResult, GstRegisterType, GstReportFilters } from "@/types/gst-report";
 
 interface GstRegistersPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const ZERO_TOTALS = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
 const PARTY_LABEL: Record<GstRegisterType, string> = { OUTWARD: "Customer", INWARD: "Supplier" };
 
 function firstValue(value: string | string[] | undefined): string | undefined {
@@ -144,7 +144,7 @@ export default async function GstRegistersPage({ searchParams }: GstRegistersPag
 
         {filters ? (
           <>
-            <GstRegisterTable lines={result?.lines ?? []} totals={result?.totals ?? ZERO_TOTALS} />
+            <GstRegisterTable lines={result?.lines ?? []} totals={result?.totals ?? ZERO_GST_REGISTER_TOTALS} />
             {result ? (
               <GstRegisterPagination
                 page={result.page}

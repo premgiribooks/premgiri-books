@@ -103,6 +103,71 @@ Mapping so far:
 
 ## Current Phase
 
+- **Feature-spec 60 (HSN Summary, Phase 8 — GST #58) implemented 2026-09-11** on branch
+  `feature/hsn-summary` — the last item in Phase 8's original four-item batch (GST
+  Registers #55, GSTR-1 #56, GSTR-3B #57, HSN Summary #58 are all now implemented; GSTR-2
+  #80 and ITC Register #81 remain). New `hsnSummaryService.getHsnSummary()`
+  (`src/modules/gst/services/hsn-summary-service.ts`) groups `getOutwardSupplyLines`'
+  (spec 57) product-bearing lines by `(hsnCode, codeType, ratePercent)` — Credit
+  Note/Debit Note lines (no `productId`) excluded from the grouped output entirely, and a
+  product-bearing line whose product has no `hsnCodeId` bucketed under a single, always-
+  last "No HSN Assigned" row rather than dropped. A group's Quantity column shows the
+  representative (first/most-common) `Unit.uqcCode`/symbol plus a "Mixed unit" badge when
+  the group actually summed quantities from more than one distinct `Unit` — the mixed-unit
+  caveat the spec calls out explicitly. One batched `prisma.product.findMany` resolves
+  every group's HSN description/codeType and unit label (no N+1). Extracted the
+  partyId/hsnCode/ratePercent line-filter predicate the Registers screen already had into
+  a new shared `matchesOptionalGstReportFilters` helper (`gst-supply-line-filters.ts`) so
+  `gst-register-service.ts` and this new service apply identical filter semantics instead
+  of duplicating the predicate (code-standards.md's DRY rule) — `gst-register-service.ts`
+  was updated to call the shared helper too, no behavior change. No new Prisma
+  model/migration (pure grouping over spec 57's already-computed output, per the spec's
+  own Data Model section). New `/gst/hsn-summary` page, reusing the Registers screen's
+  `GstReportFilterBar`/`GstReportExportButton` components unmodified per the spec; new
+  shared `HsnSummaryTable` component embedded verbatim (identical props, no independent
+  aggregation call) by `58-gstr-1.md`'s own Table 12 section, replacing its former "not
+  yet available" placeholder. `/gst` hub card flipped from disabled "Coming soon" to
+  linked; added the `hsn-summary` breadcrumb label. 6 new vitest cases (permission gate;
+  same-HSN-same-rate grouping vs. same-HSN-different-rate split; signed Sales Return
+  netting into its HSN group's quantity/taxable totals; mixed-unit badge on vs. off;
+  "No HSN Assigned" bucketing plus Credit/Debit Note exclusion from the grouped output;
+  cross-company scoping of the batched product lookup) — 1529/1529 total suite passing.
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2 pre-existing unrelated
+  warnings), `npx vitest run`, and `next build` all pass; `/gst/hsn-summary` appears in
+  the build route table. Committed on branch `feature/hsn-summary`.
+
+  **Post-implementation code review + security review found 1 HIGH (code), 1 LOW (code)
+  — both fixed; security review clean (0 findings)**, no CRITICAL/MEDIUM: (1) **HIGH,
+  fixed** — `toSalesReturnLine`/`toPurchaseReturnLine` in
+  `src/engines/gst/gst-report-queries.ts` (spec 57's already-merged
+  `getOutwardSupplyLines`/`getInwardSupplyLines` primitive, not introduced by this
+  branch) negated every monetary field for a return line (taxableAmount/cgst/sgst/igst/
+  cess/totalAmount) but **not `quantity`**, contradicting `GstSupplyLine`'s own
+  documented contract ("already sign-adjusted per document type") and directly breaking
+  spec 60's Business Rule that a Sales Return must reduce, not inflate, its HSN group's
+  net quantity — a Sales Invoice of 10 units + a Return of 4 would have summed to 14, not
+  the correct 6. Fixed by negating `quantity` the same way the other fields already are
+  in both mapper functions; added a regression assertion (`line.quantity`) to the
+  existing Sales Return/Purchase Return mapping tests in `gst-report-queries.test.ts` so
+  this can't silently regress again. This bug predates `feature/hsn-summary` (it lives in
+  code merged by spec 57) but was fixed here since it directly breaks this feature's
+  stated business rule and success criteria, per code-standards.md's "fix root causes"
+  rule — it also would have silently affected any future feature summing `.quantity`
+  across returns (nothing else in the codebase currently does). (2) **LOW, fixed** — the
+  same `{ taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 }` zero-
+  totals literal was duplicated across five files (`gst-register-service.ts`,
+  `hsn-summary-service.ts`, and the three `/gst/*` pages); extracted to a single exported
+  `ZERO_GST_REGISTER_TOTALS` constant in `src/types/gst-report.ts`, all five call sites
+  updated to reuse it. **Security review: 0 CRITICAL/HIGH/MEDIUM/LOW findings** —
+  explicit PASS on all five focus areas (cross-tenant isolation of the new batched
+  `prisma.product.findMany` lookup, authorization gate ordering, Server Action input
+  validation, information disclosure, IDOR). Re-verified after both code-review fixes:
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx vitest run` (1529/1529),
+  and `next build` all pass.
+
+  **Not yet browser-verified (no browser tool available this session), pushed, or merged
+  into `main`** — see Next Up.
+
 - **Feature-specs 82 (GSTR-2) and 83 (ITC Register) drafted 2026-09-11** — documentation
   only, not implemented — added to Phase 8 (GST) as tracker items #80/#81, per an
   explicit user request ("add GSTR-2 in GST phase and also add ITC... and create
@@ -1600,14 +1665,13 @@ Mapping so far:
 - **2026-09-11 — Phase 7 (Accounting) is complete and merged into `main`**
   (Payment #52, Receipt #53, Contra #54, Journal Voucher #55 —
   `feature/receipt-voucher` merged, checks re-verified green). **Phase 8 (GST)
-  is under way: GST Registers (#55/spec 57) and GSTR-1 (#56/spec 58) are both
-  implemented, reviewed, and merged into `main`** (`feature/gst-registers`
-  `ac10ffa`, `feature/gstr-1` `6f9274c` — both `--no-ff` merges, no
-  conflicts, checks re-verified green). **GSTR-3B (#57/spec 59) is now also
-  implemented, reviewed, and merged into `main`** (`feature/gstr-3b`
-  `77e88f9` — `--no-ff` merge, no conflicts, checks re-verified green; see
-  the Current Phase entry above). Per `phase-tracker.md`, **HSN Summary
-  (#58/spec 60) remains queued next** in Phase 8's original item order.
+  is under way: GST Registers (#55/spec 57), GSTR-1 (#56/spec 58), and GSTR-3B
+  (#57/spec 59) are all implemented, reviewed, and merged into `main`**
+  (`feature/gst-registers` `ac10ffa`, `feature/gstr-1` `6f9274c`,
+  `feature/gstr-3b` `77e88f9` — all `--no-ff` merges, no conflicts, checks
+  re-verified green). **HSN Summary (#58/spec 60) is now also implemented**
+  on branch `feature/hsn-summary` (see the Current Phase entry above) —
+  **not yet code-reviewed, security-reviewed, or merged into `main`.**
 
   **Two more Phase 8 items were added 2026-09-11, per explicit user request: GSTR-2
   (#80/spec 82) and an ITC Register (#81/spec 83)** — both drafted (documentation
@@ -1619,11 +1683,13 @@ Mapping so far:
   breakdown report rather than a full Electronic Credit Ledger) via a clarifying
   question to the user before any spec content was written.
 
-  **Three items are now queued in Phase 8 with no implementation yet: HSN Summary
-  (#58/spec 60, queued first, per the phase's original order), GSTR-2 (#80/spec 82),
-  and ITC Register (#81/spec 83).** Per `ai-workflow-rules.md`, only one
-  feature/subsystem should be worked on at a time — **awaiting explicit
-  instruction on which of these three to implement next**, and in what order.
+  **Immediate next step: get `feature/hsn-summary` reviewed (code-reviewer +
+  security-reviewer) and merged into `main`, closing out Phase 8's original
+  four-item batch.** After that, two items remain queued in Phase 8 with no
+  implementation yet — GSTR-2 (#80/spec 82) and ITC Register (#81/spec 83). Per
+  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a
+  time — **awaiting explicit instruction on which of the two to implement next**,
+  and in what order.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
