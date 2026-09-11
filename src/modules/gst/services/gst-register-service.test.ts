@@ -1,21 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getOutwardSupplyLinesMock, getInwardSupplyLinesMock, getCurrentCompanyUserMock, assertPermissionMock } = vi.hoisted(
-  () => ({
-    getOutwardSupplyLinesMock: vi.fn(),
-    getInwardSupplyLinesMock: vi.fn(),
-    getCurrentCompanyUserMock: vi.fn(),
-    assertPermissionMock: vi.fn(),
-  })
-);
+const {
+  getOutwardSupplyLinesMock,
+  getInwardSupplyLinesMock,
+  getCurrentCompanyUserMock,
+  assertPermissionMock,
+  customerFindManyMock,
+  supplierFindManyMock,
+} = vi.hoisted(() => ({
+  getOutwardSupplyLinesMock: vi.fn(),
+  getInwardSupplyLinesMock: vi.fn(),
+  getCurrentCompanyUserMock: vi.fn(),
+  assertPermissionMock: vi.fn(),
+  customerFindManyMock: vi.fn(),
+  supplierFindManyMock: vi.fn(),
+}));
 
-vi.mock("@/engines/gst/gst-report-queries", () => ({
-  getOutwardSupplyLines: getOutwardSupplyLinesMock,
-  getInwardSupplyLines: getInwardSupplyLinesMock,
+vi.mock("@/engines/gst/gst-engine", () => ({
+  gstReportEngine: {
+    getOutwardSupplyLines: getOutwardSupplyLinesMock,
+    getInwardSupplyLines: getInwardSupplyLinesMock,
+  },
 }));
 
 vi.mock("@/lib/current-user", () => ({ getCurrentCompanyUser: getCurrentCompanyUserMock }));
 vi.mock("@/lib/permissions", () => ({ assertPermission: assertPermissionMock }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    customer: { findMany: customerFindManyMock },
+    supplier: { findMany: supplierFindManyMock },
+  },
+}));
 
 import { gstRegisterService } from "@/modules/gst/services/gst-register-service";
 import type { GstSupplyLine } from "@/engines/gst/gst-report-types";
@@ -52,6 +67,8 @@ function line(overrides: Partial<GstSupplyLine>): GstSupplyLine {
 beforeEach(() => {
   getOutwardSupplyLinesMock.mockReset();
   getInwardSupplyLinesMock.mockReset();
+  customerFindManyMock.mockReset().mockResolvedValue([]);
+  supplierFindManyMock.mockReset().mockResolvedValue([]);
   getCurrentCompanyUserMock.mockReset().mockResolvedValue({ id: "u1", companyId: COMPANY_ID, role: "Accountant" });
   assertPermissionMock.mockReset().mockResolvedValue(undefined);
 });
@@ -136,5 +153,44 @@ describe("gstRegisterService.getInwardRegister", () => {
     expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "gst", "view");
     expect(getInwardSupplyLinesMock).toHaveBeenCalledWith(COMPANY_ID, FROM, TO);
     expect(result.lines).toHaveLength(1);
+  });
+});
+
+describe("gstRegisterService.listPartyOptions", () => {
+  it("gates on gst/view (not masters/view) so an Accountant-only role can still list party options", async () => {
+    customerFindManyMock.mockResolvedValue([]);
+
+    await gstRegisterService.listPartyOptions("OUTWARD");
+
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.objectContaining({ companyId: COMPANY_ID }), "gst", "view");
+    expect(assertPermissionMock).not.toHaveBeenCalledWith(expect.anything(), "masters", expect.anything());
+  });
+
+  it("queries active Customers, company-scoped, for OUTWARD", async () => {
+    customerFindManyMock.mockResolvedValue([
+      { id: "cust-1", gstin: "27AAAAA0000A1Z5", ledger: { name: "Acme Retail" } },
+    ]);
+
+    const options = await gstRegisterService.listPartyOptions("OUTWARD");
+
+    expect(customerFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: COMPANY_ID, isActive: true } })
+    );
+    expect(supplierFindManyMock).not.toHaveBeenCalled();
+    expect(options).toEqual([{ id: "cust-1", name: "Acme Retail", gstin: "27AAAAA0000A1Z5" }]);
+  });
+
+  it("queries active Suppliers, company-scoped, for INWARD", async () => {
+    supplierFindManyMock.mockResolvedValue([
+      { id: "supp-1", gstin: "27BBBBB0000B1Z5", ledger: { name: "Acme Wholesale" } },
+    ]);
+
+    const options = await gstRegisterService.listPartyOptions("INWARD");
+
+    expect(supplierFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: COMPANY_ID, isActive: true } })
+    );
+    expect(customerFindManyMock).not.toHaveBeenCalled();
+    expect(options).toEqual([{ id: "supp-1", name: "Acme Wholesale", gstin: "27BBBBB0000B1Z5" }]);
   });
 });

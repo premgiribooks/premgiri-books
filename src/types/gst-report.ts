@@ -34,3 +34,10 @@ export interface GstRegisterResult {
   pageSize: number;
   totalCount: number;
 }
+
+/** The party filter dropdown's options — Customers for the Outward register, Suppliers for Inward. */
+export interface GstPartyOption {
+  id: string;
+  name: string;
+  gstin: string | null;
+}

@@ -5,7 +5,7 @@ import { gstRegisterService } from "@/modules/gst/services/gst-register-service"
 import { gstReportFiltersSchema, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
 import type { GstReportFiltersInput } from "@/modules/gst/validation/gst-report-filters-schema";
 import type { ActionResult } from "@/types/api";
-import type { GstRegisterResult } from "@/types/gst-report";
+import type { GstPartyOption, GstRegisterResult, GstRegisterType } from "@/types/gst-report";
 
 // Read-only — nothing to revalidate. Kept as Server Actions (rather than
 // letting components import gstRegisterService directly) so a future
@@ -37,4 +37,8 @@ export async function getInwardRegisterAction(rawFilters: unknown): Promise<Acti
     const filters = gstReportFiltersSchema.parse(rawFilters);
     return gstRegisterService.getInwardRegister(toServiceFilters(filters));
   }, []);
+}
+
+export async function listGstPartyOptionsAction(registerType: GstRegisterType): Promise<ActionResult<GstPartyOption[]>> {
+  return runAction(() => gstRegisterService.listPartyOptions(registerType), []);
 }

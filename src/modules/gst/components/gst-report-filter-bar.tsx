@@ -4,8 +4,17 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { GstPartyOption } from "@/types/gst-report";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const ALL_VALUE = "all";
+
+interface GstReportFilterBarProps {
+  /** Customers for the Outward register, Suppliers for Inward — fetched server-side by the page. */
+  partyOptions: GstPartyOption[];
+  partyLabel: string;
+}
 
 /**
  * Shared date-range/party/HSN/rate filter UI for every Phase 8 GST report
@@ -14,7 +23,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  * in the query string, so a full server re-render always has the complete
  * filter state (no client-side data fetching here).
  */
-export function GstReportFilterBar() {
+export function GstReportFilterBar({ partyOptions, partyLabel }: GstReportFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -69,6 +78,28 @@ export function GstReportFilterBar() {
           className="sm:w-40"
           aria-label="To date"
         />
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        {partyLabel}
+        <Select
+          value={searchParams.get("partyId") ?? ALL_VALUE}
+          onValueChange={(next) => updateParams({ partyId: !next || next === ALL_VALUE ? undefined : next })}
+        >
+          <SelectTrigger className="w-full sm:w-48" aria-label={`Filter by ${partyLabel.toLowerCase()}`}>
+            <SelectValue>
+              {(current: string | null) => partyOptions.find((party) => party.id === current)?.name ?? `All ${partyLabel}s`}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>All {partyLabel}s</SelectItem>
+            {partyOptions.map((party) => (
+              <SelectItem key={party.id} value={party.id}>
+                {party.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </label>
 
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
