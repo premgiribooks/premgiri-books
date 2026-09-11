@@ -658,10 +658,11 @@ mapping table and batch-level scope-decision summary.
 ➡ **`feature/receipt-voucher` (Receipt/Contra/Journal Voucher, closing Phase 7) was
 merged into `main` 2026-09-11** before Phase 8 began, per `ai-workflow-rules.md`'s
 one-branch-at-a-time rule — see the Phase 7 pointer above. **GST Registers (#55) is now
-implemented** (see the Phase 8 section above for the full record), on its own
-`feature/gst-registers` branch off the updated `main`, not yet merged. **GSTR-1 (#56) is
-next** to implement, awaiting explicit instruction — GSTR-3B (#57) and HSN Summary (#58)
-remain after it. Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
+implemented, reviewed, and merged into `main`** (see the Phase 8 section above for the
+full record) — `feature/gst-registers` merged `--no-ff`, no conflicts, checks
+re-verified green (`ac10ffa`). **GSTR-1 (#56) is next** to implement, awaiting explicit
+instruction — GSTR-3B (#57) and HSN Summary (#58) remain after it. Phases 9–11 remain
+entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
 
 Serial Number Tracking (`feature/serial-number-tracking`) — the second of the two

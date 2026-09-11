@@ -109,7 +109,9 @@ Mapping so far:
   merged result before pushing `main`.
 
 - **Feature-spec 57 — GST Registers implemented 2026-09-11** on branch
-  `feature/gst-registers`, branched from the just-updated `main` (not yet merged back).
+  `feature/gst-registers`, branched from the just-updated `main`, later merged back
+  (`--no-ff`, no conflicts, `ac10ffa`) after code + security review — see the "Post-implementation
+  code review + security review" note below and the merge entry in Next Up.
   First item of Phase 8 — GST (#55). Added the shared read-only aggregation primitive
   `getOutwardSupplyLines`/`getInwardSupplyLines` to `src/engines/gst/`
   (`gst-report-queries.ts`/`gst-report-types.ts`, re-exported from `gst-engine.ts` as
@@ -1364,13 +1366,13 @@ Mapping so far:
 - **2026-09-11 — Phase 7 (Accounting) is complete and merged into `main`**
   (Payment #52, Receipt #53, Contra #54, Journal Voucher #55 —
   `feature/receipt-voucher` merged, checks re-verified green). **Phase 8 (GST)
-  is under way: GST Registers (#55/spec 57) is implemented**, on
-  `feature/gst-registers` (not yet merged into `main`). Per
-  `phase-tracker.md`, **GSTR-1 (#56/spec 58) is next**; GSTR-3B (#57/spec 59)
-  and HSN Summary (#58/spec 60) remain after it. Per `ai-workflow-rules.md`,
-  only one feature/subsystem should be worked on at a time — awaiting
-  explicit instruction before starting GSTR-1, and before merging
-  `feature/gst-registers` into `main`.
+  is under way: GST Registers (#55/spec 57) is implemented, reviewed (code +
+  security, all findings fixed), and merged into `main`** (`feature/gst-registers`,
+  `--no-ff` merge, no conflicts, checks re-verified green against the merged
+  result — `ac10ffa`). Per `phase-tracker.md`, **GSTR-1 (#56/spec 58) is
+  next**; GSTR-3B (#57/spec 59) and HSN Summary (#58/spec 60) remain after
+  it. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked
+  on at a time — awaiting explicit instruction before starting GSTR-1.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
