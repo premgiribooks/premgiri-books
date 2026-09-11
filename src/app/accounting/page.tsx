@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftRight, BookText, HandCoins, Landmark, ListTree, PiggyBank, Receipt, Wallet } from "lucide-react";
+import { ArrowLeftRight, BookText, HandCoins, Landmark, ListTree, NotebookPen, PiggyBank, Receipt, Wallet } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +55,12 @@ const ACCOUNTING_MODULES = [
     icon: ArrowLeftRight,
     title: "Contra Vouchers",
     description: "Record fund movement strictly between the company's own Cash/Bank ledgers.",
+  },
+  {
+    href: "/accounting/journal-vouchers",
+    icon: NotebookPen,
+    title: "Journal Vouchers",
+    description: "Freeform Debit/Credit entries for corrections, accruals, and adjustments.",
   },
 ] as const;
 

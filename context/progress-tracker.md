@@ -76,6 +76,69 @@ Mapping so far:
 
 ## Current Phase
 
+- **Feature-spec 55 — Journal Voucher implemented 2026-09-11** on branch
+  `feature/receipt-voucher` (continuing the same branch — not yet merged to
+  `main`). Fourth and last of the four manual voucher screens (Phase 7 —
+  Accounting, #51–#54) — **this closes out Phase 7 (Accounting) in full**,
+  per `55-journal-voucher.md`. Per that spec's Goal, this is the **least**
+  restrictive of the four: any combination of Debit/Credit entries against
+  any active company ledger (including Cash/Bank), as long as the whole set
+  balances — no entry-shape narrowing at all beyond what
+  `voucherEngine.postVoucher` itself already enforces (≥2 entries, sum
+  Debit === sum Credit, every amount > 0 with ≤2 decimals). No new Prisma
+  model — a Journal Voucher *is* a `Voucher` reusing the already-existing
+  `VoucherType.JOURNAL`/`DocumentType.JOURNAL_VOUCHER`.
+  - `journalVoucherService` (new `src/modules/manual-vouchers/services/
+    journal-voucher-service.ts`): `listJournalVouchers` (scoped to
+    `voucherType: "JOURNAL"` and the current financial year),
+    `getJournalVoucher` (company- and voucher-type-scoped),
+    `postJournalVoucher` (parses the schema and posts the given `entries`
+    array to `voucherEngine.postVoucher` unmodified — no client-amount
+    computation or ledger-class check, unlike Payment/Receipt/Contra),
+    `cancelJournalVoucher` (thin pass-through to `voucherEngine.cancelVoucher`,
+    rejecting an id belonging to a different voucher type). **The one
+    deliberate divergence from specs 52–54**: both `postJournalVoucher` and
+    `cancelJournalVoucher` require the `approve` permission action, not
+    `create` — an unrestricted debit/credit entry against any ledger is a
+    plausible error/fraud surface with no structural safeguard otherwise, the
+    same posture Purchase/Sales Invoice already takes toward their own
+    highest-trust operation (a tax override). No repository file and no new
+    `listLedgerOptions` method — reuses `paymentVoucherService.listLedgerOptions()`
+    directly, same as Receipt/Contra Voucher.
+  - New `/accounting/journal-vouchers` (list — Number, Date, Narration, Total
+    Amount, Status, Actions), `/new` (create — fully freeform entry table:
+    add/remove Debit-or-Credit lines via a per-row Debit/Credit `Select`, any
+    ledger picker with no class restriction, a running Debit/Credit
+    totals-and-balanced indicator — a client-side convenience only, never the
+    actual enforcement point), and `/[id]` (read-only detail, Cancel action
+    gated on `approve`, no Edit). Both the list page's "New" button and the
+    `/new` page itself gate on `approve` (not `create`, unlike the other
+    three voucher types' equivalent pages). Added a "Journal Vouchers" card
+    to the `/accounting` hub (fourth and final card, completing the hub
+    started in spec 52) and a `journal-vouchers` breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1444/1444,
+    +29 from this feature), and `next build` all pass;
+    `/accounting/journal-vouchers*` appears in the build route table.
+  - **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW findings. Security
+    review: zero CRITICAL/HIGH/MEDIUM findings.** Both independently
+    confirmed: `approve` (not `create`) actually gates Post and Cancel in
+    every location (service methods, list/new/detail page-level redirects);
+    no ledger-class restriction was introduced anywhere; the `entries` array
+    reaches `voucherEngine.postVoucher` unmodified; company-scoping and the
+    cross-voucher-type "not found" convention are identical to the sibling
+    modules with no distinguishing error/status leak; the shared engine-level
+    `assertLedgersActiveAndOwned` check (ownership + active-status,
+    voucherType-agnostic) still protects this screen even though the
+    voucher-specific Cash/Bank check doesn't apply here; and the omission of
+    `assertLedgersAreCashOrBank` is confirmed intentional per spec's "Do Not"
+    list, not a regression.
+  - **Not yet browser-verified** — no browser/Playwright tool was available
+    to the agent this session (matching Contra Voucher's prior session).
+    Manual click-through UAT (post a Journal Voucher with a freeform
+    multi-line balanced set, confirm the list/detail views, Cancel flow, and
+    that a `create`-only user is blocked from both Post and Cancel) is still
+    needed before merge.
+
 - **Feature-spec 54 — Contra Voucher implemented 2026-09-11** on branch
   `feature/receipt-voucher` (continuing the same branch — not yet merged to
   `main`). Third of the four manual voucher screens (Phase 7 — Accounting,
@@ -1159,11 +1222,13 @@ Mapping so far:
 
 ## Next Up
 
-- **2026-09-11 — Payment (#52), Receipt (#53), and now Contra Voucher (#54) are
-  implemented**, leaving **Journal Voucher (feature-spec 55, tracker #54)** as the
-  fourth and last manual voucher screen in Phase 7 — Accounting, and the last item
-  in Phase 7 overall. Per `ai-workflow-rules.md`, only one feature/subsystem should
-  be worked on at a time — awaiting explicit instruction before starting it.
+- **2026-09-11 — Payment (#52), Receipt (#53), Contra (#54), and now Journal
+  Voucher (#55) are all implemented — Phase 7 (Accounting) is functionally
+  complete.** Per `phase-tracker.md`, Phase 8 (GST — GST Registers, GSTR-1,
+  GSTR-3B, HSN Summary, #55–#58) is next. Per `ai-workflow-rules.md`, only one
+  feature/subsystem should be worked on at a time — awaiting explicit
+  instruction before starting it, and before merging `feature/receipt-voucher`
+  (which now carries Receipt/Contra/Journal Voucher) into `main`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
