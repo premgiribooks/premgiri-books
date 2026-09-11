@@ -7,9 +7,8 @@ import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { matchesOptionalGstReportFilters } from "@/modules/gst/services/gst-supply-line-filters";
 import type { GstRegisterTotals, GstReportFilters } from "@/types/gst-report";
+import { ZERO_GST_REGISTER_TOTALS } from "@/types/gst-report";
 import type { HsnSummaryResult, HsnSummaryRow } from "@/types/hsn-summary";
-
-const ZERO_TOTALS: GstRegisterTotals = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
 
 /** The single bucket key for every product-bearing line whose product has no `hsnCodeId` (Business Rules). */
 const NO_HSN_BUCKET_KEY = "__NO_HSN__";
@@ -192,7 +191,7 @@ function sumTotals(rows: readonly HsnSummaryRow[]): GstRegisterTotals {
       cess: totals.cess + row.cess,
       totalAmount: totals.totalAmount + row.totalAmount,
     }),
-    ZERO_TOTALS
+    ZERO_GST_REGISTER_TOTALS
   );
 }
 

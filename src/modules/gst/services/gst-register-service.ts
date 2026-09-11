@@ -7,10 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { matchesOptionalGstReportFilters } from "@/modules/gst/services/gst-supply-line-filters";
 import { GST_REPORT_DEFAULT_PAGE_SIZE } from "@/modules/gst/validation/gst-report-filters-schema";
 import type { GstPartyOption, GstRegisterResult, GstRegisterTotals, GstRegisterType, GstReportFilters } from "@/types/gst-report";
+import { ZERO_GST_REGISTER_TOTALS } from "@/types/gst-report";
 
 const DEFAULT_PAGE = 1;
-
-const ZERO_TOTALS: GstRegisterTotals = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
 
 function sumTotals(lines: GstSupplyLine[]): GstRegisterTotals {
   return lines.reduce<GstRegisterTotals>(
@@ -22,7 +21,7 @@ function sumTotals(lines: GstSupplyLine[]): GstRegisterTotals {
       cess: totals.cess + line.cess,
       totalAmount: totals.totalAmount + line.totalAmount,
     }),
-    ZERO_TOTALS
+    ZERO_GST_REGISTER_TOTALS
   );
 }
 

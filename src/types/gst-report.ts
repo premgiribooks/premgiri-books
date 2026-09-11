@@ -24,6 +24,18 @@ export interface GstRegisterTotals {
   totalAmount: number;
 }
 
+/** The zero value of GstRegisterTotals — shared by every GST report screen/service
+ * (Registers, HSN Summary, GSTR-1's embedded Table 12) instead of each redefining
+ * its own copy of the same six-field literal. */
+export const ZERO_GST_REGISTER_TOTALS: GstRegisterTotals = {
+  taxableAmount: 0,
+  cgst: 0,
+  sgst: 0,
+  igst: 0,
+  cess: 0,
+  totalAmount: 0,
+};
+
 /** One page of a register plus the period's running total across every
  * filtered line (not just the current page) — the UI's "running period
  * total row". */

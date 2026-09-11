@@ -9,14 +9,13 @@ import { HsnSummaryTable } from "@/modules/gst/components/hsn-summary-table";
 import { gstRegisterService } from "@/modules/gst/services/gst-register-service";
 import { hsnSummaryService } from "@/modules/gst/services/hsn-summary-service";
 import { gstReportFiltersSchema, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
+import { ZERO_GST_REGISTER_TOTALS } from "@/types/gst-report";
 import type { GstReportFilters } from "@/types/gst-report";
 import type { HsnSummaryResult } from "@/types/hsn-summary";
 
 interface HsnSummaryPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
-
-const ZERO_TOTALS = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -98,7 +97,7 @@ export default async function HsnSummaryPage({ searchParams }: HsnSummaryPagePro
         <GstReportFilterBar partyOptions={partyOptions} partyLabel="Customer" />
 
         {filters ? (
-          <HsnSummaryTable rows={result?.rows ?? []} totals={result?.totals ?? ZERO_TOTALS} />
+          <HsnSummaryTable rows={result?.rows ?? []} totals={result?.totals ?? ZERO_GST_REGISTER_TOTALS} />
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
             <p className="text-sm text-muted-foreground">Select a From and To date to view the HSN Summary.</p>

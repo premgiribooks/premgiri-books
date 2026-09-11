@@ -134,8 +134,39 @@ Mapping so far:
   cross-company scoping of the batched product lookup) — 1529/1529 total suite passing.
   `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2 pre-existing unrelated
   warnings), `npx vitest run`, and `next build` all pass; `/gst/hsn-summary` appears in
-  the build route table. **Not yet code-reviewed, security-reviewed, browser-verified (no
-  browser tool available this session), committed, or merged into `main`** — see Next Up.
+  the build route table. Committed on branch `feature/hsn-summary`.
+
+  **Post-implementation code review + security review found 1 HIGH (code), 1 LOW (code)
+  — both fixed; security review clean (0 findings)**, no CRITICAL/MEDIUM: (1) **HIGH,
+  fixed** — `toSalesReturnLine`/`toPurchaseReturnLine` in
+  `src/engines/gst/gst-report-queries.ts` (spec 57's already-merged
+  `getOutwardSupplyLines`/`getInwardSupplyLines` primitive, not introduced by this
+  branch) negated every monetary field for a return line (taxableAmount/cgst/sgst/igst/
+  cess/totalAmount) but **not `quantity`**, contradicting `GstSupplyLine`'s own
+  documented contract ("already sign-adjusted per document type") and directly breaking
+  spec 60's Business Rule that a Sales Return must reduce, not inflate, its HSN group's
+  net quantity — a Sales Invoice of 10 units + a Return of 4 would have summed to 14, not
+  the correct 6. Fixed by negating `quantity` the same way the other fields already are
+  in both mapper functions; added a regression assertion (`line.quantity`) to the
+  existing Sales Return/Purchase Return mapping tests in `gst-report-queries.test.ts` so
+  this can't silently regress again. This bug predates `feature/hsn-summary` (it lives in
+  code merged by spec 57) but was fixed here since it directly breaks this feature's
+  stated business rule and success criteria, per code-standards.md's "fix root causes"
+  rule — it also would have silently affected any future feature summing `.quantity`
+  across returns (nothing else in the codebase currently does). (2) **LOW, fixed** — the
+  same `{ taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 }` zero-
+  totals literal was duplicated across five files (`gst-register-service.ts`,
+  `hsn-summary-service.ts`, and the three `/gst/*` pages); extracted to a single exported
+  `ZERO_GST_REGISTER_TOTALS` constant in `src/types/gst-report.ts`, all five call sites
+  updated to reuse it. **Security review: 0 CRITICAL/HIGH/MEDIUM/LOW findings** —
+  explicit PASS on all five focus areas (cross-tenant isolation of the new batched
+  `prisma.product.findMany` lookup, authorization gate ordering, Server Action input
+  validation, information disclosure, IDOR). Re-verified after both code-review fixes:
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx vitest run` (1529/1529),
+  and `next build` all pass.
+
+  **Not yet browser-verified (no browser tool available this session), pushed, or merged
+  into `main`** — see Next Up.
 
 - **Feature-specs 82 (GSTR-2) and 83 (ITC Register) drafted 2026-09-11** — documentation
   only, not implemented — added to Phase 8 (GST) as tracker items #80/#81, per an

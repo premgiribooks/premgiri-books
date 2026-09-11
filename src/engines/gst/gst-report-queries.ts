@@ -180,7 +180,10 @@ function toSalesReturnLine(row: SalesReturnItemRow): GstSupplyLine {
     placeOfSupplyStateCode: sourceInvoice.placeOfSupplyStateCode,
     hsnCode: row.salesInvoiceItem.product.hsnCode?.code ?? null,
     productId: row.salesInvoiceItem.productId,
-    quantity: toNum(row.quantity),
+    // Stored positive ("quantity returned"), like every other column on this
+    // row — negated here for the same reason taxableAmount/cgst/etc. are: a
+    // returned quantity must reduce, not inflate, a consumer's net total.
+    quantity: -toNum(row.quantity),
     ratePercent: toNum(row.salesInvoiceItem.ratePercent),
     cessPercent: toNum(row.salesInvoiceItem.cessPercent),
     taxableAmount: -toNum(row.taxableAmount),
@@ -346,7 +349,9 @@ function toPurchaseReturnLine(row: PurchaseReturnItemRow): GstSupplyLine {
     placeOfSupplyStateCode: sourceInvoice.placeOfSupplyStateCode,
     hsnCode: row.purchaseInvoiceItem.product.hsnCode?.code ?? null,
     productId: row.purchaseInvoiceItem.productId,
-    quantity: toNum(row.quantity),
+    // See toSalesReturnLine's comment — quantity is stored positive and must
+    // be negated here too, mirroring every monetary field on this line.
+    quantity: -toNum(row.quantity),
     ratePercent: toNum(row.purchaseInvoiceItem.ratePercent),
     cessPercent: toNum(row.purchaseInvoiceItem.cessPercent),
     taxableAmount: -toNum(row.taxableAmount),

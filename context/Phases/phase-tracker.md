@@ -652,9 +652,29 @@ grouping vs. same-HSN-different-rate split, signed Sales Return netting, mixed-u
 badge on/off, "No HSN Assigned" bucketing + Credit/Debit Note exclusion, cross-company
 product-lookup scoping) — 1529/1529 total suite passing. `npx tsc --noEmit`, `npx eslint
 src prisma` (0 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and
-`next build` all pass; `/gst/hsn-summary` appears in the build route table. Not yet
-browser-verified (no browser tool available this session). Not yet code/security
-reviewed or merged into `main` — see progress-tracker.md's Current Phase entry.
+`next build` all pass; `/gst/hsn-summary` appears in the build route table.
+
+**Post-implementation code review + security review found 1 HIGH, 1 LOW (code) — both
+fixed; security review 0 findings**, no CRITICAL/MEDIUM: (1) **HIGH, fixed** — the
+shared `getOutwardSupplyLines`/`getInwardSupplyLines` primitive's Sales
+Return/Purchase Return mappers (`src/engines/gst/gst-report-queries.ts`, spec 57,
+already merged — not introduced by this branch) negated every monetary field for a
+return line but not `quantity`, breaking `GstSupplyLine`'s documented "already
+sign-adjusted" contract and this spec's own Business Rule that a return must reduce
+its HSN group's net quantity. Fixed at the root (negated `quantity` alongside the other
+fields in both mappers) plus a regression assertion added to
+`gst-report-queries.test.ts`, since a pre-existing bug that breaks this spec's stated
+business rule is this spec's problem to fix, not defer. (2) **LOW, fixed** — the
+GstRegisterTotals zero-value literal was duplicated across five files; extracted to one
+exported `ZERO_GST_REGISTER_TOTALS` constant in `src/types/gst-report.ts`. **Security
+review: 0 findings**, explicit PASS on cross-tenant isolation (the new batched
+`prisma.product.findMany` lookup), authorization ordering, Server Action input
+validation, information disclosure, and IDOR. Re-verified: `npx tsc --noEmit`, `npx
+eslint src prisma` (0 errors), `npx vitest run` (1529/1529), `next build` all pass.
+
+Committed on branch `feature/hsn-summary`. Not yet browser-verified (no browser tool
+available this session), pushed, or merged into `main` — see progress-tracker.md's
+Current Phase entry.
 
 **GSTR-2 (#80) and ITC Register (#81) feature-specs drafted 2026-09-11** (documentation
 only, not implemented — matching this phase's own original batch-drafting precedent),

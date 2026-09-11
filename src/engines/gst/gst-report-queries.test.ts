@@ -250,6 +250,7 @@ describe("getOutwardSupplyLines", () => {
     expect(line.documentType).toBe("SALES_RETURN");
     expect(line.placeOfSupplyStateCode).toBe("09");
     expect(line.ratePercent).toBe(18);
+    expect(line.quantity).toBe(-2);
     expect(line.taxableAmount).toBe(-200);
     expect(line.cgst).toBe(-18);
     expect(line.totalAmount).toBe(-236);
@@ -519,6 +520,7 @@ describe("getInwardSupplyLines", () => {
 
     expect(line.documentType).toBe("PURCHASE_RETURN");
     expect(line.placeOfSupplyStateCode).toBe("09");
+    expect(line.quantity).toBe(-1);
     expect(line.taxableAmount).toBe(-100);
     expect(line.totalAmount).toBe(-112);
   });

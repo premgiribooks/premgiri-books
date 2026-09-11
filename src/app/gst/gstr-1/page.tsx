@@ -18,14 +18,13 @@ import { HsnSummaryTable } from "@/modules/gst/components/hsn-summary-table";
 import { hsnSummaryService } from "@/modules/gst/services/hsn-summary-service";
 import { isValidCalendarDate, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
 import { getMonthlyPeriodOptions, getQuarterlyPeriodOptions } from "@/modules/gst/utils/gst-filing-periods";
+import { ZERO_GST_REGISTER_TOTALS } from "@/types/gst-report";
 import type { GstFilingRecord, Gstr1Return } from "@/types/gstr1";
 import type { HsnSummaryResult } from "@/types/hsn-summary";
 
 interface Gstr1PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
-
-const ZERO_TOTALS = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -125,7 +124,7 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
 
                 <div className="flex flex-col gap-3">
                   <h3 className="text-sm font-semibold text-foreground">Table 12 — HSN Summary</h3>
-                  <HsnSummaryTable rows={hsnSummary?.rows ?? []} totals={hsnSummary?.totals ?? ZERO_TOTALS} />
+                  <HsnSummaryTable rows={hsnSummary?.rows ?? []} totals={hsnSummary?.totals ?? ZERO_GST_REGISTER_TOTALS} />
                 </div>
               </div>
             ) : null}
