@@ -1695,17 +1695,21 @@ Mapping so far:
 
   **`feature/hsn-summary` has been reviewed and merged into `main` (`99a25d4`),
   closing out Phase 8's original four-item batch** (see above). **GSTR-2 (#80/
-  spec 82) is now implemented** on branch `feature/gstr-2`, per explicit user
-  instruction 2026-09-11 ("start GSTR-2") — see the Current Phase entry above
-  for the full implementation record (Table 3 invoice-wise groups for
-  registered suppliers, Table 7 consolidated by party, Tables 4/5/8/9/11 as
-  always-not-computed placeholders, Tables 6/10/12/13 absent entirely, no
-  `GstFilingRecord` interaction anywhere, cross-checked against
-  `gstr3bService`'s Table 4(A)(5)). **Not yet code-reviewed, security-reviewed,
-  or merged into `main`** — that review runs next, before the merge this time
-  (learning from the HSN Summary process slip where review ran only after the
-  merge had already happened). ITC Register (#81/spec 83) is the one remaining
-  Phase 8 item, queued after GSTR-2 is reviewed and merged.
+  spec 82) is implemented, reviewed, and merged into `main`** (`feature/gstr-2`
+  `--no-ff` merged `2fdd91f`, no conflicts, checks re-verified green — `npx tsc
+  --noEmit`, `npx eslint src prisma`, `npx vitest run` 1539/1539, `next build`),
+  per explicit user instruction 2026-09-11 ("start GSTR-2") — see the Current
+  Phase entry above for the full implementation record (Table 3 invoice-wise
+  groups for registered suppliers, Table 7 consolidated by party, Tables
+  4/5/8/9/11 as always-not-computed placeholders, Tables 6/10/12/13 absent
+  entirely, no `GstFilingRecord` interaction anywhere, cross-checked against
+  `gstr3bService`'s Table 4(A)(5)). Both code-reviewer and security-reviewer ran
+  **before** the merge this time (learning from the HSN Summary process slip):
+  both **APPROVE, zero CRITICAL/HIGH/MEDIUM findings** — a handful of LOW/
+  informational notes, all matching pre-existing patterns already accepted
+  elsewhere in the codebase, none requiring a fix. **This closes out GSTR-2 in
+  full.** ITC Register (#81/spec 83) is now the one remaining Phase 8 item —
+  awaiting explicit instruction to start it.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

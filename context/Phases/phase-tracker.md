@@ -466,7 +466,7 @@ header note already established for tracker-vs-spec-file numbering:
 | 56  | GSTR-1        | GST Engine | ✅     |
 | 57  | GSTR-3B       | GST Engine | ✅     |
 | 58  | HSN Summary   | GST Engine | ✅     |
-| 80  | GSTR-2        | GST Registers (#55) | 🟨     |
+| 80  | GSTR-2        | GST Registers (#55) | ✅     |
 | 81  | ITC Register  | GST Registers (#55); GSTR-3B (#57) | ⬜     |
 
 **GST Registers (#55) implemented 2026-09-11** on branch `feature/gst-registers`. Added
@@ -902,9 +902,11 @@ extraction candidate, not fixed). security-reviewer confirmed company-scoping,
 authorization, input validation, and error handling are all sound, with one LOW/
 informational note (unbounded/unpaginated date range, an existing pattern shared with GST
 Registers, not introduced here). Neither MEDIUM/LOW blocks anything — both deferred as
-optional follow-ups. **GSTR-2 (#80) is now implemented** on branch `feature/gstr-2` (see
-the Phase 8 section above for the full record) — **not yet reviewed or merged.** ITC
-Register (#81) remains the one outstanding Phase 8 item.
+optional follow-ups. **GSTR-2 (#80) is implemented, reviewed (both code-reviewer and
+security-reviewer APPROVE, zero CRITICAL/HIGH/MEDIUM), and merged into `main`**
+(`feature/gstr-2` `--no-ff` merged `2fdd91f`, no conflicts, checks re-verified green —
+see the Phase 8 section above for the full record). ITC Register (#81) is now the
+one remaining Phase 8 item — **awaiting explicit instruction to start it.**
 
 **GSTR-2 (#80) implemented 2026-09-11** on branch `feature/gstr-2`, per
 `82-gstr-2.md`. Pure read-only aggregation over `getInwardSupplyLines` (spec 57) — no
@@ -979,6 +981,13 @@ linked detail pages independently re-verify `companyId` ownership and their own
 `isValidCalendarDate` check doesn't independently enforce `to >= from`, matching every
 sibling GST page's identical pre-existing pattern; harmless since an inverted range
 just yields an empty result set). Neither review found anything requiring a fix.
+
+**Merged into `main`** (`feature/gstr-2` `--no-ff` merged `2fdd91f`, no conflicts,
+checks re-verified green on the merged result — `npx tsc --noEmit`, `npx eslint src
+prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx vitest run`
+1539/1539, `next build` with `/gst/gstr-2` confirmed in the route table). Branch
+deleted both locally and on origin. **This closes out GSTR-2 (#80) in full** — status
+below updated to ✅. ITC Register (#81) is now the one remaining Phase 8 item.
 
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
