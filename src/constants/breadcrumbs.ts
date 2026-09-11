@@ -35,6 +35,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   transfers: "Stock Transfers",
   verifications: "Physical Verification",
   accounting: "Accounting",
+  "payment-vouchers": "Payment Vouchers",
   "ledger-groups": "Ledger Groups",
   ledgers: "Ledgers",
   banks: "Bank Management",
