@@ -67,7 +67,7 @@ Mapping so far:
 | 50           | Batch Tracking (`50-batch-tracking.md`)                                          | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#48) — **implemented 2026-09-11** (git branch `feature/batch-tracking`); fifth of Phase 5's six documents; new `Product.isBatchTracked` flag, `ProductBatch` catalog model, additive nullable `StockTransaction.batchId`; Batches tab UI deliberately deferred (no Product detail page existed) — see feature-spec 56 |
 | 51           | Serial Number Tracking (`51-serial-number-tracking.md`)                         | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#49) — **implemented 2026-09-11** (git branch `feature/serial-number-tracking`); last item in Phase 5, closing it in full; depended on feature-spec 56 (Product Detail Page) for its own Serial Numbers tab's host page |
 | 52           | Payment Voucher (`52-payment-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#51) — **implemented 2026-09-11** (git branch `feature/payment-voucher`); first of the four manual voucher screens; renumbered from Phase 6/#50 when feature-spec 56 (Phase 6 — Product Detail Page) was inserted ahead of this phase |
-| 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#51, see spec 52's note |
+| 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **implemented 2026-09-11** (git branch `feature/receipt-voucher`); the direct mirror of spec 52 (Payment Voucher) with the ledger direction reversed |
 | 54           | Contra Voucher (`54-contra-voucher.md`)                                         | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#53) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#52, see spec 52's note |
 | 55           | Journal Voucher (`55-journal-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#54) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#53, see spec 52's note; last item in Phase 7, closing the Accounting phase |
 | 56           | Product Detail Page (`56-product-detail-page.md`)                               | `context/Phases/phase-tracker.md` **Phase 6 — Product Detail Page (#50)** — **implemented 2026-09-11** (git branch `feature/product-detail-page`); new phase inserted ahead of the (renumbered) Phase 7 — Accounting, and ahead of Phase 5's own remaining item (#49 Serial Number Tracking), because both Batch Tracking (spec 50) and Serial Number Tracking (spec 51) need a Product detail view; UI-only, no new Prisma model, composes the existing `productService`/`productBatchService` stack |
@@ -75,6 +75,58 @@ Mapping so far:
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Feature-spec 53 — Receipt Voucher implemented 2026-09-11** on branch
+  `feature/receipt-voucher`, branched off `main` immediately after merging
+  `feature/payment-voucher` into it. Second of the four manual voucher screens
+  (Phase 7 — Accounting, #51–#54) — Contra/Journal Voucher (#54–#55) remain
+  next. Per `53-receipt-voucher.md`'s Goal, this is the direct mirror of
+  `52-payment-voucher.md` with the ledger direction reversed: UI + validation
+  only, no new Prisma model, since a Receipt Voucher *is* a `Voucher` reusing
+  the already-existing `VoucherType.RECEIPT`/`DocumentType.RECEIPT_VOUCHER`.
+  - `receiptVoucherService` (new `src/modules/manual-vouchers/services/
+    receipt-voucher-service.ts`): `listReceiptVouchers` (scoped to
+    `voucherType: "RECEIPT"` and the current financial year), `getReceiptVoucher`
+    (company- and voucher-type-scoped), `postReceiptVoucher` (validates exactly
+    one Debit entry restricted to the Cash/Bank class via the existing shared
+    `assertLedgersAreCashOrBank` helper, one-or-more Credit entries against any
+    other active ledger, computes the Debit entry's amount as the integer-
+    paise-safe sum of the Credit lines — never trusted from the client — then
+    calls `voucherEngine.postVoucher` unmodified), `cancelReceiptVoucher` (thin
+    pass-through to `voucherEngine.cancelVoucher`, rejecting an id belonging to
+    a different voucher type). No repository file and no new
+    `listLedgerOptions` method — per spec 53's explicit Service/Repository
+    section, the Receipt screens reuse `paymentVoucherService.listLedgerOptions()`
+    directly (the "shared read-model" the `ManualVoucherLedgerOption` type's
+    own header comment already documents as common to all four manual-voucher
+    screens), so `payment-voucher-service.ts` was left untouched rather than
+    speculatively refactored ahead of Contra/Journal (specs 54/55, not
+    implemented here per `ai-workflow-rules.md`'s one-feature-at-a-time rule).
+  - New `/accounting/receipt-vouchers` (list — Number, Date, "Received From"
+    summarizing the Credit ledger name(s), Amount, Status, Actions), `/new`
+    (create — a "Received In (Cash / Bank)" picker restricted to the Cash/Bank
+    subset, a "Received From" Credit-lines table with Add/Remove, narration, a
+    running total), and `/[id]` (read-only detail, Cancel action gated on
+    `approve`, no Edit). Added a "Receipt Vouchers" card to the `/accounting`
+    hub (second of the four, after Payment Vouchers) and a `receipt-vouchers`
+    breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1392/1392,
+    +25 from this feature), and `next build` all pass;
+    `/accounting/receipt-vouchers*` appears in the build route table.
+  - **Browser-verified end-to-end with `@playwright/cli`** against the dev
+    server: created a Receipt Voucher (Debit against the seeded "Cash" ledger,
+    one Credit line against "Prajapat paints", amount 750) → posted
+    successfully as `RCT-0001` → the list correctly showed "Prajapat paints"
+    under "Received From," the amount, and a Posted badge → the detail page
+    correctly showed both entries (Cash Debit 750.00, Prajapat paints Credit
+    750.00, Total 750.00) → Cancel produced the correct confirmation dialog
+    text, then flipped the status to Cancelled — matching Payment Voucher's
+    exact walkthrough shape with the direction reversed. Zero console errors
+    at every step. The one voucher created for this walkthrough was itself
+    cancelled as part of the walkthrough, leaving no uncancelled test data
+    behind (vouchers have no delete path in this codebase, only Cancel).
+  - Local scratch artifacts from the `@playwright/cli` session (`.playwright-cli/`)
+    are git-ignored, not committed.
 
 - **Feature-spec 52 — Payment Voucher implemented 2026-09-11** on branch
   `feature/payment-voucher`, branched off `main` immediately after merging
