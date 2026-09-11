@@ -354,7 +354,7 @@ three do), since it has no structural safeguard against an arbitrary entry.
 | 51  | Payment Voucher | Voucher Engine | ✅     |
 | 52  | Receipt Voucher | Voucher Engine | ✅     |
 | 53  | Contra Voucher  | Voucher Engine | ✅     |
-| 54  | Journal Voucher | Voucher Engine | ⬜     |
+| 54  | Journal Voucher | Voucher Engine | ✅     |
 
 Payment Voucher (#51, `feature/payment-voucher`) implemented 2026-09-11. UI + validation
 only, no new Prisma model, per the spec's Goal (a Payment Voucher *is* a `Voucher`). New
@@ -400,9 +400,31 @@ the entry count is fixed. Reuses `paymentVoucherService.listLedgerOptions()`. **
 review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM findings.**
 `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1415/1415, +23), and
 `next build` all pass; `/accounting/contra-vouchers*` appears in the build route table.
-Not yet browser-verified (no browser tool available this session) and not yet
-committed — see `context/progress-tracker.md`'s Current Phase entry for the full
-implementation record.
+Not yet browser-verified (no browser tool available this session). Committed (`662aed3`)
+— see `context/progress-tracker.md`'s Current Phase entry for the full implementation
+record.
+
+Journal Voucher (#54, `feature/receipt-voucher`, spec file `55-journal-voucher.md`)
+implemented 2026-09-11 — **the fourth and last of the four, closing out Phase 7
+(Accounting) in full.** The least restrictive of the four: a fully freeform entry table
+(any combination of Debit/Credit lines against any active ledger, including Cash/Bank),
+no ledger-class restriction at all — `postJournalVoucher` passes the given `entries`
+array straight to `voucherEngine.postVoucher` with no client-amount computation and no
+`assertLedgersAreCashOrBank` call. The one deliberate divergence from specs 51–53: both
+`postJournalVoucher` and `cancelJournalVoucher` require the `approve` permission action,
+not `create` — enforced in the service and at every page-level gate (list "New" button,
+`/new` page, detail page's Cancel button), since an unrestricted entry against any ledger
+has no structural safeguard otherwise (the same posture Purchase/Sales Invoice takes
+toward their own tax-override mechanism). Reuses `paymentVoucherService.listLedgerOptions()`.
+**Code review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM
+findings** — both confirmed `approve` actually gates Post and Cancel everywhere it needs
+to, no ledger-class restriction was introduced, the shared engine-level
+`assertLedgersActiveAndOwned` check still protects this screen regardless, and the
+omission of the Cash/Bank check is intentional per spec, not a regression. `npx tsc
+--noEmit`, `npx eslint src prisma`, `npx vitest run` (1444/1444, +29), and `next build`
+all pass; `/accounting/journal-vouchers*` appears in the build route table. Not yet
+browser-verified (no browser tool available this session). Committed (`68042e8`) — see
+`context/progress-tracker.md`'s Current Phase entry for the full implementation record.
 
 ---
 
@@ -486,11 +508,16 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 7 — Accounting, Journal Voucher (#54)** next — the fourth and last manual
-voucher screen. Payment Voucher (#51), Receipt Voucher (#52), and Contra Voucher (#53)
-are all implemented (see the Phase 7 section above for each's implementation record),
-all sharing the `src/modules/manual-vouchers/` module Payment Voucher established and
-the `assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`). Serial Number Tracking (#49,
+➡ **Phase 7 — Accounting is complete.** Payment Voucher (#51), Receipt Voucher (#52),
+Contra Voucher (#53), and Journal Voucher (#54) are all implemented (see the Phase 7
+section above for each's implementation record), all sharing the
+`src/modules/manual-vouchers/` module Payment Voucher established and the
+`assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`) — Journal Voucher
+is the one of the four that deliberately doesn't call it. **Phase 8 — GST (GST
+Registers #55, GSTR-1 #56, GSTR-3B #57, HSN Summary #58) is next**, awaiting explicit
+instruction before starting per `ai-workflow-rules.md`'s one-feature-at-a-time rule —
+also still pending: merging `feature/receipt-voucher` (which now carries Receipt/
+Contra/Journal Voucher) into `main`. Serial Number Tracking (#49,
 `feature/serial-number-tracking`, implemented 2026-09-11) closed Phase 5 in full — Opening
 Stock (#44), Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47),
 Batch Tracking (#48), Product Detail Page (#50), and Serial Number Tracking (#49) are all

@@ -137,7 +137,9 @@ Mapping so far:
     Manual click-through UAT (post a Journal Voucher with a freeform
     multi-line balanced set, confirm the list/detail views, Cancel flow, and
     that a `create`-only user is blocked from both Post and Cancel) is still
-    needed before merge.
+    needed before merge. **Committed** (`68042e8`), not yet merged/pushed —
+    Phase 7 (Accounting) is now functionally complete; Phase 8 (GST) is next
+    per `phase-tracker.md`, awaiting explicit instruction before starting.
 
 - **Feature-spec 54 — Contra Voucher implemented 2026-09-11** on branch
   `feature/receipt-voucher` (continuing the same branch — not yet merged to
@@ -189,7 +191,7 @@ Mapping so far:
     the agent this session (unlike Payment/Receipt Voucher's prior sessions).
     Manual click-through UAT (post a Contra Voucher between two Cash/Bank
     ledgers, confirm the list/detail views and Cancel flow) is still needed
-    before merge. **Not yet committed.**
+    before merge. **Committed** (`662aed3`), not yet merged/pushed.
 
 - **Feature-spec 53 — Receipt Voucher implemented 2026-09-11** on branch
   `feature/receipt-voucher`, branched off `main` immediately after merging
