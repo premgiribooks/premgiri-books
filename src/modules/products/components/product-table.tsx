@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -112,6 +112,16 @@ export function ProductTable({ products, canEdit = false, canManage = false }: P
             </TableCell>
             <TableCell className="text-right">
               <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  nativeButton={false}
+                  render={
+                    <Link href={`/masters/products/${product.id}`} aria-label="View product">
+                      <Eye size={16} />
+                    </Link>
+                  }
+                />
                 {canEdit ? (
                   <Button
                     variant="ghost"

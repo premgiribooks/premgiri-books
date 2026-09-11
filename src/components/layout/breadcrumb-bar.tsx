@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronRight, Home } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { BREADCRUMB_ID_PATTERN, BREADCRUMB_LABELS } from "@/constants/breadcrumbs";
+import { useBreadcrumbLabels } from "@/hooks/use-breadcrumb-label";
 import { cn } from "@/lib/utils";
 
 interface Crumb {
@@ -30,7 +31,7 @@ function toLabel(segment: string, previousSegment: string | undefined): string {
     .join(" ");
 }
 
-function buildTrail(pathname: string): Crumb[] {
+function buildTrail(pathname: string, dynamicLabels: ReadonlyMap<string, string>): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   const crumbs: Crumb[] = [];
   let href = "";
@@ -39,10 +40,18 @@ function buildTrail(pathname: string): Crumb[] {
   for (const segment of segments) {
     href += `/${segment}`;
     // A resource id (uuid) isn't meaningful on its own without fetching the
-    // entity it points at — dropped from the visible trail, but its parent
-    // href still carries it forward so the *next* segment (e.g. "edit")
-    // links correctly.
+    // entity it points at, so it's dropped from the visible trail by
+    // default — its parent href still carries it forward so the *next*
+    // segment (e.g. "edit") links correctly. A page that has already
+    // fetched its own entity can opt in to a real label via
+    // useBreadcrumbLabel (see use-breadcrumb-label.ts); everything else
+    // keeps the original drop-the-id behavior.
     if (BREADCRUMB_ID_PATTERN.test(segment)) {
+      const dynamicLabel = dynamicLabels.get(href);
+      if (dynamicLabel) {
+        crumbs.push({ label: dynamicLabel, href });
+        previousSegment = segment;
+      }
       continue;
     }
     crumbs.push({ label: toLabel(segment, previousSegment), href });
@@ -55,7 +64,8 @@ function buildTrail(pathname: string): Crumb[] {
 export function BreadcrumbBar() {
   const pathname = usePathname();
   const router = useRouter();
-  const crumbs = buildTrail(pathname);
+  const dynamicLabels = useBreadcrumbLabels();
+  const crumbs = buildTrail(pathname, dynamicLabels);
 
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-background px-4 text-sm">
