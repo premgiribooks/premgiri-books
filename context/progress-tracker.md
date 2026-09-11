@@ -101,6 +101,97 @@ Mapping so far:
 
 ## Current Phase
 
+- **`feature/receipt-voucher` merged into `main` 2026-09-11** (Receipt Voucher #52,
+  Contra Voucher #53, Journal Voucher #54, plus the feature-spec 57–81 drafting batch
+  below), closing Phase 7 (Accounting) in full, per `ai-workflow-rules.md`'s
+  one-branch-at-a-time rule — a clean `--no-ff` merge with no conflicts;
+  `tsc`/`eslint`/`vitest` (1444/1444)/`next build` all re-verified green against the
+  merged result before pushing `main`.
+
+- **Feature-spec 57 — GST Registers implemented 2026-09-11** on branch
+  `feature/gst-registers`, branched from the just-updated `main` (not yet merged back).
+  First item of Phase 8 — GST (#55). Added the shared read-only aggregation primitive
+  `getOutwardSupplyLines`/`getInwardSupplyLines` to `src/engines/gst/`
+  (`gst-report-queries.ts`/`gst-report-types.ts`, re-exported from `gst-engine.ts` as
+  `gstReportEngine`) that specs 58–60 and Phase 10's GST Reports (#72) will all reuse
+  unmodified — pure aggregation over the six already-posted source tables
+  (SalesInvoiceItem, SalesReturnItem, CreditNoteItem, DebitNoteItem,
+  PurchaseInvoiceItem, PurchaseReturnItem), `POSTED`-only and company-scoped at the
+  query level, sign-adjusted per document type, preferring overridden tax figures over
+  computed ones, and resolving a Sales/Purchase Return's place of supply and party from
+  its **parent invoice** rather than the reporting company's own state. No new Prisma
+  model, matching spec 33's "no schema" convention extended to aggregation.
+  `gstRegisterService` (`src/modules/gst/services/gst-register-service.ts`) wraps both
+  engine functions with optional party/HSN/rate filters and pagination (max 200
+  rows/page), gated on `assertPermission(user, "gst", "view")` — no Permission catalog
+  change needed, the `gst` module and its `view`/`export` actions already existed
+  (seeded by feature-spec 11). New `/gst` hub page (GST Registers linked; GSTR-1/
+  GSTR-3B/HSN Summary rendered as disabled "Coming soon" placeholder cards, per the
+  spec's own explicit implementer's-call) and `/gst/registers` (Outward/Inward toggle,
+  required date-range + optional party/HSN/rate filters, a paginated table with a
+  running period total row and a per-row link to the source document's own detail page,
+  and a disabled Export button forward-noted to Excel Export #75/#76 — no file
+  generation wired, per Do Not). Wired the Sidebar's previously-unlinked "GST" entry to
+  `/gst` (the same pattern Opening Stock used for "Inventory") and added `gst`/
+  `registers` breadcrumb labels. 25 new vitest cases across three files (14 engine
+  aggregation tests — sign convention, overridden-vs-computed tax selection, the four
+  party-resolution branches including a mid-transaction-converted QUICK invoice,
+  parent-invoice place-of-supply resolution for both Sales and Purchase Returns,
+  cross-company isolation, date-sort; 8 service tests — permission gate, running-total
+  correctness independent of pagination, independent party/HSN/rate filtering,
+  pagination; 7 schema-validation tests) — full suite now 1474/1474 passing.
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2 pre-existing
+  unrelated warnings), `npx vitest run`, and `next build` all pass; `/gst` and
+  `/gst/registers` both appear in the build route table.
+
+  **Post-implementation code review + security review** (agents run in parallel,
+  mirroring every prior phase's practice) found 0 CRITICAL, 1 HIGH, 1 MEDIUM, and 2 LOW
+  issues in the code review, and 0 CRITICAL/HIGH/MEDIUM plus 1 LOW in the security
+  review — **all four code-review findings fixed**, the one security LOW folded into
+  the same fix pass:
+  - **HIGH, fixed**: pagination was fully wired through the service and page
+    (`page`/`pageSize`/`totalCount` all computed correctly) but no UI ever rendered
+    Previous/Next controls, silently truncating any register past 50 rows with no way
+    to reach further pages. Added `GstRegisterPagination`
+    (`src/modules/gst/components/gst-register-pagination.tsx`).
+  - **MEDIUM, fixed**: the optional party filter was validated, service-filtered, and
+    unit-tested, but `GstReportFilterBar` never rendered a party Select, so `partyId`
+    could only be set by hand-editing the URL. Added a party Select populated by a new
+    `gstRegisterService.listPartyOptions(registerType)` — deliberately queries
+    `Customer`/`Supplier` directly (gated on `gst`/`view`) rather than routing through
+    `customerService.listSelectableCustomers()`/`supplierService.listSelectableSuppliers()`
+    (both gated on `masters`/`view`), since an Accountant role has `gst:view` but not
+    `masters:view` per `DEFAULT_ROLE_PERMISSIONS` — reusing those services would have
+    403'd this module's primary user. Mirrors `physical-verification-service.ts`'s own
+    `listFormOptions()` precedent of querying via its own module, not a sibling
+    service, for exactly this reason.
+  - **LOW, fixed**: `/gst/registers`'s `parseFilters` duplicated (and diverged from)
+    `gstReportFiltersSchema`'s validation instead of reusing it. Now coerces raw
+    URL-string values into a plain object and delegates every actual rule (date format,
+    uuid format, `to >= from`, the 200-row `pageSize` cap) to
+    `gstReportFiltersSchema.safeParse`.
+  - **LOW, fixed**: `gst-register-service.ts` imported `gst-report-queries.ts` directly
+    instead of the `gstReportEngine` barrel `gst-engine.ts` re-exports — every other
+    GST-consuming service (`sales-invoice-service.ts`, `purchase-invoice-service.ts`,
+    etc.) imports the `gstEngine` barrel, not the calculation file directly. Now
+    consistent.
+  - **Security LOW, accepted as-is (folded into the schema-reuse fix above)**: the
+    reviewer noted the same `parseFilters`-vs-schema divergence as an input-validation
+    consistency gap, explicitly confirming it had no exploit path (results are filtered
+    in-memory against an already company-scoped query result, never interpolated into a
+    Prisma `where` clause) — resolved as a side effect of the LOW fix directly above,
+    not a separate change.
+  - **Security review otherwise clean**: explicit PASS on cross-tenant isolation
+    (`companyId` always session-derived via `getCurrentCompanyUser()`, never client
+    input, verified by the engine's own cross-company test), IDOR via `partyId` (filter
+    only ever narrows an already tenant-scoped result set), authorization (`gst`/`view`
+    enforced at the service and redundantly at the page, no bypass path), and
+    information disclosure (generic error envelope via `toActionErrorMessage`, no
+    tenant-existence signal).
+  - Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same
+    2 pre-existing unrelated warnings), `npx vitest run` (1477/1477, 3 new
+    `listPartyOptions` service tests added), and `next build` all pass.
+
 - **Feature-specs 57–81 (Phases 8–11, 25 files) drafted 2026-09-11** —
   documentation only, not implemented, per explicit user request. Covers
   Phase 8 — GST (GST Registers #55/spec 57, GSTR-1 #56/spec 58, GSTR-3B
@@ -118,13 +209,13 @@ Mapping so far:
   each batch's spec-file mapping table and scope-decision summary (see
   that file directly rather than duplicating it here). No `schema.prisma`
   edits, no migrations, no source files were touched by this drafting
-  pass — Markdown specs only. **Phase 8 — GST is next to implement**,
-  awaiting explicit instruction before starting per
-  `ai-workflow-rules.md`'s one-feature-at-a-time rule.
+  pass — Markdown specs only. **Phase 8 — GST Registers (#55/spec 57) has
+  since been implemented** (see the entry above) — GSTR-1 (#56/spec 58) is
+  next, awaiting explicit instruction.
 
 - **Feature-spec 55 — Journal Voucher implemented 2026-09-11** on branch
-  `feature/receipt-voucher` (continuing the same branch — not yet merged to
-  `main`). Fourth and last of the four manual voucher screens (Phase 7 —
+  `feature/receipt-voucher`, later merged into `main` the same day (see the
+  merge entry above). Fourth and last of the four manual voucher screens (Phase 7 —
   Accounting, #51–#54) — **this closes out Phase 7 (Accounting) in full**,
   per `55-journal-voucher.md`. Per that spec's Goal, this is the **least**
   restrictive of the four: any combination of Debit/Credit entries against
@@ -1270,13 +1361,16 @@ Mapping so far:
 
 ## Next Up
 
-- **2026-09-11 — Payment (#52), Receipt (#53), Contra (#54), and now Journal
-  Voucher (#55) are all implemented — Phase 7 (Accounting) is functionally
-  complete.** Per `phase-tracker.md`, Phase 8 (GST — GST Registers, GSTR-1,
-  GSTR-3B, HSN Summary, #55–#58) is next. Per `ai-workflow-rules.md`, only one
-  feature/subsystem should be worked on at a time — awaiting explicit
-  instruction before starting it, and before merging `feature/receipt-voucher`
-  (which now carries Receipt/Contra/Journal Voucher) into `main`.
+- **2026-09-11 — Phase 7 (Accounting) is complete and merged into `main`**
+  (Payment #52, Receipt #53, Contra #54, Journal Voucher #55 —
+  `feature/receipt-voucher` merged, checks re-verified green). **Phase 8 (GST)
+  is under way: GST Registers (#55/spec 57) is implemented**, on
+  `feature/gst-registers` (not yet merged into `main`). Per
+  `phase-tracker.md`, **GSTR-1 (#56/spec 58) is next**; GSTR-3B (#57/spec 59)
+  and HSN Summary (#58/spec 60) remain after it. Per `ai-workflow-rules.md`,
+  only one feature/subsystem should be worked on at a time — awaiting
+  explicit instruction before starting GSTR-1, and before merging
+  `feature/gst-registers` into `main`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

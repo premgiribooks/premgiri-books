@@ -448,10 +448,51 @@ Spec-file numbers are sequential and diverge from tracker numbers as usual:
 
 | #   | Feature       | Depends On | Status |
 | --- | ------------- | ---------- | ------ |
-| 55  | GST Registers | GST Engine | ⬜     |
+| 55  | GST Registers | GST Engine | ✅     |
 | 56  | GSTR-1        | GST Engine | ⬜     |
 | 57  | GSTR-3B       | GST Engine | ⬜     |
 | 58  | HSN Summary   | GST Engine | ⬜     |
+
+**GST Registers (#55) implemented 2026-09-11** on branch `feature/gst-registers`. Added
+`getOutwardSupplyLines`/`getInwardSupplyLines` to `src/engines/gst/` (`gst-report-queries.ts`
++ `gst-report-types.ts`, re-exported from `gst-engine.ts` as `gstReportEngine`) — pure
+read-only aggregation over the six already-posted source tables (SalesInvoiceItem,
+SalesReturnItem, CreditNoteItem, DebitNoteItem, PurchaseInvoiceItem, PurchaseReturnItem),
+`POSTED`-only, company-scoped at the query level, sign-adjusted per document type (Sales
+Invoice/Debit Note +, Sales Return/Credit Note −, Purchase Invoice +, Purchase Return −),
+preferring overridden tax figures over computed ones, and resolving a Return's place of
+supply/party from its parent invoice rather than the company's own state — no new Prisma
+model, matching the spec's "no schema" convention. `gstRegisterService`
+(`src/modules/gst/services/gst-register-service.ts`) wraps both engine functions with the
+optional party/HSN/rate filters and pagination, gated on `assertPermission(user, "gst",
+"view")` (no Permission catalog changes needed — the `gst` module/`view`/`export` actions
+already existed). New `/gst` hub page (cards for all four Phase 8 items — only GST
+Registers linked, the other three left as disabled "Coming soon" placeholders per the
+spec's explicit implementer's-call) and `/gst/registers` (Outward/Inward toggle, required
+date-range + optional party/HSN/rate filters, paginated table with a running period total
+row and a per-row link to the source document's own detail page, and a disabled Export
+button stub forward-noted to Excel Export #75). Wired the Sidebar's previously-unlinked
+"GST" entry to `/gst` and added `gst`/`registers` breadcrumb labels. 25 new vitest cases
+(14 engine aggregation — sign/override/party-resolution/place-of-supply/company-scope/
+sort, 8 service — permission gate, totals, filtering, pagination, 7 schema validation) —
+1474/1474 total suite passing. `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the
+same 2 pre-existing unrelated warnings), `npx vitest run`, and `next build` all pass;
+`/gst` and `/gst/registers` both appear in the build route table.
+
+**Post-implementation code review + security review found 1 HIGH, 1 MEDIUM, 2 LOW
+(code) and 1 LOW (security, folded into the same fix) — all fixed**, no CRITICAL: (1)
+pagination was computed end-to-end but had no rendered Previous/Next controls, silently
+truncating registers past 50 rows — added `GstRegisterPagination`; (2) the party filter
+had no Select control despite full schema/service/test support — added one, backed by a
+new `gstRegisterService.listPartyOptions()` that deliberately queries Customer/Supplier
+directly (gated on `gst`/`view`) rather than the `masters`-gated
+`customerService`/`supplierService` methods, since an Accountant role lacks
+`masters:view`; (3) `/gst/registers`'s filter parsing now delegates to
+`gstReportFiltersSchema` instead of duplicating it; (4) the service now imports the
+`gstReportEngine` barrel instead of the raw query file, matching every other
+GST-consuming service's convention. Security review otherwise clean (explicit PASS on
+cross-tenant isolation, IDOR, authorization, information disclosure). Re-verified:
+1477/1477 tests, `tsc`/`eslint`/`build` all pass.
 
 ---
 
@@ -612,13 +653,16 @@ implemented.
 user request, following the exact same batch-drafting-without-implementation precedent
 as the Phase 3/4/5/6/7 spec batches (drafted well ahead of implementation, one feature
 implemented at a time thereafter). See each phase's own section above for its spec-file
-mapping table and batch-level scope-decision summary. Nothing in Phases 8–11 is
-implemented yet — every status cell in all four phases remains ⬜.
+mapping table and batch-level scope-decision summary.
 
-**Phase 8 — GST (GST Registers #55, GSTR-1 #56, GSTR-3B #57, HSN Summary #58) is next**
-to implement, awaiting explicit instruction before starting per `ai-workflow-rules.md`'s
-one-feature-at-a-time rule — also still pending: merging `feature/receipt-voucher` (which
-now carries Receipt/Contra/Journal Voucher) into `main`.
+➡ **`feature/receipt-voucher` (Receipt/Contra/Journal Voucher, closing Phase 7) was
+merged into `main` 2026-09-11** before Phase 8 began, per `ai-workflow-rules.md`'s
+one-branch-at-a-time rule — see the Phase 7 pointer above. **GST Registers (#55) is now
+implemented** (see the Phase 8 section above for the full record), on its own
+`feature/gst-registers` branch off the updated `main`, not yet merged. **GSTR-1 (#56) is
+next** to implement, awaiting explicit instruction — GSTR-3B (#57) and HSN Summary (#58)
+remain after it. Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
+only); every status cell there remains ⬜.
 
 Serial Number Tracking (`feature/serial-number-tracking`) — the second of the two
 genuinely new engine-adjacent schema additions Phase 5 reserved, the structural mirror of
