@@ -494,7 +494,8 @@ GST-consuming service's convention. Security review otherwise clean (explicit PA
 cross-tenant isolation, IDOR, authorization, information disclosure). Re-verified:
 1477/1477 tests, `tsc`/`eslint`/`build` all pass.
 
-**GSTR-1 (#56) implemented 2026-09-11** on branch `feature/gstr-1`, not yet merged.
+**GSTR-1 (#56) implemented 2026-09-11** on branch `feature/gstr-1`, merged into `main`
+(`--no-ff`, no conflicts, checks re-verified green — `6f9274c`).
 Classifies `getOutwardSupplyLines` into Table 4 (B2B), 5/7 (B2C Large/Small), 8
 (Nil-rated), and 9B/9C (Credit/Debit Notes registered/unregistered) — pure in-memory
 grouping, no new GST arithmetic. New `GstFilingRecord` model (shared, unmodified, by the
@@ -684,9 +685,10 @@ merged into `main` 2026-09-11** before Phase 8 began, per `ai-workflow-rules.md`
 one-branch-at-a-time rule — see the Phase 7 pointer above. **GST Registers (#55) is
 implemented, reviewed, and merged into `main`** (see the Phase 8 section above for the
 full record) — `feature/gst-registers` merged `--no-ff`, no conflicts, checks
-re-verified green (`ac10ffa`). **GSTR-1 (#56) is implemented and reviewed, on
-`feature/gstr-1`, not yet merged.** **GSTR-3B (#57) is next** to implement once that
-branch merges, awaiting explicit instruction — HSN Summary (#58) remains after it.
+re-verified green (`ac10ffa`). **GSTR-1 (#56) is implemented, reviewed, and merged into
+`main`** (`feature/gstr-1` merged `--no-ff`, no conflicts, checks re-verified green —
+`6f9274c`). **GSTR-3B (#57) is next** to implement, awaiting explicit instruction — HSN
+Summary (#58) remains after it.
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
 

@@ -102,7 +102,8 @@ Mapping so far:
 ## Current Phase
 
 - **Feature-spec 58 — GSTR-1 implemented 2026-09-11** on branch `feature/gstr-1`,
-  branched from the updated `main` (not yet merged back). Second item of Phase 8 — GST
+  branched from the updated `main`, later merged back (`--no-ff`, no conflicts,
+  `6f9274c`) after code + security review. Second item of Phase 8 — GST
   (#56). Classifies `getOutwardSupplyLines` (spec 57) into the in-scope statutory
   tables: Table 4 (B2B, invoice-wise, GSTIN present), Table 5 (B2C Large, invoice-wise,
   unregistered inter-state invoices whose full value exceeds ₹2,50,000 —
@@ -1427,16 +1428,13 @@ Mapping so far:
 - **2026-09-11 — Phase 7 (Accounting) is complete and merged into `main`**
   (Payment #52, Receipt #53, Contra #54, Journal Voucher #55 —
   `feature/receipt-voucher` merged, checks re-verified green). **Phase 8 (GST)
-  is under way: GST Registers (#55/spec 57) is implemented, reviewed, and
-  merged into `main`** (`feature/gst-registers`, `--no-ff` merge, no
-  conflicts, checks re-verified green — `ac10ffa`). **GSTR-1 (#56/spec 58) is
-  implemented, reviewed (code + security, all real findings fixed), on
-  `feature/gstr-1`** (not yet merged into `main`). Per `phase-tracker.md`,
-  **GSTR-3B (#57/spec 59) is next** after this branch merges; HSN Summary
-  (#58/spec 60) remains after that. Per `ai-workflow-rules.md`, only one
-  feature/subsystem should be worked on at a time — awaiting explicit
-  instruction before starting GSTR-3B, and before merging `feature/gstr-1`
-  into `main`.
+  is under way: GST Registers (#55/spec 57) and GSTR-1 (#56/spec 58) are both
+  implemented, reviewed, and merged into `main`** (`feature/gst-registers`
+  `ac10ffa`, `feature/gstr-1` `6f9274c` — both `--no-ff` merges, no
+  conflicts, checks re-verified green). Per `phase-tracker.md`, **GSTR-3B
+  (#57/spec 59) is next**; HSN Summary (#58/spec 60) remains after that. Per
+  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a
+  time — awaiting explicit instruction before starting GSTR-3B.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
