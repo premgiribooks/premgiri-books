@@ -7,6 +7,8 @@ import type { ProductWithRelations } from "@/types/product";
 interface ProductEditFormProps {
   product: ProductWithRelations;
   options: ProductFormOptions;
+  /** Disables the batch-tracking toggle once the product has any recorded movement (50-batch-tracking.md). */
+  hasStockTransactions: boolean;
 }
 
 /**
@@ -16,6 +18,6 @@ interface ProductEditFormProps {
  * day edit diverges (once the Inventory Engine #30 makes unitId/productType
  * immutable for products with movements).
  */
-export function ProductEditForm({ product, options }: ProductEditFormProps) {
-  return <ProductForm product={product} options={options} />;
+export function ProductEditForm({ product, options, hasStockTransactions }: ProductEditFormProps) {
+  return <ProductForm product={product} options={options} hasStockTransactions={hasStockTransactions} />;
 }

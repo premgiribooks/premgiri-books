@@ -32,7 +32,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
     notFound();
   }
 
-  const [isAdmin, categories, brands, units, hsnCodes, gstRates, warehouses, marginProfiles] =
+  const [isAdmin, categories, brands, units, hsnCodes, gstRates, warehouses, marginProfiles, hasStockTransactions] =
     await Promise.all([
       isCurrentUserCompanyAdmin(),
       categoryService.listSelectableCategories(),
@@ -42,6 +42,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
       gstRateService.listSelectableGstRates(),
       warehouseService.listSelectableWarehouses(),
       marginProfileService.listSelectableMarginProfiles(),
+      productService.hasStockTransactions(id),
     ]);
 
   // Merges the product's current references into the pickers even if since
@@ -64,7 +65,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
           </p>
         </div>
 
-        <ProductEditForm product={product} options={options} />
+        <ProductEditForm product={product} options={options} hasStockTransactions={hasStockTransactions} />
       </div>
     </AppShell>
   );

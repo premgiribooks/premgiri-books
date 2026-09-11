@@ -36,9 +36,13 @@ interface ProductFormProps {
    * current references even if since deactivated (see
    * buildProductFormOptions). */
   options: ProductFormOptions;
+  /** True once the product has any recorded StockTransaction — disables the
+   * batch-tracking toggle (50-batch-tracking.md). Always false on create;
+   * the edit page supplies the real value. */
+  hasStockTransactions?: boolean;
 }
 
-export function ProductForm({ product, options }: ProductFormProps) {
+export function ProductForm({ product, options, hasStockTransactions = false }: ProductFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const isEdit = product !== undefined;
@@ -61,6 +65,7 @@ export function ProductForm({ product, options }: ProductFormProps) {
       sellingPrice: product?.sellingPrice ?? undefined,
       purchasePrice: product?.purchasePrice ?? undefined,
       minStockLevel: product?.minStockLevel ?? undefined,
+      isBatchTracked: product?.isBatchTracked ?? false,
       description: product?.description ?? "",
     },
   });
@@ -142,6 +147,8 @@ export function ProductForm({ product, options }: ProductFormProps) {
           control={form.control}
           warehouses={options.warehouses}
           unitDecimalPlaces={selectedUnit?.decimalPlaces ?? 0}
+          productType={productType}
+          hasStockTransactions={hasStockTransactions}
         />
 
         <div className="flex justify-end gap-2">

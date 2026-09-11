@@ -97,6 +97,33 @@ export function pairKey(productId: string, warehouseId: string): string {
   return `${productId}::${warehouseId}`;
 }
 
+/**
+ * `batchId` is required on a movement line when the product is
+ * `isBatchTracked`, and forbidden (must be null/absent) otherwise
+ * (50-batch-tracking.md's Business Rules) — checked against the loaded
+ * product's own flag, never the client's claim about it. Mirrors
+ * `isDirectionAllowed`/`directionErrorMessage`'s predicate+message split:
+ * the throw lives in the engine, this is the pure rule.
+ */
+export function batchRequirementError(
+  productName: string,
+  isBatchTracked: boolean,
+  batchId: string | undefined
+): string | null {
+  if (isBatchTracked && !batchId) {
+    return `Product "${productName}" is batch-tracked — select a batch for this movement.`;
+  }
+  if (!isBatchTracked && batchId) {
+    return `Product "${productName}" is not batch-tracked — a batch cannot be attached to its movements.`;
+  }
+  return null;
+}
+
+/** Stable key for a (product, warehouse, batch) triple — the batch-scoped analog of pairKey. */
+export function batchKey(productId: string, warehouseId: string, batchId: string): string {
+  return `${productId}::${warehouseId}::${batchId}::batch`;
+}
+
 export interface AggregatedDemand {
   productId: string;
   warehouseId: string;
@@ -130,6 +157,49 @@ export function aggregateOutDemand(lines: readonly DemandLine[]): AggregatedDema
       existing.quantity += line.quantity;
     } else {
       byKey.set(key, { productId: line.productId, warehouseId: line.warehouseId, quantity: line.quantity });
+    }
+  }
+  return [...byKey.values()];
+}
+
+export interface AggregatedBatchDemand {
+  productId: string;
+  warehouseId: string;
+  batchId: string;
+  quantity: number;
+}
+
+interface BatchDemandLine {
+  productId: string;
+  warehouseId: string;
+  batchId?: string;
+  direction: StockDirection;
+  quantity: number;
+}
+
+/**
+ * Batch-scoped analog of `aggregateOutDemand` — sums OUT quantities per
+ * (product, warehouse, batch) triple, ignoring IN lines (conservative by
+ * design, same reasoning as the product-level aggregation) and lines with no
+ * `batchId` (nothing to scope them to).
+ */
+export function aggregateBatchOutDemand(lines: readonly BatchDemandLine[]): AggregatedBatchDemand[] {
+  const byKey = new Map<string, AggregatedBatchDemand>();
+  for (const line of lines) {
+    if (line.direction !== "OUT" || !line.batchId) {
+      continue;
+    }
+    const key = batchKey(line.productId, line.warehouseId, line.batchId);
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.quantity += line.quantity;
+    } else {
+      byKey.set(key, {
+        productId: line.productId,
+        warehouseId: line.warehouseId,
+        batchId: line.batchId,
+        quantity: line.quantity,
+      });
     }
   }
   return [...byKey.values()];
@@ -171,6 +241,7 @@ export const stockMovementLineSchema = z
     transactionDate: z.string().trim().refine(isValidCalendarDate, "Enter a valid transaction date"),
     referenceType: z.string().trim().max(50, "Reference type must be at most 50 characters").optional(),
     referenceId: z.uuid("Reference id must be a valid id").optional(),
+    batchId: z.uuid("Select a valid batch").optional(),
     narration: z.string().trim().max(500, "Narration must be at most 500 characters").optional(),
   })
   .refine((data) => Boolean(data.referenceType) === Boolean(data.referenceId), {
@@ -189,6 +260,7 @@ export const transferStockInputSchema = z
     destinationWarehouseId: z.uuid("Select a valid destination warehouse"),
     quantity: z.number("Quantity must be a number").positive("Quantity must be greater than zero"),
     transactionDate: z.string().trim().refine(isValidCalendarDate, "Enter a valid transaction date"),
+    batchId: z.uuid("Select a valid batch").optional(),
     narration: z.string().trim().max(500, "Narration must be at most 500 characters").optional(),
   })
   .refine((data) => data.sourceWarehouseId !== data.destinationWarehouseId, {

@@ -88,24 +88,38 @@ const DESCRIPTION_SCHEMA = z
   .transform((value) => (value === "" ? undefined : value))
   .optional();
 
-export const createProductSchema = z.object({
-  name: NAME_SCHEMA,
-  productCode: PRODUCT_CODE_SCHEMA,
-  barcode: BARCODE_SCHEMA,
-  productType: PRODUCT_TYPE_SCHEMA,
-  categoryId: OPTIONAL_REFERENCE_SCHEMA("category"),
-  brandId: OPTIONAL_REFERENCE_SCHEMA("brand"),
-  unitId: UNIT_ID_SCHEMA,
-  hsnCodeId: OPTIONAL_REFERENCE_SCHEMA("HSN/SAC code"),
-  gstRateId: OPTIONAL_REFERENCE_SCHEMA("GST rate"),
-  defaultWarehouseId: OPTIONAL_REFERENCE_SCHEMA("warehouse"),
-  marginProfileId: OPTIONAL_REFERENCE_SCHEMA("margin profile"),
-  mrp: PRICE_SCHEMA("MRP"),
-  sellingPrice: PRICE_SCHEMA("Selling price"),
-  purchasePrice: PRICE_SCHEMA("Purchase price"),
-  minStockLevel: MIN_STOCK_LEVEL_SCHEMA,
-  description: DESCRIPTION_SCHEMA,
-});
+export const createProductSchema = z
+  .object({
+    name: NAME_SCHEMA,
+    productCode: PRODUCT_CODE_SCHEMA,
+    barcode: BARCODE_SCHEMA,
+    productType: PRODUCT_TYPE_SCHEMA,
+    categoryId: OPTIONAL_REFERENCE_SCHEMA("category"),
+    brandId: OPTIONAL_REFERENCE_SCHEMA("brand"),
+    unitId: UNIT_ID_SCHEMA,
+    hsnCodeId: OPTIONAL_REFERENCE_SCHEMA("HSN/SAC code"),
+    gstRateId: OPTIONAL_REFERENCE_SCHEMA("GST rate"),
+    defaultWarehouseId: OPTIONAL_REFERENCE_SCHEMA("warehouse"),
+    marginProfileId: OPTIONAL_REFERENCE_SCHEMA("margin profile"),
+    mrp: PRICE_SCHEMA("MRP"),
+    sellingPrice: PRICE_SCHEMA("Selling price"),
+    purchasePrice: PRICE_SCHEMA("Purchase price"),
+    minStockLevel: MIN_STOCK_LEVEL_SCHEMA,
+    // Opt-in, TRADING-only (50-batch-tracking.md's Business Rules) — the
+    // server-side immutability-once-moved rule lives in
+    // product-repository.ts, not here (this schema only guards shape).
+    // Plain required boolean, no schema-level default — mirrors
+    // company-schema.ts's allowNegativeStock; every caller (the form's
+    // defaultValues) always supplies a value, and this avoids the
+    // z.input/z.output split a Zod `.default()` introduces for
+    // @hookform/resolvers/zod's Resolver typing.
+    isBatchTracked: z.boolean(),
+    description: DESCRIPTION_SCHEMA,
+  })
+  .refine((data) => !data.isBatchTracked || data.productType === "TRADING", {
+    message: "Only a trading product can be batch-tracked.",
+    path: ["isBatchTracked"],
+  });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 

@@ -1,8 +1,8 @@
 # 54 - Contra Voucher
 
 > Feature-spec file number 54 (spec-file numbers are sequential and never reused). This
-> feature is `context/Phases/phase-tracker.md`'s **Phase 6 — Accounting** item **#52
-> Contra Voucher** — the third of the four manual voucher screens (#50–#53). Depends on
+> feature is `context/Phases/phase-tracker.md`'s **Phase 7 — Accounting** item **#53
+> Contra Voucher** — the third of the four manual voucher screens (#51–#54). Depends on
 > the Voucher Engine (feature-spec 31, implemented) and the Document Number Engine
 > (feature-spec 34, implemented). **Read `52-payment-voucher.md` first in full** — this
 > spec records only what differs, and is the *most* restrictive of the four.
@@ -198,5 +198,5 @@ Verify
 - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and `next build` all
   pass; `/accounting/contra-vouchers*` appears in the build route table.
 
-Feature-spec 54 (this spec) is `context/Phases/phase-tracker.md`'s Phase 6 item #52.
-Feature-spec 55 (Journal Voucher, tracker #53) is next and last.
+Feature-spec 54 (this spec) is `context/Phases/phase-tracker.md`'s Phase 7 item #53.
+Feature-spec 55 (Journal Voucher, tracker #54) is next and last.

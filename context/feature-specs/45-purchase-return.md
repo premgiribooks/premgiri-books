@@ -312,4 +312,5 @@ Feature-spec 45 (this spec) is `context/Phases/phase-tracker.md`'s Phase 4 item 
 **the last item in Phase 4 (Purchase Management)**. Per `context/Phases/phase-
 tracker.md`, Phase 5 (Inventory — Opening Stock, Stock Adjustment, Stock Transfer,
 Physical Verification, Batch Tracking, Serial Number Tracking, #44–#49) is next, followed
-by Phase 6 (Accounting — the four manual voucher screens, #50–#53).
+by Phase 6 (Product Detail Page, #50 — inserted 2026-09-11 ahead of Phase 5's own #49) and
+then Phase 7 (Accounting — the four manual voucher screens, #51–#54).

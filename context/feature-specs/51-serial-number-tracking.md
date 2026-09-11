@@ -6,6 +6,13 @@
 > `50-batch-tracking.md` first in full — this spec is its structural mirror for
 > one-of-a-kind (serialized) products instead of lot-batched ones, reuses its Retrofit
 > Decision verbatim, and records only what genuinely differs.
+>
+> **Also depends on Product Detail Page (feature-spec 56, `context/Phases/phase-tracker.md`
+> Phase 6, tracker #50)**, inserted 2026-09-11 specifically because this spec's own UI
+> section below assumes "the existing Product detail view" — which does not exist yet.
+> Implement spec 56 first; this spec's Serial Numbers tab then wires into the page it
+> builds, the same way Batch Tracking's deferred Batches tab (see spec 50's UI section)
+> finally lands there too.
 
 ## Goal
 
@@ -320,4 +327,7 @@ Verify
 
 Feature-spec 51 (this spec) is `context/Phases/phase-tracker.md`'s Phase 5 item #49 —
 **the last item in Phase 5 (Inventory)**. Per `context/Phases/phase-tracker.md`, Phase 6
-(Accounting — the four manual voucher screens, #50–#53) is next.
+(Product Detail Page, feature-spec 56, #50) is implemented first — ahead of this spec,
+by explicit exception — so this spec's Serial Numbers tab has a page to land in; Phase 7
+(Accounting — the four manual voucher screens, #51–#54) follows after this spec closes
+Phase 5.

@@ -18,6 +18,7 @@ export interface RecordedStockTransaction {
   referenceType: string | null;
   referenceId: string | null;
   transferGroupId: string | null;
+  batchId: string | null;
   narration: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +45,8 @@ export interface StockLedgerFilters {
   warehouseId?: string;
   from?: Date;
   to?: Date;
+  /** Batch-scoped ledger filter (50-batch-tracking.md) — used internally by getBatchLedger. */
+  batchId?: string;
 }
 
 export interface StockLedgerLine {
@@ -56,6 +59,7 @@ export interface StockLedgerLine {
   warehouseId: string;
   referenceType: string | null;
   referenceId: string | null;
+  batchId: string | null;
   narration: string | null;
   /** Running balance immediately after this line (Sigma IN - Sigma OUT, up to and including this row). */
   runningBalance: number;
@@ -63,6 +67,32 @@ export interface StockLedgerLine {
 
 export interface StockLedgerResult {
   productId: string;
+  lines: StockLedgerLine[];
+  closingBalance: number;
+}
+
+/**
+ * Batch-scoped analogs of CurrentStockFilters/CurrentStockRow
+ * (50-batch-tracking.md) — batch quantity is always Sigma IN - Sigma OUT of
+ * StockTransaction rows scoped to batchId, never a stored column, preserving
+ * 32-inventory-engine.md's aggregation-only invariant one dimension further.
+ */
+export interface BatchStockFilters {
+  productId?: string;
+  warehouseId?: string;
+  batchId?: string;
+}
+
+export interface BatchStockRow {
+  productId: string;
+  warehouseId: string;
+  batchId: string;
+  quantity: number;
+}
+
+export interface BatchLedgerResult {
+  productId: string;
+  batchId: string;
   lines: StockLedgerLine[];
   closingBalance: number;
 }
