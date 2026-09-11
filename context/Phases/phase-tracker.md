@@ -248,6 +248,34 @@ Purchase Invoice's own posting). **This closes Phase 4 — Purchase Management i
 
 # Phase 5 — Inventory
 
+Feature-specs for all six items were drafted 2026-09-11 (documentation only, not
+implemented), on a dedicated `docs/phase-5-6-feature-specs` branch — spec-file numbers
+are sequential and diverge from tracker numbers as usual:
+
+| Tracker # | Feature                | Spec file                                              |
+| --------- | ----------------------- | ------------------------------------------------------ |
+| 44        | Opening Stock          | `context/feature-specs/46-opening-stock.md`             |
+| 45        | Stock Adjustment       | `context/feature-specs/47-stock-adjustment.md`          |
+| 46        | Stock Transfer         | `context/feature-specs/48-stock-transfer.md`            |
+| 47        | Physical Verification  | `context/feature-specs/49-physical-verification.md`     |
+| 48        | Batch Tracking         | `context/feature-specs/50-batch-tracking.md`            |
+| 49        | Serial Number Tracking | `context/feature-specs/51-serial-number-tracking.md`    |
+
+Items #44–#47 are thin document/UI layers over the already-implemented Inventory Engine
+(feature-spec 32) — no engine changes. #48/#49 are the two genuinely new schema
+additions the Inventory Engine spec explicitly deferred to this phase (its own Do Not
+section excludes batch/serial tracking): both extend only `StockTransaction` with an
+optional `batchId`/`serialId` rather than retrofitting every existing document's item
+table — a recorded trade-off (see each spec's Retrofit Decision) that leaves wiring a
+batch/serial picker into Purchase Invoice, Sales Invoice, Purchase Return, Sales Return,
+and #44–#47's own line editors as a named follow-up per document, not automatic. #48/#49
+are also mutually exclusive per product (`isBatchTracked` / `isSerialTracked` cannot
+both be true). Two open sanity-check flags from the drafting pass, not yet resolved by a
+human: (a) whether Physical Verification (#49's spec, item #47) should reserve a new
+`DocumentType.PHYSICAL_VERIFICATION` value now versus staying unreserved like Opening
+Stock; (b) whether the batch/serial "extend `StockTransaction` only" trade-off is
+acceptable given the deferred per-document retrofit cost it implies.
+
 | #   | Feature                | Depends On         | Status |
 | --- | ---------------------- | ------------------ | ------ |
 | 44  | Opening Stock          | Products           | ⬜     |
@@ -260,6 +288,29 @@ Purchase Invoice's own posting). **This closes Phase 4 — Purchase Management i
 ---
 
 # Phase 6 — Accounting
+
+Feature-specs for all four items were drafted 2026-09-11 (documentation only, not
+implemented), on the same `docs/phase-5-6-feature-specs` branch:
+
+| Tracker # | Feature         | Spec file                                     |
+| --------- | --------------- | ---------------------------------------------- |
+| 50        | Payment Voucher | `context/feature-specs/52-payment-voucher.md`  |
+| 51        | Receipt Voucher | `context/feature-specs/53-receipt-voucher.md`  |
+| 52        | Contra Voucher  | `context/feature-specs/54-contra-voucher.md`   |
+| 53        | Journal Voucher | `context/feature-specs/55-journal-voucher.md`  |
+
+All four are thin permission-gated UI/validation layers directly over the
+already-implemented Voucher Engine (feature-spec 31) — no engine changes, and
+deliberately **no new Prisma model for any of the four** (`Voucher`/`VoucherEntry`
+already carry everything a manual voucher needs; unlike Sales/Purchase Invoice, none of
+these four have document-specific data a generic voucher shape can't hold). All four
+share one `src/modules/manual-vouchers/` module and one parameterized `ManualVoucherForm`
+rather than four near-duplicate modules/forms. Entry-shape restrictiveness, most to
+least: Contra (exactly 1 Debit + 1 Credit, both Cash/Bank-restricted, source ≠
+destination) → Payment/Receipt (one side fixed-and-restricted to Cash/Bank, the other
+free, 1+ lines) → Journal (fully freeform, balance-only) — and Journal Voucher alone
+additionally gates both Post and Cancel behind `approve` (not just Cancel, as the other
+three do), since it has no structural safeguard against an arbitrary entry.
 
 | #   | Feature         | Depends On     | Status |
 | --- | --------------- | -------------- | ------ |
