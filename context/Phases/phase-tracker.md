@@ -479,6 +479,21 @@ sort, 8 service — permission gate, totals, filtering, pagination, 7 schema val
 same 2 pre-existing unrelated warnings), `npx vitest run`, and `next build` all pass;
 `/gst` and `/gst/registers` both appear in the build route table.
 
+**Post-implementation code review + security review found 1 HIGH, 1 MEDIUM, 2 LOW
+(code) and 1 LOW (security, folded into the same fix) — all fixed**, no CRITICAL: (1)
+pagination was computed end-to-end but had no rendered Previous/Next controls, silently
+truncating registers past 50 rows — added `GstRegisterPagination`; (2) the party filter
+had no Select control despite full schema/service/test support — added one, backed by a
+new `gstRegisterService.listPartyOptions()` that deliberately queries Customer/Supplier
+directly (gated on `gst`/`view`) rather than the `masters`-gated
+`customerService`/`supplierService` methods, since an Accountant role lacks
+`masters:view`; (3) `/gst/registers`'s filter parsing now delegates to
+`gstReportFiltersSchema` instead of duplicating it; (4) the service now imports the
+`gstReportEngine` barrel instead of the raw query file, matching every other
+GST-consuming service's convention. Security review otherwise clean (explicit PASS on
+cross-tenant isolation, IDOR, authorization, information disclosure). Re-verified:
+1477/1477 tests, `tsc`/`eslint`/`build` all pass.
+
 ---
 
 # Phase 9 — Employee Management

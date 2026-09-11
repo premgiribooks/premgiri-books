@@ -144,6 +144,54 @@ Mapping so far:
   unrelated warnings), `npx vitest run`, and `next build` all pass; `/gst` and
   `/gst/registers` both appear in the build route table.
 
+  **Post-implementation code review + security review** (agents run in parallel,
+  mirroring every prior phase's practice) found 0 CRITICAL, 1 HIGH, 1 MEDIUM, and 2 LOW
+  issues in the code review, and 0 CRITICAL/HIGH/MEDIUM plus 1 LOW in the security
+  review — **all four code-review findings fixed**, the one security LOW folded into
+  the same fix pass:
+  - **HIGH, fixed**: pagination was fully wired through the service and page
+    (`page`/`pageSize`/`totalCount` all computed correctly) but no UI ever rendered
+    Previous/Next controls, silently truncating any register past 50 rows with no way
+    to reach further pages. Added `GstRegisterPagination`
+    (`src/modules/gst/components/gst-register-pagination.tsx`).
+  - **MEDIUM, fixed**: the optional party filter was validated, service-filtered, and
+    unit-tested, but `GstReportFilterBar` never rendered a party Select, so `partyId`
+    could only be set by hand-editing the URL. Added a party Select populated by a new
+    `gstRegisterService.listPartyOptions(registerType)` — deliberately queries
+    `Customer`/`Supplier` directly (gated on `gst`/`view`) rather than routing through
+    `customerService.listSelectableCustomers()`/`supplierService.listSelectableSuppliers()`
+    (both gated on `masters`/`view`), since an Accountant role has `gst:view` but not
+    `masters:view` per `DEFAULT_ROLE_PERMISSIONS` — reusing those services would have
+    403'd this module's primary user. Mirrors `physical-verification-service.ts`'s own
+    `listFormOptions()` precedent of querying via its own module, not a sibling
+    service, for exactly this reason.
+  - **LOW, fixed**: `/gst/registers`'s `parseFilters` duplicated (and diverged from)
+    `gstReportFiltersSchema`'s validation instead of reusing it. Now coerces raw
+    URL-string values into a plain object and delegates every actual rule (date format,
+    uuid format, `to >= from`, the 200-row `pageSize` cap) to
+    `gstReportFiltersSchema.safeParse`.
+  - **LOW, fixed**: `gst-register-service.ts` imported `gst-report-queries.ts` directly
+    instead of the `gstReportEngine` barrel `gst-engine.ts` re-exports — every other
+    GST-consuming service (`sales-invoice-service.ts`, `purchase-invoice-service.ts`,
+    etc.) imports the `gstEngine` barrel, not the calculation file directly. Now
+    consistent.
+  - **Security LOW, accepted as-is (folded into the schema-reuse fix above)**: the
+    reviewer noted the same `parseFilters`-vs-schema divergence as an input-validation
+    consistency gap, explicitly confirming it had no exploit path (results are filtered
+    in-memory against an already company-scoped query result, never interpolated into a
+    Prisma `where` clause) — resolved as a side effect of the LOW fix directly above,
+    not a separate change.
+  - **Security review otherwise clean**: explicit PASS on cross-tenant isolation
+    (`companyId` always session-derived via `getCurrentCompanyUser()`, never client
+    input, verified by the engine's own cross-company test), IDOR via `partyId` (filter
+    only ever narrows an already tenant-scoped result set), authorization (`gst`/`view`
+    enforced at the service and redundantly at the page, no bypass path), and
+    information disclosure (generic error envelope via `toActionErrorMessage`, no
+    tenant-existence signal).
+  - Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same
+    2 pre-existing unrelated warnings), `npx vitest run` (1477/1477, 3 new
+    `listPartyOptions` service tests added), and `next build` all pass.
+
 - **Feature-specs 57–81 (Phases 8–11, 25 files) drafted 2026-09-11** —
   documentation only, not implemented, per explicit user request. Covers
   Phase 8 — GST (GST Registers #55/spec 57, GSTR-1 #56/spec 58, GSTR-3B
