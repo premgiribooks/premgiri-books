@@ -1,0 +1,242 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { numericFieldWidth } from "@/lib/utils";
+import { createReceiptVoucherAction } from "@/modules/manual-vouchers/actions/receipt-voucher-actions";
+import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
+import {
+  createReceiptVoucherSchema,
+  type CreateReceiptVoucherInput,
+} from "@/modules/manual-vouchers/validation/receipt-voucher-schema";
+import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
+
+interface ReceiptVoucherFormProps {
+  ledgerOptions: ManualVoucherLedgerOption[];
+}
+
+function toNumberOrZero(value: number): number {
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
+  return ledgers.map((ledger) => ({ id: ledger.id, label: ledger.name, isActive: true }));
+}
+
+/**
+ * Create form for a Receipt Voucher (53-receipt-voucher.md's UI section) —
+ * the mirror of `PaymentVoucherForm` with the entry direction reversed: one
+ * Debit ledger picker restricted to the Cash-in-Hand-or-bank-linked subset,
+ * one or more Credit lines against any ledger, narration. Posting (this
+ * screen has no separate Draft/Post step — Create *is* Post, per spec)
+ * computes nothing client-side beyond a running total shown for the user's
+ * own convenience; the server independently computes and validates the
+ * actual balanced entry set.
+ */
+export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  const cashOrBankOptions = React.useMemo(
+    () => toOptions(ledgerOptions.filter((ledger) => ledger.isCashOrBank)),
+    [ledgerOptions]
+  );
+  const allLedgerOptions = React.useMemo(() => toOptions(ledgerOptions), [ledgerOptions]);
+
+  const form = useForm<CreateReceiptVoucherInput>({
+    resolver: zodResolver(createReceiptVoucherSchema),
+    defaultValues: {
+      voucherDate: new Date().toISOString().slice(0, 10),
+      narration: "",
+      debitLedgerId: "",
+      creditLines: [{ ledgerId: "", amount: 0 }],
+    },
+  });
+  const { control } = form;
+  const { fields, append, remove } = useFieldArray({ control, name: "creditLines" });
+  const creditLines = useWatch({ control, name: "creditLines" });
+  const totalAmount = (creditLines ?? []).reduce((sum, line) => sum + (line?.amount || 0), 0);
+
+  async function handleSubmit(data: CreateReceiptVoucherInput) {
+    setIsSubmitting(true);
+    try {
+      const result = await createReceiptVoucherAction(data);
+      if (!result.success || !result.data) {
+        toast.error(result.error ?? "Failed to create receipt voucher.");
+        return;
+      }
+      toast.success(`Receipt voucher ${result.data.voucherNumber} posted successfully.`);
+      router.push(`/accounting/receipt-vouchers/${result.data.id}`);
+      router.refresh();
+    } catch {
+      toast.error("Failed to create receipt voucher.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="flex max-w-3xl flex-col gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <FormField
+            control={control}
+            name="voucherDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Voucher Date *</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name="debitLedgerId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Received In (Cash / Bank) *</FormLabel>
+                <FormControl>
+                  <ProductOptionSelector
+                    options={cashOrBankOptions}
+                    value={field.value || undefined}
+                    onChange={(value) => field.onChange(value ?? "")}
+                    allowNone={false}
+                    placeholder="Select the Cash/Bank ledger"
+                    emptyLabel="No Cash-in-Hand or bank ledger found"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Received From</h2>
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ledger</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead className="text-right">Remove</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {fields.map((lineField, index) => (
+                  <TableRow key={lineField.id}>
+                    <TableCell className="min-w-56">
+                      <FormField
+                        control={control}
+                        name={`creditLines.${index}.ledgerId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <ProductOptionSelector
+                                options={allLedgerOptions}
+                                value={field.value || undefined}
+                                onChange={(value) => field.onChange(value ?? "")}
+                                allowNone={false}
+                                placeholder="Select a ledger"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <FormField
+                        control={control}
+                        name={`creditLines.${index}.amount`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min={0.01}
+                                step="0.01"
+                                style={{ width: numericFieldWidth(field.value) }}
+                                {...field}
+                                onChange={(event) => field.onChange(toNumberOrZero(event.target.valueAsNumber))}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Remove line"
+                        disabled={fields.length <= 1}
+                        onClick={() => remove(index)}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ ledgerId: "", amount: 0 })}>
+              <Plus size={16} />
+              Add Line
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Total: <span className="font-financial text-foreground">{totalAmount.toFixed(2)}</span>
+            </p>
+          </div>
+        </div>
+
+        <FormField
+          control={control}
+          name="narration"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Narration</FormLabel>
+              <FormControl>
+                <Textarea {...field} value={field.value ?? ""} rows={3} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push("/accounting/receipt-vouchers")}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Posting…" : "Post Receipt Voucher"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}

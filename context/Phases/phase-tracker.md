@@ -352,9 +352,9 @@ three do), since it has no structural safeguard against an arbitrary entry.
 | #   | Feature         | Depends On     | Status |
 | --- | --------------- | -------------- | ------ |
 | 51  | Payment Voucher | Voucher Engine | ✅     |
-| 52  | Receipt Voucher | Voucher Engine | ⬜     |
-| 53  | Contra Voucher  | Voucher Engine | ⬜     |
-| 54  | Journal Voucher | Voucher Engine | ⬜     |
+| 52  | Receipt Voucher | Voucher Engine | ✅     |
+| 53  | Contra Voucher  | Voucher Engine | ✅     |
+| 54  | Journal Voucher | Voucher Engine | ✅     |
 
 Payment Voucher (#51, `feature/payment-voucher`) implemented 2026-09-11. UI + validation
 only, no new Prisma model, per the spec's Goal (a Payment Voucher *is* a `Voucher`). New
@@ -384,9 +384,67 @@ immutable once posted), a new "Payment Vouchers" card on the `/accounting` hub, 
 review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM findings.
 Merged into `main` and pushed 2026-09-11** (commit `923c137`).
 
+Receipt Voucher (#52, `feature/receipt-voucher`, spec file `53-receipt-voucher.md`)
+implemented 2026-09-11 — the direct mirror of Payment Voucher with the ledger
+direction reversed (one Debit entry restricted to Cash/Bank, one-or-more free Credit
+lines). Reuses `paymentVoucherService.listLedgerOptions()` rather than duplicating it.
+Committed (`798ebdd`), merged into `main`. See `context/progress-tracker.md`'s Current
+Phase entry for the full implementation record and browser-verification walkthrough.
+
+Contra Voucher (#53, `feature/receipt-voucher`, spec file `54-contra-voucher.md`)
+implemented 2026-09-11 — the strictest of the four: exactly one Debit + one Credit
+entry, both sides restricted to the Cash-in-Hand-or-BankAccount-linked ledger class via
+`assertLedgersAreCashOrBank` applied to both ledger ids at once, source ≠ destination
+enforced by the Zod schema's object-level `.refine`. No add-line control in the form —
+the entry count is fixed. Reuses `paymentVoucherService.listLedgerOptions()`. **Code
+review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM findings.**
+`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1415/1415, +23), and
+`next build` all pass; `/accounting/contra-vouchers*` appears in the build route table.
+Not yet browser-verified (no browser tool available this session). Committed (`662aed3`)
+— see `context/progress-tracker.md`'s Current Phase entry for the full implementation
+record.
+
+Journal Voucher (#54, `feature/receipt-voucher`, spec file `55-journal-voucher.md`)
+implemented 2026-09-11 — **the fourth and last of the four, closing out Phase 7
+(Accounting) in full.** The least restrictive of the four: a fully freeform entry table
+(any combination of Debit/Credit lines against any active ledger, including Cash/Bank),
+no ledger-class restriction at all — `postJournalVoucher` passes the given `entries`
+array straight to `voucherEngine.postVoucher` with no client-amount computation and no
+`assertLedgersAreCashOrBank` call. The one deliberate divergence from specs 51–53: both
+`postJournalVoucher` and `cancelJournalVoucher` require the `approve` permission action,
+not `create` — enforced in the service and at every page-level gate (list "New" button,
+`/new` page, detail page's Cancel button), since an unrestricted entry against any ledger
+has no structural safeguard otherwise (the same posture Purchase/Sales Invoice takes
+toward their own tax-override mechanism). Reuses `paymentVoucherService.listLedgerOptions()`.
+**Code review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM
+findings** — both confirmed `approve` actually gates Post and Cancel everywhere it needs
+to, no ledger-class restriction was introduced, the shared engine-level
+`assertLedgersActiveAndOwned` check still protects this screen regardless, and the
+omission of the Cash/Bank check is intentional per spec, not a regression. `npx tsc
+--noEmit`, `npx eslint src prisma`, `npx vitest run` (1444/1444, +29), and `next build`
+all pass; `/accounting/journal-vouchers*` appears in the build route table. Not yet
+browser-verified (no browser tool available this session). Committed (`68042e8`) — see
+`context/progress-tracker.md`'s Current Phase entry for the full implementation record.
+
 ---
 
 # Phase 8 — GST
+
+Feature-specs for all four items were drafted 2026-09-11 (documentation only, not
+implemented), continuing the same batch-drafting-without-implementation precedent as
+Phases 5/6/7. Spec 57 (GST Registers) establishes a shared read-only GST aggregation
+primitive (`getOutwardSupplyLines`/`getInwardSupplyLines`, extending `src/engines/gst/`
+rather than opening a new engine tree) that specs 58–60 and Phase 10's GST Reports (#72)
+all reuse — no new Prisma model in any of the four except one shared `GstFilingRecord`
+(advisory "mark period filed," no hard lock) introduced by spec 58 and reused by spec 59.
+Spec-file numbers are sequential and diverge from tracker numbers as usual:
+
+| Tracker # | Feature       | Spec file                                      |
+| --------- | ------------- | ----------------------------------------------- |
+| 55        | GST Registers | `context/feature-specs/57-gst-registers.md`     |
+| 56        | GSTR-1        | `context/feature-specs/58-gstr-1.md`            |
+| 57        | GSTR-3B       | `context/feature-specs/59-gstr-3b.md`           |
+| 58        | HSN Summary   | `context/feature-specs/60-hsn-summary.md`       |
 
 | #   | Feature       | Depends On | Status |
 | --- | ------------- | ---------- | ------ |
@@ -399,6 +457,23 @@ Merged into `main` and pushed 2026-09-11** (commit `923c137`).
 
 # Phase 9 — Employee Management
 
+Feature-specs for all three items were drafted 2026-09-11 (documentation only, not
+implemented). No `Employee` Prisma model existed before this batch — this is the first
+genuinely new domain since Phase 5/6. `User` (login/auth) and `Employee` (HR/payroll
+record) are kept as two separate entities linked by an optional, nullable, unique
+`Employee.userId` (spec 61), since most employees never log in and not every logged-in
+user is a payroll employee. Payroll (spec 63) posts through the Voucher Engine like every
+other financial transaction, adding a new `VoucherType.SALARY` (reasoned explicitly
+against reusing `JOURNAL`/`PAYMENT` — see the spec's own Business Rules section) — one
+aggregate voucher per payroll run, with actual disbursement left to the existing Payment
+Voucher screen. Must be implemented in order (#59 → #60 → #61):
+
+| Tracker # | Feature         | Spec file                                     |
+| --------- | --------------- | ------------------------------------------------ |
+| 59        | Employee Master | `context/feature-specs/61-employee-master.md`    |
+| 60        | Attendance      | `context/feature-specs/62-attendance.md`         |
+| 61        | Payroll         | `context/feature-specs/63-payroll.md`            |
+
 | #   | Feature         | Depends On | Status |
 | --- | --------------- | ---------- | ------ |
 | 59  | Employee Master | Company    | ⬜     |
@@ -408,6 +483,33 @@ Merged into `main` and pushed 2026-09-11** (commit `923c137`).
 ---
 
 # Phase 10 — Reporting
+
+Feature-specs for all eleven items were drafted 2026-09-11 (documentation only, not
+implemented), in two parallel batches (financial: #62–65/72; operational: #66–71) that
+converged on the same shared `src/engines/reporting/` module — established by spec 64
+(Trial Balance), reused explicitly by specs 65–67/74 and by specs 68–73 (which also
+independently arrived at the same location before spec 64 was confirmed to exist, per
+each spec's own Project Context note). No new Prisma model in any of the eleven except
+Balance Sheet's reuse of the *existing* `LedgerGroup.natureType` field (no schema change
+needed after all — see spec 66) and one new read-only `getCashAndBankLedgerIds` helper
+(spec 67). Cash Flow (spec 67) uses the direct method (not indirect), justified against
+this codebase's already-transaction-level ledger data. A shared `/reports` hub page is
+introduced (whichever of these specs lands first wires it up; every other spec adds its
+own card). Spec-file numbers are sequential and diverge from tracker numbers as usual:
+
+| Tracker # | Feature           | Spec file                                          |
+| --------- | ----------------- | ----------------------------------------------------- |
+| 62        | Trial Balance     | `context/feature-specs/64-trial-balance.md`           |
+| 63        | Profit & Loss     | `context/feature-specs/65-profit-and-loss.md`         |
+| 64        | Balance Sheet     | `context/feature-specs/66-balance-sheet.md`           |
+| 65        | Cash Flow         | `context/feature-specs/67-cash-flow.md`               |
+| 66        | Sales Reports     | `context/feature-specs/68-sales-reports.md`           |
+| 67        | Purchase Reports  | `context/feature-specs/69-purchase-reports.md`        |
+| 68        | Inventory Reports | `context/feature-specs/70-inventory-reports.md`       |
+| 69        | Customer Reports  | `context/feature-specs/71-customer-reports.md`        |
+| 70        | Supplier Reports  | `context/feature-specs/72-supplier-reports.md`        |
+| 71        | Employee Reports  | `context/feature-specs/73-employee-reports.md`        |
+| 72        | GST Reports       | `context/feature-specs/74-gst-reports.md`             |
 
 | #   | Feature           | Depends On     | Status |
 | --- | ----------------- | -------------- | ------ |
@@ -426,6 +528,34 @@ Merged into `main` and pushed 2026-09-11** (commit `923c137`).
 ---
 
 # Phase 11 — Productivity Features
+
+Feature-specs for all seven items were drafted 2026-09-11 (documentation only, not
+implemented), in two parallel batches (data/export: #73–76; operational: #77–79). Global
+Search, Excel Import, Excel Export, and PDF Generation introduce no new Prisma model —
+Excel Export (spec 77) establishes a shared `src/lib/excel-export.ts` utility (`exceljs`,
+a new dependency — confirmed absent from `package.json`) around a new `ReportExportTable[]`
+contract that PDF Generation (spec 78, Puppeteer-based) and every Phase 10 report screen's
+export forward-note both reuse. Barcode Billing (spec 79) is UI-only over the
+already-existing `Product.barcode` field. Audit Logs (spec 80) retrofits the existing
+generic `AuditLog` model to financial-transaction events only (voucher/document
+post-cancel across 10 existing call sites), under a genuinely new `audit` permission
+module, at a new company-scoped `/settings/audit-logs` route — explicitly distinct from
+the existing Super-Admin `/administration/audit` stub. Backup & Restore (spec 81)
+introduces one new `BackupJob` model and a `pg_dump`/`pg_restore`-based mechanism, and
+(unlike Audit Logs) reuses the existing `/administration/backup` Super-Admin route rather
+than adding a company-level one, since this app runs one shared Postgres installation, not
+a per-company database. Spec-file numbers are sequential and diverge from tracker numbers
+as usual:
+
+| Tracker # | Feature          | Spec file                                       |
+| --------- | ---------------- | -------------------------------------------------- |
+| 73        | Global Search    | `context/feature-specs/75-global-search.md`        |
+| 74        | Excel Import     | `context/feature-specs/76-excel-import.md`         |
+| 75        | Excel Export     | `context/feature-specs/77-excel-export.md`         |
+| 76        | PDF Generation   | `context/feature-specs/78-pdf-generation.md`       |
+| 77        | Barcode Billing  | `context/feature-specs/79-barcode-billing.md`      |
+| 78        | Audit Logs       | `context/feature-specs/80-audit-logs.md`           |
+| 79        | Backup & Restore | `context/feature-specs/81-backup-restore.md`       |
 
 | #   | Feature          | Depends On | Status |
 | --- | ---------------- | ---------- | ------ |
@@ -466,16 +596,29 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 7 — Accounting, Receipt Voucher (#52)** next. Payment Voucher (#51,
-`feature/payment-voucher`, implemented 2026-09-11) is Phase 7's first item — see the
-Phase 7 section above for the implementation record. Receipt/Contra/Journal Voucher
-(#52–#54) remain, all sharing the `src/modules/manual-vouchers/` module Payment Voucher
-established and the `assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`)
-Receipt and Contra Voucher will both reuse. Serial Number Tracking (#49,
+➡ **Phase 7 — Accounting is complete.** Payment Voucher (#51), Receipt Voucher (#52),
+Contra Voucher (#53), and Journal Voucher (#54) are all implemented (see the Phase 7
+section above for each's implementation record), all sharing the
+`src/modules/manual-vouchers/` module Payment Voucher established and the
+`assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`) — Journal Voucher
+is the one of the four that deliberately doesn't call it. Serial Number Tracking (#49,
 `feature/serial-number-tracking`, implemented 2026-09-11) closed Phase 5 in full — Opening
 Stock (#44), Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47),
 Batch Tracking (#48), Product Detail Page (#50), and Serial Number Tracking (#49) are all
 implemented.
+
+**Phases 8–11 (tracker #55–#79, 25 feature-spec files, `57-gst-registers.md` through
+`81-backup-restore.md`) were all drafted 2026-09-11** — documentation only, per explicit
+user request, following the exact same batch-drafting-without-implementation precedent
+as the Phase 3/4/5/6/7 spec batches (drafted well ahead of implementation, one feature
+implemented at a time thereafter). See each phase's own section above for its spec-file
+mapping table and batch-level scope-decision summary. Nothing in Phases 8–11 is
+implemented yet — every status cell in all four phases remains ⬜.
+
+**Phase 8 — GST (GST Registers #55, GSTR-1 #56, GSTR-3B #57, HSN Summary #58) is next**
+to implement, awaiting explicit instruction before starting per `ai-workflow-rules.md`'s
+one-feature-at-a-time rule — also still pending: merging `feature/receipt-voucher` (which
+now carries Receipt/Contra/Journal Voucher) into `main`.
 
 Serial Number Tracking (`feature/serial-number-tracking`) — the second of the two
 genuinely new engine-adjacent schema additions Phase 5 reserved, the structural mirror of

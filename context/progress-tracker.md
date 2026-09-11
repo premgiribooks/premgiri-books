@@ -67,14 +67,229 @@ Mapping so far:
 | 50           | Batch Tracking (`50-batch-tracking.md`)                                          | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#48) — **implemented 2026-09-11** (git branch `feature/batch-tracking`); fifth of Phase 5's six documents; new `Product.isBatchTracked` flag, `ProductBatch` catalog model, additive nullable `StockTransaction.batchId`; Batches tab UI deliberately deferred (no Product detail page existed) — see feature-spec 56 |
 | 51           | Serial Number Tracking (`51-serial-number-tracking.md`)                         | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#49) — **implemented 2026-09-11** (git branch `feature/serial-number-tracking`); last item in Phase 5, closing it in full; depended on feature-spec 56 (Product Detail Page) for its own Serial Numbers tab's host page |
 | 52           | Payment Voucher (`52-payment-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#51) — **implemented 2026-09-11** (git branch `feature/payment-voucher`); first of the four manual voucher screens; renumbered from Phase 6/#50 when feature-spec 56 (Phase 6 — Product Detail Page) was inserted ahead of this phase |
-| 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#51, see spec 52's note |
+| 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **implemented 2026-09-11** (git branch `feature/receipt-voucher`); the direct mirror of spec 52 (Payment Voucher) with the ledger direction reversed |
 | 54           | Contra Voucher (`54-contra-voucher.md`)                                         | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#53) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#52, see spec 52's note |
 | 55           | Journal Voucher (`55-journal-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#54) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#53, see spec 52's note; last item in Phase 7, closing the Accounting phase |
 | 56           | Product Detail Page (`56-product-detail-page.md`)                               | `context/Phases/phase-tracker.md` **Phase 6 — Product Detail Page (#50)** — **implemented 2026-09-11** (git branch `feature/product-detail-page`); new phase inserted ahead of the (renumbered) Phase 7 — Accounting, and ahead of Phase 5's own remaining item (#49 Serial Number Tracking), because both Batch Tracking (spec 50) and Serial Number Tracking (spec 51) need a Product detail view; UI-only, no new Prisma model, composes the existing `productService`/`productBatchService` stack |
+| 57           | GST Registers (`57-gst-registers.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#55) — **spec drafted 2026-09-11, not implemented**; establishes the shared `getOutwardSupplyLines`/`getInwardSupplyLines` GST aggregation primitive in `src/engines/gst/` that specs 58–60 and Phase 10's GST Reports (#72/spec 74) all reuse |
+| 58           | GSTR-1 (`58-gstr-1.md`)                                                          | `context/Phases/phase-tracker.md` Phase 8 — GST (#56) — **spec drafted 2026-09-11, not implemented**; introduces the shared `GstFilingRecord` model (advisory "mark period filed," no hard lock), reused by spec 59 |
+| 59           | GSTR-3B (`59-gstr-3b.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#57) — **spec drafted 2026-09-11, not implemented**; renders every statutorily-required but uncomputable row as an explicit "not tracked" placeholder rather than guessing |
+| 60           | HSN Summary (`60-hsn-summary.md`)                                                | `context/Phases/phase-tracker.md` Phase 8 — GST (#58) — **spec drafted 2026-09-11, not implemented**; last of the four GST-phase specs, closing Phase 8's drafting; pure grouping over spec 57's outward lines, no new schema |
+| 61           | Employee Master (`61-employee-master.md`)                                       | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#59) — **spec drafted 2026-09-11, not implemented**; first genuinely new domain since Phase 5/6 — `Employee` linked to `User` via an optional nullable unique `userId`, no per-employee `Ledger` |
+| 62           | Attendance (`62-attendance.md`)                                                  | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#60) — **spec drafted 2026-09-11, not implemented**; one row per (employee, date), exposing `getAttendanceSummary` as the sole aggregation Payroll consumes |
+| 63           | Payroll (`63-payroll.md`)                                                        | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#61) — **spec drafted 2026-09-11, not implemented**; last item in Phase 9, closing it; adds a new `VoucherType.SALARY` and posts one aggregate voucher per run through the (unmodified) Voucher Engine |
+| 64           | Trial Balance (`64-trial-balance.md`)                                           | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#62) — **spec drafted 2026-09-11, not implemented**; establishes `src/engines/reporting/` as the Reporting Engine location and the `/reports` hub page, both reused by specs 65–74 |
+| 65           | Profit & Loss (`65-profit-and-loss.md`)                                        | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#63) — **spec drafted 2026-09-11, not implemented**; computes a period P&L by calling `getTrialBalance` twice and diffing, no new engine query |
+| 66           | Balance Sheet (`66-balance-sheet.md`)                                           | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#64) — **spec drafted 2026-09-11, not implemented**; no schema change needed — reuses the existing `LedgerGroup.natureType` field for Asset/Liability/Income/Expense classification |
+| 67           | Cash Flow (`67-cash-flow.md`)                                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#65) — **spec drafted 2026-09-11, not implemented**; uses the direct method (not indirect), justified against this codebase's already-transaction-level ledger data; adds one new read-only `getCashAndBankLedgerIds` helper |
+| 68           | Sales Reports (`68-sales-reports.md`)                                          | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#66) — **spec drafted 2026-09-11, not implemented**; MVP scoped to Sales Register/Item-wise/Party-wise/Return Summary over Sales Invoice/Return only |
+| 69           | Purchase Reports (`69-purchase-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#67) — **spec drafted 2026-09-11, not implemented**; direct mirror of spec 68 from the purchase side |
+| 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **spec drafted 2026-09-11, not implemented**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
+| 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **spec drafted 2026-09-11, not implemented**; Outstanding Report calls `voucherEngine.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
+| 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **spec drafted 2026-09-11, not implemented**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
+| 73           | Employee Reports (`73-employee-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#71) — **spec drafted 2026-09-11, not implemented**; reads Payroll's exact posted snapshot shape, adds one new bulk `getAttendanceSummaryBulk` method |
+| 74           | GST Reports (`74-gst-reports.md`)                                               | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#72) — **spec drafted 2026-09-11, not implemented**; last item in Phase 10, closing it; an analytical dashboard over specs 57/60's data, explicitly distinct from Phase 8's statutory filing screens, gated by both `reports:view` and `gst:view` |
+| 75           | Global Search (`75-global-search.md`)                                          | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#73) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers/Ledgers, wired into the shell's existing Top Navbar search placeholder as a `Ctrl+K` overlay |
+| 76           | Excel Import (`76-excel-import.md`)                                            | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#74) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers, row-by-row partial-success handling with a dry-run preview and downloadable error report |
+| 77           | Excel Export (`77-excel-export.md`)                                            | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#75) — **spec drafted 2026-09-11, not implemented**; introduces a shared `src/lib/excel-export.ts` utility (new `exceljs` dependency) around a new `ReportExportTable[]` contract, with Trial Balance as the required reference implementation |
+| 78           | PDF Generation (`78-pdf-generation.md`)                                        | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#76) — **spec drafted 2026-09-11, not implemented**; a shared Puppeteer-based `renderHtmlToPdf` core serving both document printing and spec 77's report-export contract |
+| 79           | Barcode Billing (`79-barcode-billing.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#77) — **spec drafted 2026-09-11, not implemented**; UI-only over the existing `Product.barcode` field, added as a toggle-able entry mode in place on the existing Sales Invoice line-entry screen |
+| 80           | Audit Logs (`80-audit-logs.md`)                                                | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#78) — **spec drafted 2026-09-11, not implemented**; retrofits the existing generic `AuditLog` model to financial-transaction events only, under a new `audit` permission module at a new `/settings/audit-logs` route, explicitly distinct from the existing Super-Admin `/administration/audit` stub |
+| 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#79) — **spec drafted 2026-09-11, not implemented**; last item in Phase 11, closing the drafting of Phases 8–11 in full; introduces a new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Feature-specs 57–81 (Phases 8–11, 25 files) drafted 2026-09-11** —
+  documentation only, not implemented, per explicit user request. Covers
+  Phase 8 — GST (GST Registers #55/spec 57, GSTR-1 #56/spec 58, GSTR-3B
+  #57/spec 59, HSN Summary #58/spec 60), Phase 9 — Employee Management
+  (Employee Master #59/spec 61, Attendance #60/spec 62, Payroll #61/spec
+  63), Phase 10 — Reporting (Trial Balance through GST Reports, #62–#72/
+  specs 64–74), and Phase 11 — Productivity Features (Global Search
+  through Backup & Restore, #73–#79/specs 75–81). Drafted in four parallel
+  batches (GST; Employee Management; Reporting split into
+  financial/operational halves; Productivity Features split into
+  data-export/operational halves), following the exact same
+  batch-drafting-without-implementation precedent as the Phase 3/4/5/6/7
+  spec batches — every status cell in all four phases remains ⬜ in
+  `context/Phases/phase-tracker.md`, whose own per-phase sections carry
+  each batch's spec-file mapping table and scope-decision summary (see
+  that file directly rather than duplicating it here). No `schema.prisma`
+  edits, no migrations, no source files were touched by this drafting
+  pass — Markdown specs only. **Phase 8 — GST is next to implement**,
+  awaiting explicit instruction before starting per
+  `ai-workflow-rules.md`'s one-feature-at-a-time rule.
+
+- **Feature-spec 55 — Journal Voucher implemented 2026-09-11** on branch
+  `feature/receipt-voucher` (continuing the same branch — not yet merged to
+  `main`). Fourth and last of the four manual voucher screens (Phase 7 —
+  Accounting, #51–#54) — **this closes out Phase 7 (Accounting) in full**,
+  per `55-journal-voucher.md`. Per that spec's Goal, this is the **least**
+  restrictive of the four: any combination of Debit/Credit entries against
+  any active company ledger (including Cash/Bank), as long as the whole set
+  balances — no entry-shape narrowing at all beyond what
+  `voucherEngine.postVoucher` itself already enforces (≥2 entries, sum
+  Debit === sum Credit, every amount > 0 with ≤2 decimals). No new Prisma
+  model — a Journal Voucher *is* a `Voucher` reusing the already-existing
+  `VoucherType.JOURNAL`/`DocumentType.JOURNAL_VOUCHER`.
+  - `journalVoucherService` (new `src/modules/manual-vouchers/services/
+    journal-voucher-service.ts`): `listJournalVouchers` (scoped to
+    `voucherType: "JOURNAL"` and the current financial year),
+    `getJournalVoucher` (company- and voucher-type-scoped),
+    `postJournalVoucher` (parses the schema and posts the given `entries`
+    array to `voucherEngine.postVoucher` unmodified — no client-amount
+    computation or ledger-class check, unlike Payment/Receipt/Contra),
+    `cancelJournalVoucher` (thin pass-through to `voucherEngine.cancelVoucher`,
+    rejecting an id belonging to a different voucher type). **The one
+    deliberate divergence from specs 52–54**: both `postJournalVoucher` and
+    `cancelJournalVoucher` require the `approve` permission action, not
+    `create` — an unrestricted debit/credit entry against any ledger is a
+    plausible error/fraud surface with no structural safeguard otherwise, the
+    same posture Purchase/Sales Invoice already takes toward their own
+    highest-trust operation (a tax override). No repository file and no new
+    `listLedgerOptions` method — reuses `paymentVoucherService.listLedgerOptions()`
+    directly, same as Receipt/Contra Voucher.
+  - New `/accounting/journal-vouchers` (list — Number, Date, Narration, Total
+    Amount, Status, Actions), `/new` (create — fully freeform entry table:
+    add/remove Debit-or-Credit lines via a per-row Debit/Credit `Select`, any
+    ledger picker with no class restriction, a running Debit/Credit
+    totals-and-balanced indicator — a client-side convenience only, never the
+    actual enforcement point), and `/[id]` (read-only detail, Cancel action
+    gated on `approve`, no Edit). Both the list page's "New" button and the
+    `/new` page itself gate on `approve` (not `create`, unlike the other
+    three voucher types' equivalent pages). Added a "Journal Vouchers" card
+    to the `/accounting` hub (fourth and final card, completing the hub
+    started in spec 52) and a `journal-vouchers` breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1444/1444,
+    +29 from this feature), and `next build` all pass;
+    `/accounting/journal-vouchers*` appears in the build route table.
+  - **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW findings. Security
+    review: zero CRITICAL/HIGH/MEDIUM findings.** Both independently
+    confirmed: `approve` (not `create`) actually gates Post and Cancel in
+    every location (service methods, list/new/detail page-level redirects);
+    no ledger-class restriction was introduced anywhere; the `entries` array
+    reaches `voucherEngine.postVoucher` unmodified; company-scoping and the
+    cross-voucher-type "not found" convention are identical to the sibling
+    modules with no distinguishing error/status leak; the shared engine-level
+    `assertLedgersActiveAndOwned` check (ownership + active-status,
+    voucherType-agnostic) still protects this screen even though the
+    voucher-specific Cash/Bank check doesn't apply here; and the omission of
+    `assertLedgersAreCashOrBank` is confirmed intentional per spec's "Do Not"
+    list, not a regression.
+  - **Not yet browser-verified** — no browser/Playwright tool was available
+    to the agent this session (matching Contra Voucher's prior session).
+    Manual click-through UAT (post a Journal Voucher with a freeform
+    multi-line balanced set, confirm the list/detail views, Cancel flow, and
+    that a `create`-only user is blocked from both Post and Cancel) is still
+    needed before merge. **Committed** (`68042e8`), not yet merged/pushed —
+    Phase 7 (Accounting) is now functionally complete; Phase 8 (GST) is next
+    per `phase-tracker.md`, awaiting explicit instruction before starting.
+
+- **Feature-spec 54 — Contra Voucher implemented 2026-09-11** on branch
+  `feature/receipt-voucher` (continuing the same branch — not yet merged to
+  `main`). Third of the four manual voucher screens (Phase 7 — Accounting,
+  #51–#54) — Journal Voucher (#55) remains next and last. Per
+  `54-contra-voucher.md`'s Goal, this is the **strictest** of the four by
+  entry count: unlike Payment/Receipt's "one restricted side, one-or-more
+  free side," a Contra Voucher is exactly one Debit + one Credit entry, both
+  restricted to the Cash-in-Hand-or-`BankAccount`-linked ledger class, with
+  the two ledgers required to differ. No new Prisma model — a Contra Voucher
+  *is* a `Voucher` reusing the already-existing `VoucherType.CONTRA`/
+  `DocumentType.CONTRA_VOUCHER`.
+  - `contraVoucherService` (new `src/modules/manual-vouchers/services/
+    contra-voucher-service.ts`): `listContraVouchers` (scoped to
+    `voucherType: "CONTRA"` and the current financial year), `getContraVoucher`
+    (company- and voucher-type-scoped), `postContraVoucher` (validates via the
+    shared `assertLedgersAreCashOrBank` helper applied to **both**
+    `fromLedgerId`/`toLedgerId` at once — the one place this spec's
+    restriction is wider than Payment/Receipt's single-side check — then posts
+    a fixed one-Debit/one-Credit entry pair at the single client-supplied
+    `amount`, unlike Payment/Receipt's server-computed sum-of-lines, since
+    there is only ever one entry per side here), `cancelContraVoucher` (thin
+    pass-through to `voucherEngine.cancelVoucher`, rejecting an id belonging to
+    a different voucher type). Source ≠ destination is enforced by a
+    `contra-voucher-schema.ts` object-level Zod `.refine` (`fromLedgerId !==
+    toLedgerId`) rather than a second service-level check, since the schema's
+    own `.parse()` already runs server-side inside `postContraVoucher` and
+    can't be bypassed by a client. No repository file and no new
+    `listLedgerOptions` method — reuses `paymentVoucherService.listLedgerOptions()`
+    directly, same as Receipt Voucher.
+  - New `/accounting/contra-vouchers` (list — Number, Date, From, To, Amount,
+    Status, Actions), `/new` (create — two Cash/Bank-restricted ledger
+    pickers, a single amount field, narration — **no add-line control**,
+    since the entry count is fixed at exactly one pair, the one place this
+    screen's form meaningfully diverges from Payment/Receipt's variable-length
+    line table), and `/[id]` (read-only detail, Cancel action gated on
+    `approve`, no Edit). Added a "Contra Vouchers" card to the `/accounting`
+    hub (third of the four) and a `contra-vouchers` breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1415/1415,
+    +23 from this feature), and `next build` all pass;
+    `/accounting/contra-vouchers*` appears in the build route table.
+  - **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW findings. Security
+    review: zero CRITICAL/HIGH/MEDIUM findings** — both confirmed the
+    both-sides ledger-class restriction, the fixed 2-entry shape, and the
+    source-≠-destination rule are all enforced server-side (never trusted
+    from the client), and that a cross-company or wrong-type voucher id
+    resolves identically to "not found" with no information leakage.
+  - **Not yet browser-verified** — no browser/Playwright tool was available to
+    the agent this session (unlike Payment/Receipt Voucher's prior sessions).
+    Manual click-through UAT (post a Contra Voucher between two Cash/Bank
+    ledgers, confirm the list/detail views and Cancel flow) is still needed
+    before merge. **Committed** (`662aed3`), not yet merged/pushed.
+
+- **Feature-spec 53 — Receipt Voucher implemented 2026-09-11** on branch
+  `feature/receipt-voucher`, branched off `main` immediately after merging
+  `feature/payment-voucher` into it. Second of the four manual voucher screens
+  (Phase 7 — Accounting, #51–#54) — Contra/Journal Voucher (#54–#55) remain
+  next. Per `53-receipt-voucher.md`'s Goal, this is the direct mirror of
+  `52-payment-voucher.md` with the ledger direction reversed: UI + validation
+  only, no new Prisma model, since a Receipt Voucher *is* a `Voucher` reusing
+  the already-existing `VoucherType.RECEIPT`/`DocumentType.RECEIPT_VOUCHER`.
+  - `receiptVoucherService` (new `src/modules/manual-vouchers/services/
+    receipt-voucher-service.ts`): `listReceiptVouchers` (scoped to
+    `voucherType: "RECEIPT"` and the current financial year), `getReceiptVoucher`
+    (company- and voucher-type-scoped), `postReceiptVoucher` (validates exactly
+    one Debit entry restricted to the Cash/Bank class via the existing shared
+    `assertLedgersAreCashOrBank` helper, one-or-more Credit entries against any
+    other active ledger, computes the Debit entry's amount as the integer-
+    paise-safe sum of the Credit lines — never trusted from the client — then
+    calls `voucherEngine.postVoucher` unmodified), `cancelReceiptVoucher` (thin
+    pass-through to `voucherEngine.cancelVoucher`, rejecting an id belonging to
+    a different voucher type). No repository file and no new
+    `listLedgerOptions` method — per spec 53's explicit Service/Repository
+    section, the Receipt screens reuse `paymentVoucherService.listLedgerOptions()`
+    directly (the "shared read-model" the `ManualVoucherLedgerOption` type's
+    own header comment already documents as common to all four manual-voucher
+    screens), so `payment-voucher-service.ts` was left untouched rather than
+    speculatively refactored ahead of Contra/Journal (specs 54/55, not
+    implemented here per `ai-workflow-rules.md`'s one-feature-at-a-time rule).
+  - New `/accounting/receipt-vouchers` (list — Number, Date, "Received From"
+    summarizing the Credit ledger name(s), Amount, Status, Actions), `/new`
+    (create — a "Received In (Cash / Bank)" picker restricted to the Cash/Bank
+    subset, a "Received From" Credit-lines table with Add/Remove, narration, a
+    running total), and `/[id]` (read-only detail, Cancel action gated on
+    `approve`, no Edit). Added a "Receipt Vouchers" card to the `/accounting`
+    hub (second of the four, after Payment Vouchers) and a `receipt-vouchers`
+    breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1392/1392,
+    +25 from this feature), and `next build` all pass;
+    `/accounting/receipt-vouchers*` appears in the build route table.
+  - **Browser-verified end-to-end with `@playwright/cli`** against the dev
+    server: created a Receipt Voucher (Debit against the seeded "Cash" ledger,
+    one Credit line against "Prajapat paints", amount 750) → posted
+    successfully as `RCT-0001` → the list correctly showed "Prajapat paints"
+    under "Received From," the amount, and a Posted badge → the detail page
+    correctly showed both entries (Cash Debit 750.00, Prajapat paints Credit
+    750.00, Total 750.00) → Cancel produced the correct confirmation dialog
+    text, then flipped the status to Cancelled — matching Payment Voucher's
+    exact walkthrough shape with the direction reversed. Zero console errors
+    at every step. The one voucher created for this walkthrough was itself
+    cancelled as part of the walkthrough, leaving no uncancelled test data
+    behind (vouchers have no delete path in this codebase, only Cancel).
+  - Local scratch artifacts from the `@playwright/cli` session (`.playwright-cli/`)
+    are git-ignored, not committed.
 
 - **Feature-spec 52 — Payment Voucher implemented 2026-09-11** on branch
   `feature/payment-voucher`, branched off `main` immediately after merging
@@ -1055,13 +1270,13 @@ Mapping so far:
 
 ## Next Up
 
-- **2026-09-11 — Phase 5 (Inventory) is now fully closed** (feature-spec 51, Serial
-  Number Tracking, was its last remaining item). Per `context/Phases/phase-tracker.md`'s
-  Current Feature entry, the next feature in phase order is **Phase 7 — Accounting**
-  (the four manual voucher screens: Payment Voucher #52, Receipt Voucher #53, Contra
-  Voucher #54, Journal Voucher #55 — all spec-drafted, none implemented). Per
-  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time —
-  awaiting explicit instruction before starting the next one.
+- **2026-09-11 — Payment (#52), Receipt (#53), Contra (#54), and now Journal
+  Voucher (#55) are all implemented — Phase 7 (Accounting) is functionally
+  complete.** Per `phase-tracker.md`, Phase 8 (GST — GST Registers, GSTR-1,
+  GSTR-3B, HSN Summary, #55–#58) is next. Per `ai-workflow-rules.md`, only one
+  feature/subsystem should be worked on at a time — awaiting explicit
+  instruction before starting it, and before merging `feature/receipt-voucher`
+  (which now carries Receipt/Contra/Journal Voucher) into `main`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
