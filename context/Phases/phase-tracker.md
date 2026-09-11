@@ -278,7 +278,7 @@ acceptable given the deferred per-document retrofit cost it implies.
 
 | #   | Feature                | Depends On         | Status |
 | --- | ---------------------- | ------------------ | ------ |
-| 44  | Opening Stock          | Products           | ⬜     |
+| 44  | Opening Stock          | Products           | ✅     |
 | 45  | Stock Adjustment       | Inventory Engine   | ⬜     |
 | 46  | Stock Transfer         | Warehouse          | ⬜     |
 | 47  | Physical Verification  | Inventory Engine   | ⬜     |
@@ -401,19 +401,30 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 5 — Inventory** (Opening Stock #44, Stock Adjustment #45, Stock Transfer #46,
-Physical Verification #47, Batch Tracking #48, Serial Number Tracking #49). Phases 1–4
-are now all fully complete: Phase 3 — Sales Management (#33–#39, all seven documents)
-and Phase 4 — Purchase Management (#40–#43, all four documents, the last being Purchase
-Return implemented 2026-09-11) — see each phase's own status paragraph above and
-`context/progress-tracker.md`'s Completed entries for the full record. Feature-specs
-for Phase 5 (Inventory, tracker #44–#49) and Phase 6 (Accounting — the four manual
-voucher screens, tracker #50–#53) are being drafted per explicit user request,
-following the same batch-drafting-without-implementation precedent as the Phase 3/4
-spec batches (drafted 2026-07-18/19, implemented much later, one at a time). Per
-`ai-workflow-rules.md` only one feature is *implemented* at a time; drafting multiple
-specs together is the established documentation-only exception, and the next feature
-to actually build still awaits explicit user direction.
+➡ **Phase 5 — Inventory: Stock Adjustment (#45)**. Opening Stock (#44,
+`context/feature-specs/46-opening-stock.md`) was implemented 2026-09-11 on
+`feature/opening-stock` — the thin UI/service layer directly over the already-shipped
+Inventory Engine (feature-spec 32) the spec called for: no new Prisma model, no
+document header/numbering, `openingStockService.recordOpeningStock` enforces "at most
+one Opening Stock entry ever per (companyId, productId, warehouseId)" via a
+Serializable-transaction check-then-insert against `stockTransactionRepository`'s new
+`existingTransactionPairs` method (matches on ANY prior transactionType for the pair,
+not just OPENING_STOCK), then delegates the actual write to
+`inventoryEngine.recordMovements` unchanged. Established the `/inventory` hub (one card
+today; Stock Adjustment/Transfer/Physical Verification add their own as they land) and
+wired the previously-unlinked sidebar "Inventory" entry to it. `npx tsc --noEmit`,
+`npx eslint src prisma`, `npx vitest run` (1065 tests), and `next build` all pass;
+`/inventory` and `/inventory/opening-stock*` appear in the build route table.
+
+Phases 1–4 are fully complete: Phase 3 — Sales Management (#33–#39, all seven
+documents) and Phase 4 — Purchase Management (#40–#43, all four documents, the last
+being Purchase Return implemented 2026-09-11) — see each phase's own status paragraph
+above and `context/progress-tracker.md`'s Completed entries for the full record.
+Feature-specs for the rest of Phase 5 (tracker #45–#49) and Phase 6 (Accounting — the
+four manual voucher screens, tracker #50–#53) were drafted 2026-09-11 per explicit user
+request, following the same batch-drafting-without-implementation precedent as the
+Phase 3/4 spec batches (drafted 2026-07-18/19, implemented much later, one at a time).
+Per `ai-workflow-rules.md` only one feature is *implemented* at a time.
 
 ---
 

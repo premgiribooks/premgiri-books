@@ -29,6 +29,8 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   "purchase/receipts": "Goods Receipt Notes",
   "purchase/invoices": "Purchase Invoices",
   "purchase/returns": "Purchase Returns",
+  inventory: "Inventory",
+  "opening-stock": "Opening Stock",
   accounting: "Accounting",
   "ledger-groups": "Ledger Groups",
   ledgers: "Ledgers",

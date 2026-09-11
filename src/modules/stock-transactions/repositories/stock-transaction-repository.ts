@@ -37,6 +37,50 @@ export interface ProductForValuation {
   purchasePrice: number | null;
 }
 
+// Opening Stock (46-opening-stock.md) read-model shapes — owned by this
+// repository, like ProductForMovement/WarehouseForMovement above, rather than
+// imported from the leaf feature module's own types file (which re-exports
+// these instead — the same direction src/engines/inventory/types.ts already
+// uses for StockMovementLineInput/TransferStockInput).
+export interface OpeningStockProductOption {
+  id: string;
+  name: string;
+  productCode: string;
+  isActive: boolean;
+  unitSymbol: string;
+  unitDecimalPlaces: number;
+  purchasePrice: number | null;
+  defaultWarehouseId: string | null;
+}
+
+export interface OpeningStockWarehouseOption {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+}
+
+export interface OpeningStockListRow {
+  id: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  warehouseId: string;
+  warehouseName: string;
+  quantity: number;
+  unitSymbol: string;
+  unitCost: number | null;
+  transactionDate: Date;
+  narration: string | null;
+  createdAt: Date;
+}
+
+export interface OpeningStockListFilters {
+  search?: string;
+  productId?: string;
+  warehouseId?: string;
+}
+
 // Decimal -> number normalization at the repository boundary (established
 // convention, e.g. voucher-repository.ts's toPostedVoucher).
 function toRecordedStockTransaction(raw: {
@@ -329,5 +373,126 @@ export const stockTransactionRepository = {
       orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }],
     });
     return rows.map(toRecordedStockTransaction);
+  },
+
+  /**
+   * Which of the given (product, warehouse) pairs already have ANY
+   * StockTransaction row (any transactionType) — Opening Stock's own
+   * uniqueness gate (46-opening-stock.md's Data Model: "no StockTransaction
+   * of any type exists yet for this pair", not merely "no prior
+   * OPENING_STOCK row"). Always run on the caller's Serializable
+   * transaction so it observes the same snapshot as the insert that
+   * follows it — the same recipe as `sumStockForPairs`.
+   */
+  async existingTransactionPairs(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    pairs: readonly { productId: string; warehouseId: string }[]
+  ): Promise<Set<string>> {
+    if (pairs.length === 0) {
+      return new Set();
+    }
+    const rows = await tx.stockTransaction.findMany({
+      where: {
+        companyId,
+        OR: pairs.map((pair) => ({ productId: pair.productId, warehouseId: pair.warehouseId })),
+      },
+      select: { productId: true, warehouseId: true },
+    });
+    return new Set(rows.map((row) => pairKey(row.productId, row.warehouseId)));
+  },
+
+  /** The Opening Stock line editor's product picker — active TRADING
+   * products only, since only TRADING products may carry stock
+   * (46-opening-stock.md's UI; mirrors purchase-invoice-repository.ts's
+   * findInvoiceableProducts minus the GST/HSN fields this module never
+   * touches). */
+  async findOpeningStockEligibleProducts(companyId: string): Promise<OpeningStockProductOption[]> {
+    const rows = await prisma.product.findMany({
+      where: { companyId, isActive: true, productType: "TRADING" },
+      select: {
+        id: true,
+        name: true,
+        productCode: true,
+        isActive: true,
+        purchasePrice: true,
+        defaultWarehouseId: true,
+        unit: { select: { symbol: true, decimalPlaces: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      productCode: row.productCode,
+      isActive: row.isActive,
+      unitSymbol: row.unit.symbol,
+      unitDecimalPlaces: row.unit.decimalPlaces,
+      purchasePrice: row.purchasePrice === null ? null : row.purchasePrice.toNumber(),
+      defaultWarehouseId: row.defaultWarehouseId,
+    }));
+  },
+
+  /** The Opening Stock line editor's warehouse picker — mirrors
+   * purchase-invoice-repository.ts's findSelectableWarehouses. */
+  async findActiveWarehouses(companyId: string): Promise<OpeningStockWarehouseOption[]> {
+    return prisma.warehouse.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, name: true, code: true, isActive: true },
+      orderBy: { name: "asc" },
+    });
+  },
+
+  /** The Opening Stock list page's read model — a filtered, name-joined view
+   * over StockTransaction (46-opening-stock.md's Data Model: "a filtered
+   * view over StockTransaction, not a new table"). `search` matches the
+   * product's name or code. */
+  async findOpeningStockEntries(companyId: string, filters: OpeningStockListFilters = {}): Promise<OpeningStockListRow[]> {
+    const search = filters.search?.trim();
+    const rows = await prisma.stockTransaction.findMany({
+      where: {
+        companyId,
+        transactionType: "OPENING_STOCK",
+        ...(filters.productId ? { productId: filters.productId } : {}),
+        ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+        ...(search
+          ? {
+              product: {
+                OR: [
+                  { name: { contains: search, mode: "insensitive" } },
+                  { productCode: { contains: search, mode: "insensitive" } },
+                ],
+              },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        productId: true,
+        warehouseId: true,
+        quantity: true,
+        unitCost: true,
+        transactionDate: true,
+        narration: true,
+        createdAt: true,
+        product: { select: { name: true, productCode: true, unit: { select: { symbol: true } } } },
+        warehouse: { select: { name: true } },
+      },
+      orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      productId: row.productId,
+      productName: row.product.name,
+      productCode: row.product.productCode,
+      warehouseId: row.warehouseId,
+      warehouseName: row.warehouse.name,
+      quantity: row.quantity.toNumber(),
+      unitSymbol: row.product.unit.symbol,
+      unitCost: row.unitCost === null ? null : row.unitCost.toNumber(),
+      transactionDate: row.transactionDate,
+      narration: row.narration,
+      createdAt: row.createdAt,
+    }));
   },
 };
