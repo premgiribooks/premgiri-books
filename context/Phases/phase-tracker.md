@@ -446,12 +446,28 @@ Spec-file numbers are sequential and diverge from tracker numbers as usual:
 | 57        | GSTR-3B       | `context/feature-specs/59-gstr-3b.md`           |
 | 58        | HSN Summary   | `context/feature-specs/60-hsn-summary.md`       |
 
+**Two more items were added to this phase 2026-09-11**, after the original four-item
+batch above was already implemented (items #55–#57) or drafted-but-not-yet-implemented
+(#58) — **GSTR-2** and an **ITC Register**. Per this project's own numbering convention
+("spec-file numbers are sequential and never reused"), these two continue the sequence
+from wherever it currently ends (the highest prior spec file at draft time was
+`81-backup-restore.md`) rather than renumbering anything already assigned to Phase 9-11
+(tracker #59–#79, specs 61-81) — the same divergence-is-normal pattern spec 57's own
+header note already established for tracker-vs-spec-file numbering:
+
+| Tracker # | Feature       | Spec file                                       |
+| --------- | ------------- | ------------------------------------------------ |
+| 80        | GSTR-2        | `context/feature-specs/82-gstr-2.md`            |
+| 81        | ITC Register  | `context/feature-specs/83-itc-register.md`      |
+
 | #   | Feature       | Depends On | Status |
 | --- | ------------- | ---------- | ------ |
 | 55  | GST Registers | GST Engine | ✅     |
 | 56  | GSTR-1        | GST Engine | ✅     |
 | 57  | GSTR-3B       | GST Engine | ✅     |
 | 58  | HSN Summary   | GST Engine | ⬜     |
+| 80  | GSTR-2        | GST Registers (#55) | ⬜     |
+| 81  | ITC Register  | GST Registers (#55); GSTR-3B (#57) | ⬜     |
 
 **GST Registers (#55) implemented 2026-09-11** on branch `feature/gst-registers`. Added
 `getOutwardSupplyLines`/`getInwardSupplyLines` to `src/engines/gst/` (`gst-report-queries.ts`
@@ -611,7 +627,47 @@ response, zero console/page errors (Playwright-driven check). `tsc`/`eslint`/`vi
 (1523/1523)/`next build` all re-verified green against the merged result.
 
 Now that GSTR-3B (#57) is implemented, reviewed, merged, and this runtime bug fixed,
-**HSN Summary (#58/spec 60) is next** — see progress-tracker.md's Next Up.
+**HSN Summary (#58/spec 60) remains queued next in this phase's original order.**
+
+**GSTR-2 (#80) and ITC Register (#81) feature-specs drafted 2026-09-11** (documentation
+only, not implemented — matching this phase's own original batch-drafting precedent),
+per explicit user request to add both to the GST phase. See the tracker-numbering note
+above the item tables for why they're numbered #80/#81 (specs 82-83) rather than
+renumbering anything already assigned to Phase 9-11.
+
+- **GSTR-2** (`context/feature-specs/82-gstr-2.md`) is scoped, per an explicit scoping
+  decision confirmed with the user before drafting, as a **read-only inward-supply
+  reporting view** in the original (now-suspended) GSTR-2 form's table shape, derived
+  entirely from this company's own posted Purchase Invoice/Return data via the existing
+  `getInwardSupplyLines` primitive (spec 57) — **not** a GSTR-2A/2B portal
+  reconciliation (structurally impossible without GST Portal Integration, which remains
+  out of scope per `AGENTS.md`'s Future Modules list) and **not** a return with a
+  filing workflow (GSTR-2 has not actually been filed by any taxpayer since 2017;
+  adding a `GstFilingRecord` for it would misrepresent it as a live obligation). No new
+  Prisma schema — the third Phase 8 spec (after GST Registers and HSN Summary) to add
+  none. Every one of the real form's 13 tables this codebase's data cannot support
+  (reverse charge, imports/SEZ, amendments, ISD credit, TDS/TCS, advances, ITC
+  reversal, portal-mismatch reconciliation, purchase-side HSN summary) is either an
+  explicit visible not-computed row or, where even a labeled placeholder would imply a
+  workflow that doesn't exist (amendments, advances, portal-mismatch reconciliation),
+  omitted from the shape entirely — the spec is explicit about which case applies to
+  each table and why.
+- **ITC Register** (`context/feature-specs/83-itc-register.md`) is scoped, per the same
+  confirmed decision, as a **report only**: rate-wise/party-wise/HSN-wise breakdown of
+  the same figure `59-gstr-3b.md`'s Table 4(A)(5) already sums as one lump total — no
+  new schema, no ITC-eligibility categorization, and explicitly **not** a full
+  Electronic Credit Ledger (availed/utilized/period-to-period running balance), which
+  was considered and deliberately rejected as this spec's scope (see its own Do Not) as
+  a materially larger, separately-specced undertaking. Carries a permanently-visible
+  disclaimer that every line is assumed fully eligible, since no document anywhere in
+  this codebase records a Section 17(5) eligibility category — mirroring
+  `59-gstr-3b.md`'s own Table 4(D) disclosure at the point where a filer actually sees
+  the transaction-level detail, not just a summary line.
+
+**Neither is implemented yet.** Per `ai-workflow-rules.md`'s one-feature-at-a-time rule,
+implementation order among HSN Summary (#58, already queued) and these two new items
+(#80/#81) is a priority decision for the user, not assumed by this drafting pass — see
+progress-tracker.md's Next Up.
 
 ---
 

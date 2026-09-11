@@ -96,10 +96,61 @@ Mapping so far:
 | 79           | Barcode Billing (`79-barcode-billing.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#77) — **spec drafted 2026-09-11, not implemented**; UI-only over the existing `Product.barcode` field, added as a toggle-able entry mode in place on the existing Sales Invoice line-entry screen |
 | 80           | Audit Logs (`80-audit-logs.md`)                                                | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#78) — **spec drafted 2026-09-11, not implemented**; retrofits the existing generic `AuditLog` model to financial-transaction events only, under a new `audit` permission module at a new `/settings/audit-logs` route, explicitly distinct from the existing Super-Admin `/administration/audit` stub |
 | 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#79) — **spec drafted 2026-09-11, not implemented**; last item in Phase 11, closing the drafting of Phases 8–11 in full; introduces a new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one |
+| 82           | GSTR-2 (`82-gstr-2.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#80) — **spec drafted 2026-09-11, not implemented**; added to Phase 8 after its original batch (specs 57–60) was already implemented/drafted, per explicit user request — read-only inward-supply reporting view in the original (suspended) GSTR-2 form's shape, no `GstFilingRecord`/filing workflow, no new schema |
+| 83           | ITC Register (`83-itc-register.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#81) — **spec drafted 2026-09-11, not implemented**; second item added to Phase 8 alongside spec 82 — rate/party/HSN breakdown of GSTR-3B's (#57/spec 59) Table 4(A)(5) lump ITC figure, report-only, explicitly not a full Electronic Credit Ledger, no new schema |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Feature-specs 82 (GSTR-2) and 83 (ITC Register) drafted 2026-09-11** — documentation
+  only, not implemented — added to Phase 8 (GST) as tracker items #80/#81, per an
+  explicit user request ("add GSTR-2 in GST phase and also add ITC... and create
+  feature"). Before drafting either, two scope-defining questions were put to the user
+  (both had a narrow "report only" reading and a much bigger "new schema/ledger"
+  reading, and this project's own `ai-workflow-rules.md` forbids inventing business
+  behavior):
+  1. **GSTR-2**: the real GSTR-2 return form was suspended by the GST department in
+     2017 and replaced on the portal by auto-populated GSTR-2A/2B — no taxpayer has
+     filed an actual GSTR-2 since, and this codebase's own `AGENTS.md` Future Modules
+     list explicitly excludes GST Portal Integration. **User confirmed**: build it as a
+     read-only inward-supply reporting view in the original form's table shape, derived
+     entirely from this company's own posted Purchase Invoice/Return data (reusing
+     `getInwardSupplyLines`, spec 57) — never a claim of matching actual GSTR-2A/2B
+     portal data, and with **no `GstFilingRecord`/"mark filed" workflow at all** (a
+     return nobody files shouldn't get a fake filing button). Of the form's 13
+     statutory tables, only 3 and 7 are computable from this codebase's data; 4/5/8/9/11
+     render as explicit not-computed rows (matching `59-gstr-3b.md`'s own honesty
+     pattern), and 6/10/12/13 are omitted from the response shape entirely because even
+     a labeled placeholder would imply a workflow (amendments, advances, portal-mismatch
+     reconciliation, purchase-side HSN summary) this codebase structurally cannot
+     support and `60-hsn-summary.md` already explicitly declined to build.
+  2. **ITC (Input Tax Credit)**: `59-gstr-3b.md`'s Table 4(A)(5) already sums this
+     company's total claimable ITC as one lump figure, with no eligibility
+     categorization, no ledger, and no reversal tracking (all explicitly out of scope
+     per spec 59's own Business Rules — this codebase has no Section 17(5) eligibility
+     data anywhere). **User confirmed**: build a **report only** — rate-wise,
+     party-wise, and HSN-wise breakdown of that same figure, reconciling exactly with
+     GSTR-3B's Table 4(A)(5)/(C) — explicitly **not** a full Electronic Credit Ledger
+     (a new model tracking availed/utilized/period-carried-forward balance, plus
+     persisted eligibility categorization and Rule 42/43 reversal support), which the
+     user was shown as the larger alternative and declined in favor of the report-only
+     scope. No new Prisma schema for either feature — the third and fourth Phase 8
+     specs (after GST Registers and HSN Summary) to add none.
+
+  Both specs follow the same template/voice as specs 57–60: Goal, Project Context,
+  Module/Non-Responsibilities, Data Model, Business Rules (table-by-table for GSTR-2,
+  matching the real form's own numbering for traceability), Service/Repository,
+  Validation, UI, Security, Database, Code Standards (each specifying a cross-check
+  test against GSTR-3B's own Table 4(A)(5) — "not just an independently-asserted
+  number," the same discipline spec 59's own Code Standards required of itself against
+  spec 58), Do Not, and Success Criteria. Both `context/Phases/phase-tracker.md`
+  (Phase 8's item tables plus a narrative entry) and this file's own spec-numbering
+  table and Next Up section were updated to record the new items. **Neither spec is
+  implemented yet** — three items are now queued in Phase 8 (HSN Summary #58/spec 60,
+  already queued first; GSTR-2 #80/spec 82; ITC Register #81/spec 83), and per
+  `ai-workflow-rules.md`'s one-feature-at-a-time rule, which to implement next (and in
+  what order) is an explicit decision for the user, not assumed here.
 
 - **Feature-spec 59 — GSTR-3B implemented 2026-09-11** on branch `feature/gstr-3b`,
   branched from the updated `main`, later merged back (`--no-ff`, no conflicts,
@@ -1556,9 +1607,23 @@ Mapping so far:
   implemented, reviewed, and merged into `main`** (`feature/gstr-3b`
   `77e88f9` — `--no-ff` merge, no conflicts, checks re-verified green; see
   the Current Phase entry above). Per `phase-tracker.md`, **HSN Summary
-  (#58/spec 60) is next** — the last item of Phase 8. Per
-  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a
-  time — awaiting explicit instruction before starting HSN Summary.
+  (#58/spec 60) remains queued next** in Phase 8's original item order.
+
+  **Two more Phase 8 items were added 2026-09-11, per explicit user request: GSTR-2
+  (#80/spec 82) and an ITC Register (#81/spec 83)** — both drafted (documentation
+  only, not implemented), matching this phase's own established
+  batch-drafting-without-implementation precedent. See the Current Phase entry
+  above for what each is scoped to do; both were explicitly scoped down from a
+  larger version during drafting (GSTR-2 to a read-only reporting view rather than
+  actual GSTR-2A/2B portal reconciliation; ITC Register to a rate/party/HSN
+  breakdown report rather than a full Electronic Credit Ledger) via a clarifying
+  question to the user before any spec content was written.
+
+  **Three items are now queued in Phase 8 with no implementation yet: HSN Summary
+  (#58/spec 60, queued first, per the phase's original order), GSTR-2 (#80/spec 82),
+  and ITC Register (#81/spec 83).** Per `ai-workflow-rules.md`, only one
+  feature/subsystem should be worked on at a time — **awaiting explicit
+  instruction on which of these three to implement next**, and in what order.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
