@@ -163,7 +163,40 @@ Mapping so far:
   independence from GSTR-1's own `GstFilingRecord` row for the same period). `npx tsc
   --noEmit`, `npx eslint src prisma` (0 errors, same 2 pre-existing unrelated
   warnings), `npx vitest run`, and `next build` all pass; `/gst/gstr-3b` appears in the
-  build route table. **Not yet code-reviewed, security-reviewed, or merged to `main`.**
+  build route table.
+
+  **Post-implementation code review + security review** (agents run in parallel) found
+  0 CRITICAL/HIGH in either pass. Code review: 2 MEDIUM, 2 LOW; security review: 0
+  CRITICAL/HIGH/MEDIUM, 1 LOW. **Both MEDIUM and one LOW fixed, two LOW accepted as-is**:
+  - **MEDIUM, fixed**: Table 5's `determineSupplyType` call could throw an uncaught
+    `AppError` for the *entire* `getGstr3BReturn` call if a single nil-rated inward line
+    carried a stale/legacy GST state code — the one path in this service that didn't
+    degrade gracefully like every other "can't compute" case. Fixed by validating both
+    the company's and every line's state code with `isValidGstStateCode` before calling
+    `determineSupplyType`, falling back to a visible not-computed Table 5 row instead of
+    failing the whole return.
+  - **MEDIUM, fixed**: the spec's own Code Standards required an explicit cross-check
+    test for Table 3.2 against `gstr1Service`'s own classification, "not just an
+    independently-asserted number" — the original tests only asserted hand-computed
+    totals. Added a test running the same fixture through both services and asserting
+    their state-level totals agree.
+  - **LOW, fixed**: the repeated `row.computed ? "..." : "..."` cell-class ternary (10
+    occurrences across two table components) was extracted into a shared
+    `gstr3bFinancialCellClass` helper.
+  - **LOW, accepted as-is (code review)**: Table 5's "Non-GST supply" row shows the same
+    always-₹0 figure in both Inter-State/Intra-State columns since `Gstr3bAmountRow`
+    models one `amount`, not a split — harmless while the row stays permanently
+    not-computed.
+  - **LOW, accepted as-is (security review)**: `reopenGstr3BPeriodAction`'s bare
+    un-validated `id` parameter is pre-existing precedent duplicated verbatim from
+    `gstr1-actions.ts`, not a regression — `reopenPeriod` already checks company
+    ownership before any mutation, and the "not found"/"other company" paths return an
+    identical generic message (no cross-tenant existence oracle).
+  - Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx
+    vitest run` (1523/1523, 2 new regression tests), and `next build` all pass.
+
+  **Still not yet merged to `main`** — awaiting explicit instruction before merging
+  `feature/gstr-3b` and starting HSN Summary (#58/spec 60).
 
 - **Feature-spec 58 — GSTR-1 implemented 2026-09-11** on branch `feature/gstr-1`,
   branched from the updated `main`, later merged back (`--no-ff`, no conflicts,

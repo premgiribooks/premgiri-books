@@ -556,8 +556,40 @@ change — it was already return-type-agnostic (just an `options` list + URL par
 
 1521/1521 total suite passing (13 new). `npx tsc --noEmit`, `npx eslint src prisma` (0
 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and `next build` all
-pass; `/gst/gstr-3b` appears in the build route table. Not yet code-reviewed,
-security-reviewed, or merged to `main` — see progress-tracker.md's Open Questions.
+pass; `/gst/gstr-3b` appears in the build route table.
+
+**Post-implementation code review + security review** (agents run in parallel) found 0
+CRITICAL/HIGH in either pass. Code review: 2 MEDIUM, 2 LOW — **both MEDIUM fixed, one LOW
+fixed, one LOW accepted as-is**:
+- **MEDIUM, fixed**: `determineSupplyType` (Table 5's intra/inter split) would throw an
+  uncaught `AppError` for the whole `getGstr3BReturn` call if a single nil-rated inward
+  line carried a stale/legacy GST state code — the one path in this service that didn't
+  degrade gracefully to a not-computed row like every other "can't compute" case. Fixed
+  by validating both the company's and every line's state code via `isValidGstStateCode`
+  before calling `determineSupplyType`, falling back to a visible not-computed Table 5
+  row (with a named reason) instead of failing the entire return.
+- **MEDIUM, fixed**: the spec's own Code Standards section explicitly required an
+  "explicit cross-check test against spec 58's own classification, not just an
+  independently-asserted number" for Table 3.2 — the original test suite only asserted
+  hand-computed totals. Added a test that runs the same fixture through both
+  `gstr3bService` and `gstr1Service` and asserts their state-level totals agree.
+- **LOW, fixed**: repeated `row.computed ? "..." : "..."` cell-class ternary (10
+  occurrences across two table components) extracted into a shared
+  `gstr3bFinancialCellClass` helper in `gstr3b-row-note.tsx`.
+- **LOW, accepted as-is**: Table 5's "Non-GST supply" row renders the same (always-₹0)
+  amount in both Inter-State/Intra-State columns since `Gstr3bAmountRow` models a single
+  `amount` — harmless today since the row is always not-computed; flagged for whichever
+  future spec first populates a real non-GST inward figure.
+- **Security review: 0 CRITICAL/HIGH/MEDIUM, 1 LOW, accepted as-is** —
+  `reopenGstr3BPeriodAction`'s bare un-validated `id` param is pre-existing precedent
+  duplicated verbatim from `gstr1-actions.ts`, not a regression; `reopenPeriod` already
+  checks company ownership before any mutation and both "not found"/"other company"
+  paths return the identical generic message (no cross-tenant existence oracle).
+- Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx
+  vitest run` (1523/1523, 2 new regression tests — the state-code-invalid fallback and
+  the Table 3.2 cross-check), and `next build` all pass.
+
+Still not yet merged to `main` — see progress-tracker.md's Open Questions/Next Up.
 
 ---
 
