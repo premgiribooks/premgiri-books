@@ -15,6 +15,11 @@ interface Gstr3bRowNoteProps {
   variant?: "not-tracked" | "note";
 }
 
+/** Shared right-aligned financial cell class — muted for a not-computed row's always-₹0 figure, plain for a real computed one. */
+export function gstr3bFinancialCellClass(computed: boolean): string {
+  return computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground";
+}
+
 export function Gstr3bRowNote({ reason, variant = "not-tracked" }: Gstr3bRowNoteProps) {
   if (!reason) {
     return null;

@@ -1,4 +1,4 @@
-import { determineSupplyType, gstReportEngine } from "@/engines/gst/gst-engine";
+import { determineSupplyType, gstReportEngine, isValidGstStateCode } from "@/engines/gst/gst-engine";
 import type { GstSupplyLine } from "@/engines/gst/gst-report-types";
 import { AppError } from "@/lib/app-error";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
@@ -53,6 +53,8 @@ const NOT_TRACKED_NON_GST_INWARD =
   "Non-GST inward supplies are not tracked — no product or document is flagged as outside GST scope.";
 const NOT_TRACKED_STATE_CODE_MISSING =
   "Company GST state code is not configured — intra-state/inter-state cannot be determined for inward supplies.";
+const NOT_TRACKED_INVALID_STATE_CODE =
+  "One or more nil-rated inward supply lines carry an unrecognized GST state code — intra-state/inter-state cannot be determined safely. Review manually.";
 const INTEREST_LATE_FEE_NOTE =
   "Interest and late fee depend on the actual GST portal filing date versus the statutory due date, neither of which this offline system tracks. Compute this at actual filing time.";
 
@@ -167,16 +169,28 @@ async function getCompanyStateCode(companyId: string): Promise<string | null> {
  * the split cannot be read off the tax columns; it requires the same
  * companyStateCode/placeOfSupplyStateCode comparison
  * purchase-invoice-service.ts already used once to decide the (now-zero)
- * cgst/sgst/igst split at posting time.
+ * cgst/sgst/igst split at posting time. Both state codes are validated
+ * up front (rather than letting `determineSupplyType` throw mid-loop) so a
+ * single stale/legacy code on one old posted line degrades this one table
+ * to a visible not-computed row instead of failing the entire return —
+ * every other "can't compute" case in this service behaves the same way.
  */
 async function buildExemptInwardSupplies(companyId: string, inwardLines: GstSupplyLine[]): Promise<Gstr3bExemptInwardSupplies> {
   const nilRatedLines = inwardLines.filter((line) => line.ratePercent === 0);
   const companyStateCode = await getCompanyStateCode(companyId);
 
-  if (!companyStateCode) {
+  if (!companyStateCode || !isValidGstStateCode(companyStateCode)) {
     return {
       intraState: notComputedAmountRow(NOT_TRACKED_STATE_CODE_MISSING),
       interState: notComputedAmountRow(NOT_TRACKED_STATE_CODE_MISSING),
+      nonGst: notComputedAmountRow(NOT_TRACKED_NON_GST_INWARD),
+    };
+  }
+
+  if (nilRatedLines.some((line) => !isValidGstStateCode(line.placeOfSupplyStateCode))) {
+    return {
+      intraState: notComputedAmountRow(NOT_TRACKED_INVALID_STATE_CODE),
+      interState: notComputedAmountRow(NOT_TRACKED_INVALID_STATE_CODE),
       nonGst: notComputedAmountRow(NOT_TRACKED_NON_GST_INWARD),
     };
   }

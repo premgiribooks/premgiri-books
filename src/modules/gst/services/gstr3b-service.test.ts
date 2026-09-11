@@ -4,6 +4,7 @@ const {
   getOutwardSupplyLinesMock,
   getInwardSupplyLinesMock,
   determineSupplyTypeMock,
+  isValidGstStateCodeMock,
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
   assertPermissionMock,
@@ -15,6 +16,7 @@ const {
   getOutwardSupplyLinesMock: vi.fn(),
   getInwardSupplyLinesMock: vi.fn(),
   determineSupplyTypeMock: vi.fn(),
+  isValidGstStateCodeMock: vi.fn(),
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
   assertPermissionMock: vi.fn(),
@@ -27,6 +29,7 @@ const {
 vi.mock("@/engines/gst/gst-engine", () => ({
   gstReportEngine: { getOutwardSupplyLines: getOutwardSupplyLinesMock, getInwardSupplyLines: getInwardSupplyLinesMock },
   determineSupplyType: determineSupplyTypeMock,
+  isValidGstStateCode: isValidGstStateCodeMock,
 }));
 vi.mock("@/lib/current-user", () => ({ getCurrentCompanyUser: getCurrentCompanyUserMock }));
 vi.mock("@/lib/current-financial-year", () => ({ getCurrentFinancialYear: getCurrentFinancialYearMock }));
@@ -37,6 +40,7 @@ vi.mock("@/modules/gst/repositories/gst-filing-repository", () => ({
 }));
 
 import type { GstSupplyLine } from "@/engines/gst/gst-report-types";
+import { gstr1Service } from "@/modules/gst/services/gstr1-service";
 import { gstr3bService } from "@/modules/gst/services/gstr3b-service";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -98,6 +102,7 @@ beforeEach(() => {
   getOutwardSupplyLinesMock.mockReset().mockResolvedValue([]);
   getInwardSupplyLinesMock.mockReset().mockResolvedValue([]);
   determineSupplyTypeMock.mockReset();
+  isValidGstStateCodeMock.mockReset().mockReturnValue(true);
   getCurrentFinancialYearMock.mockReset().mockResolvedValue({ id: FY_ID });
   getCurrentCompanyUserMock.mockReset().mockResolvedValue({ id: "u1", companyId: COMPANY_ID, role: "Company Admin" });
   assertPermissionMock.mockReset().mockResolvedValue(undefined);
@@ -281,6 +286,56 @@ describe("gstr3bService.getGstr3BReturn — Table 3.2 unregistered inter-state c
     expect(result.interStateSupplies.unregisteredRecipients[0].taxableAmount).toBe(0);
     expect(result.interStateSupplies.unregisteredRecipients[0].igst).toBe(0);
   });
+
+  it("cross-checks against gstr1Service's own output: summed to state level, matches the inter-state-unregistered subset of its Table 5 (B2C Large) + Table 7 (B2C Small) — not just an independently-asserted number (59-gstr-3b.md Code Standards)", async () => {
+    const largeInvoice = outwardLine({
+      documentId: "large-1",
+      partyGstin: null,
+      placeOfSupplyStateCode: "29",
+      igst: 45000,
+      cgst: 0,
+      sgst: 0,
+      taxableAmount: 250000,
+      totalAmount: 295000, // > B2C_LARGE_THRESHOLD_RUPEES (250000) -> gstr1's Table 5 (B2C Large)
+    });
+    const smallInvoice = outwardLine({
+      documentId: "small-1",
+      partyGstin: null,
+      placeOfSupplyStateCode: "29",
+      igst: 1800,
+      cgst: 0,
+      sgst: 0,
+      taxableAmount: 10000,
+      totalAmount: 11800, // below the threshold -> gstr1's Table 7 (B2C Small)
+    });
+    getOutwardSupplyLinesMock.mockResolvedValue([largeInvoice, smallInvoice]);
+
+    const [gstr3bResult, gstr1Result] = await Promise.all([
+      gstr3bService.getGstr3BReturn({ from: FROM, to: TO }),
+      gstr1Service.getGstr1Return({ from: FROM, to: TO }),
+    ]);
+
+    const expectedTaxable =
+      gstr1Result.b2cLarge.filter((g) => g.placeOfSupplyStateCode === "29").reduce((sum, g) => sum + g.taxableAmount, 0) +
+      gstr1Result.b2cSmall
+        .filter((g) => g.placeOfSupplyStateCode === "29" && g.igst !== 0)
+        .reduce((sum, g) => sum + g.taxableAmount, 0);
+    const expectedIgst =
+      gstr1Result.b2cLarge
+        .filter((g) => g.placeOfSupplyStateCode === "29")
+        .reduce((sum, g) => sum + g.breakup.reduce((s, b) => s + b.igst, 0), 0) +
+      gstr1Result.b2cSmall.filter((g) => g.placeOfSupplyStateCode === "29" && g.igst !== 0).reduce((sum, g) => sum + g.igst, 0);
+
+    // Sanity: the cross-check fixture actually exercises both gstr1 tables.
+    expect(gstr1Result.b2cLarge).toHaveLength(1);
+    expect(gstr1Result.b2cSmall).toHaveLength(1);
+    expect(expectedTaxable).toBe(260000);
+    expect(expectedIgst).toBe(46800);
+
+    const actual = gstr3bResult.interStateSupplies.unregisteredRecipients.find((g) => g.placeOfSupplyStateCode === "29");
+    expect(actual?.taxableAmount).toBe(expectedTaxable);
+    expect(actual?.igst).toBe(expectedIgst);
+  });
 });
 
 describe("gstr3bService.getGstr3BReturn — Table 4(A)(5)/(C) net ITC", () => {
@@ -343,6 +398,25 @@ describe("gstr3bService.getGstr3BReturn — Table 5 nil-rated inward intra/inter
     expect(result.exemptInwardSupplies.interState.computed).toBe(false);
     expect(result.exemptInwardSupplies.interState.reason.length).toBeGreaterThan(0);
     expect(determineSupplyTypeMock).not.toHaveBeenCalled();
+  });
+
+  it("degrades to a visible not-computed row for both intra/inter-state — instead of throwing and failing the whole return — when a nil-rated inward line carries an unrecognized GST state code", async () => {
+    companyFindUniqueMock.mockResolvedValue({ stateCode: "27" });
+    isValidGstStateCodeMock.mockImplementation((code: string) => code !== "99");
+    getInwardSupplyLinesMock.mockResolvedValue([
+      inwardLine({ ratePercent: 0, placeOfSupplyStateCode: "99", cgst: 0, sgst: 0, igst: 0, taxableAmount: 300 }),
+    ]);
+
+    const result = await gstr3bService.getGstr3BReturn({ from: FROM, to: TO });
+
+    expect(result.exemptInwardSupplies.intraState.computed).toBe(false);
+    expect(result.exemptInwardSupplies.intraState.reason.length).toBeGreaterThan(0);
+    expect(result.exemptInwardSupplies.interState.computed).toBe(false);
+    expect(result.exemptInwardSupplies.interState.reason.length).toBeGreaterThan(0);
+    expect(determineSupplyTypeMock).not.toHaveBeenCalled();
+    // The rest of the return still renders — this one bad row degrades only
+    // Table 5, it does not throw and fail the whole getGstr3BReturn call.
+    expect(result.outwardSupplies.taxableOutwardSupplies.computed).toBe(true);
   });
 });
 

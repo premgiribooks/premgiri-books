@@ -1,5 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gstr3bRowNote } from "@/modules/gst/components/gstr3b-row-note";
+import { Gstr3bRowNote, gstr3bFinancialCellClass } from "@/modules/gst/components/gstr3b-row-note";
 import type { Gstr3bOutwardSupplies, Gstr3bTaxRow } from "@/types/gstr3b";
 
 interface Gstr3bOutwardSuppliesTableProps {
@@ -61,21 +61,11 @@ export function Gstr3bOutwardSuppliesTable({ outwardSupplies }: Gstr3bOutwardSup
                   <Gstr3bRowNote reason={row.reason} variant={row.computed ? "note" : "not-tracked"} />
                 </div>
               </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.taxableAmount.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.cgst.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.sgst.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.igst.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.cess.toFixed(2)}
-              </TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.taxableAmount.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.cgst.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.sgst.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.igst.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.cess.toFixed(2)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

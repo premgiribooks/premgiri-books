@@ -1,5 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gstr3bRowNote } from "@/modules/gst/components/gstr3b-row-note";
+import { Gstr3bRowNote, gstr3bFinancialCellClass } from "@/modules/gst/components/gstr3b-row-note";
 import type { Gstr3bEligibleItc, Gstr3bItcRow } from "@/types/gstr3b";
 
 interface Gstr3bEligibleItcTableProps {
@@ -60,18 +60,10 @@ export function Gstr3bEligibleItcTable({ eligibleItc }: Gstr3bEligibleItcTablePr
                   <Gstr3bRowNote reason={row.reason} variant={row.computed ? "note" : "not-tracked"} />
                 </div>
               </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.cgst.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.sgst.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.igst.toFixed(2)}
-              </TableCell>
-              <TableCell className={row.computed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-                {row.cess.toFixed(2)}
-              </TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.cgst.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.sgst.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.igst.toFixed(2)}</TableCell>
+              <TableCell className={gstr3bFinancialCellClass(row.computed)}>{row.cess.toFixed(2)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -1,5 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gstr3bRowNote } from "@/modules/gst/components/gstr3b-row-note";
+import { Gstr3bRowNote, gstr3bFinancialCellClass } from "@/modules/gst/components/gstr3b-row-note";
 import type { Gstr3bExemptInwardSupplies } from "@/types/gstr3b";
 
 interface Gstr3bExemptInwardTableProps {
@@ -35,12 +35,8 @@ export function Gstr3bExemptInwardTable({ exemptInwardSupplies }: Gstr3bExemptIn
                 {!nilRatedComputed ? <Gstr3bRowNote reason={nilRatedReason} /> : null}
               </div>
             </TableCell>
-            <TableCell className={nilRatedComputed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-              {interState.amount.toFixed(2)}
-            </TableCell>
-            <TableCell className={nilRatedComputed ? "text-right font-financial" : "text-right font-financial text-muted-foreground"}>
-              {intraState.amount.toFixed(2)}
-            </TableCell>
+            <TableCell className={gstr3bFinancialCellClass(nilRatedComputed)}>{interState.amount.toFixed(2)}</TableCell>
+            <TableCell className={gstr3bFinancialCellClass(nilRatedComputed)}>{intraState.amount.toFixed(2)}</TableCell>
           </TableRow>
           <TableRow className="bg-muted/30">
             <TableCell>
@@ -49,8 +45,8 @@ export function Gstr3bExemptInwardTable({ exemptInwardSupplies }: Gstr3bExemptIn
                 <Gstr3bRowNote reason={nonGst.reason} />
               </div>
             </TableCell>
-            <TableCell className="text-right font-financial text-muted-foreground">{nonGst.amount.toFixed(2)}</TableCell>
-            <TableCell className="text-right font-financial text-muted-foreground">{nonGst.amount.toFixed(2)}</TableCell>
+            <TableCell className={gstr3bFinancialCellClass(false)}>{nonGst.amount.toFixed(2)}</TableCell>
+            <TableCell className={gstr3bFinancialCellClass(false)}>{nonGst.amount.toFixed(2)}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
