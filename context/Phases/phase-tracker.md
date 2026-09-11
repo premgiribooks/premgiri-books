@@ -465,7 +465,7 @@ header note already established for tracker-vs-spec-file numbering:
 | 55  | GST Registers | GST Engine | ✅     |
 | 56  | GSTR-1        | GST Engine | ✅     |
 | 57  | GSTR-3B       | GST Engine | ✅     |
-| 58  | HSN Summary   | GST Engine | ⬜     |
+| 58  | HSN Summary   | GST Engine | ✅     |
 | 80  | GSTR-2        | GST Registers (#55) | ⬜     |
 | 81  | ITC Register  | GST Registers (#55); GSTR-3B (#57) | ⬜     |
 
@@ -626,8 +626,35 @@ live: started the dev server, logged in as `admin`, navigated to `/gst/gstr-3b` 
 response, zero console/page errors (Playwright-driven check). `tsc`/`eslint`/`vitest`
 (1523/1523)/`next build` all re-verified green against the merged result.
 
-Now that GSTR-3B (#57) is implemented, reviewed, merged, and this runtime bug fixed,
-**HSN Summary (#58/spec 60) remains queued next in this phase's original order.**
+**HSN Summary (#58) implemented 2026-09-11** on branch `feature/hsn-summary` — the last
+item in Phase 8's original four-item batch. New `hsnSummaryService.getHsnSummary()`
+(`src/modules/gst/services/hsn-summary-service.ts`) groups `getOutwardSupplyLines`'
+(spec 57) product-bearing lines by `(hsnCode, codeType, ratePercent)`, filtered first
+through the same optional partyId/hsnCode/ratePercent predicate the Registers screen
+uses — extracted to a new shared `matchesOptionalGstReportFilters` helper in
+`gst-supply-line-filters.ts` so `gst-register-service.ts` and this service apply
+identical filter semantics rather than duplicating the predicate (code-standards.md's
+DRY rule). Credit Note/Debit Note lines (no `productId`) are excluded from the grouped
+output entirely; a product-bearing line whose product carries no `hsnCodeId` lands in a
+single "No HSN Assigned" bucket instead of being dropped, always rendered last. A
+group's Quantity column shows a representative Unit (first/most-common by frequency)
+plus a "Mixed unit" badge when the group actually summed quantities from more than one
+distinct `Unit`. One batched `prisma.product.findMany` resolves every group's HSN
+description/codeType and unit label — no N+1, no query inside the grouping loop. No new
+Prisma model/migration (pure grouping over spec 57's output, per the spec's own Data
+Model section). New `/gst/hsn-summary` page (reusing the Registers screen's
+`GstReportFilterBar`/`GstReportExportButton` unmodified, per the spec) and a shared
+`HsnSummaryTable` component, embedded verbatim (same props, no second aggregation call)
+by `58-gstr-1.md`'s own Table 12 section, replacing its former "not yet available"
+placeholder. `/gst` hub card flipped from disabled "Coming soon" to linked. Added the
+`hsn-summary` breadcrumb label. 6 new vitest cases (permission gate, same-HSN-same-rate
+grouping vs. same-HSN-different-rate split, signed Sales Return netting, mixed-unit
+badge on/off, "No HSN Assigned" bucketing + Credit/Debit Note exclusion, cross-company
+product-lookup scoping) — 1529/1529 total suite passing. `npx tsc --noEmit`, `npx eslint
+src prisma` (0 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and
+`next build` all pass; `/gst/hsn-summary` appears in the build route table. Not yet
+browser-verified (no browser tool available this session). Not yet code/security
+reviewed or merged into `main` — see progress-tracker.md's Current Phase entry.
 
 **GSTR-2 (#80) and ITC Register (#81) feature-specs drafted 2026-09-11** (documentation
 only, not implemented — matching this phase's own original batch-drafting precedent),
@@ -664,10 +691,11 @@ renumbering anything already assigned to Phase 9-11.
   `59-gstr-3b.md`'s own Table 4(D) disclosure at the point where a filer actually sees
   the transaction-level detail, not just a summary line.
 
-**Neither is implemented yet.** Per `ai-workflow-rules.md`'s one-feature-at-a-time rule,
-implementation order among HSN Summary (#58, already queued) and these two new items
-(#80/#81) is a priority decision for the user, not assumed by this drafting pass — see
-progress-tracker.md's Next Up.
+**Neither GSTR-2 (#80) nor ITC Register (#81) is implemented yet.** HSN Summary (#58,
+above) is now implemented, closing out Phase 8's original four-item batch; GSTR-2/ITC
+Register are the two remaining Phase 8 items. Per `ai-workflow-rules.md`'s
+one-feature-at-a-time rule, which of the two goes next is a priority decision for the
+user, not assumed here — see progress-tracker.md's Next Up.
 
 ---
 
@@ -837,8 +865,12 @@ implemented, reviewed, and merged into `main`** (see the Phase 8 section above f
 full record) — `feature/gst-registers` merged `--no-ff`, no conflicts, checks
 re-verified green (`ac10ffa`). **GSTR-1 (#56) is implemented, reviewed, and merged into
 `main`** (`feature/gstr-1` merged `--no-ff`, no conflicts, checks re-verified green —
-`6f9274c`). **GSTR-3B (#57) is next** to implement, awaiting explicit instruction — HSN
-Summary (#58) remains after it.
+`6f9274c`). **GSTR-3B (#57) is implemented, reviewed, and merged into `main`**
+(`77e88f9`, plus a post-merge client-boundary bugfix `7699db4` — see the Phase 8 section
+above). **HSN Summary (#58) is implemented** on branch `feature/hsn-summary`, closing
+Phase 8's original four-item batch, not yet reviewed or merged — see the Phase 8 section
+above for the full record. GSTR-2 (#80) and ITC Register (#81) remain the two
+outstanding Phase 8 items.
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
 

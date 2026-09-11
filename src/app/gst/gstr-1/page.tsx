@@ -14,13 +14,18 @@ import { Gstr1FilingStatusBanner } from "@/modules/gst/components/gstr1-filing-s
 import { Gstr1NilRatedTable } from "@/modules/gst/components/gstr1-nil-rated-table";
 import { Gstr1PeriodSelector } from "@/modules/gst/components/gstr1-period-selector";
 import { gstr1Service } from "@/modules/gst/services/gstr1-service";
+import { HsnSummaryTable } from "@/modules/gst/components/hsn-summary-table";
+import { hsnSummaryService } from "@/modules/gst/services/hsn-summary-service";
 import { isValidCalendarDate, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
 import { getMonthlyPeriodOptions, getQuarterlyPeriodOptions } from "@/modules/gst/utils/gst-filing-periods";
 import type { GstFilingRecord, Gstr1Return } from "@/types/gstr1";
+import type { HsnSummaryResult } from "@/types/hsn-summary";
 
 interface Gstr1PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+const ZERO_TOTALS = { taxableAmount: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, totalAmount: 0 };
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -67,13 +72,17 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
 
   let gstr1Return: Gstr1Return | null = null;
   let filingRecord: GstFilingRecord | null = null;
+  let hsnSummary: HsnSummaryResult | null = null;
 
   if (selectedPeriod) {
     const periodStart = toUtcDate(selectedPeriod.from);
     const periodEnd = toUtcDate(selectedPeriod.to);
-    [gstr1Return, filingRecord] = await Promise.all([
+    [gstr1Return, filingRecord, hsnSummary] = await Promise.all([
       gstr1Service.getGstr1Return({ from: periodStart, to: periodEnd }),
       gstr1Service.getFilingRecord(periodStart, periodEnd),
+      // Table 12 delegates entirely to 60-hsn-summary.md's own output — no
+      // independent HSN aggregation query here.
+      hsnSummaryService.getHsnSummary({ from: periodStart, to: periodEnd }),
     ]);
   }
 
@@ -114,17 +123,9 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
                   unregistered={gstr1Return.creditDebitNotesUnregistered}
                 />
 
-                {/* Table 12 (HSN Summary) delegates entirely to 60-hsn-summary.md's
-                    own output — that spec is not yet implemented (Phase 8 item #58,
-                    after GSTR-3B), so this section is a forward-noted placeholder,
-                    never a second, independently-derived HSN aggregation. */}
                 <div className="flex flex-col gap-3">
                   <h3 className="text-sm font-semibold text-foreground">Table 12 — HSN Summary</h3>
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
-                    <p className="text-sm text-muted-foreground">
-                      HSN Summary is not yet available — it will appear here once implemented.
-                    </p>
-                  </div>
+                  <HsnSummaryTable rows={hsnSummary?.rows ?? []} totals={hsnSummary?.totals ?? ZERO_TOTALS} />
                 </div>
               </div>
             ) : null}

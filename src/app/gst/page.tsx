@@ -30,10 +30,11 @@ const GST_MODULES = [
     available: true,
   },
   {
+    href: "/gst/hsn-summary",
     icon: ListChecks,
     title: "HSN Summary",
-    description: "HSN-wise grouped outward turnover.",
-    available: false,
+    description: "HSN-wise grouped outward turnover, the same data GSTR-1's Table 12 embeds.",
+    available: true,
   },
 ] as const;
 
