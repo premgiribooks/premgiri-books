@@ -141,6 +141,12 @@ Mapping so far:
     fixed — see Open Questions) plus two informational notes (the `deriveSerialStatus`
     tie-break and unit-level-only concurrency test coverage, both confirmed as sound/
     consistent with this codebase's existing conventions, no action needed).
+  - **Merged into `main` and pushed 2026-09-11** (`git merge --no-ff
+    feature/serial-number-tracking`, commit `08425e0`; local feature branch deleted
+    after merge, per `ai-workflow-rules.md`'s Merge to Main lifecycle). `tsc`, `eslint`,
+    `vitest` (1333/1333), and `next build` were all re-verified against the merged
+    result before pushing. Phase 5 (Inventory) is closed; next up is Phase 7
+    (Accounting).
 
 - **Feature-spec 56 — Product Detail Page implemented 2026-09-11** on branch
   `feature/product-detail-page`, branched off `main` immediately after merging

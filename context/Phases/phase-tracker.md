@@ -511,6 +511,13 @@ succeeded) → deactivated one serial, toggled it back active → deactivated al
 products afterward (this codebase has no hard-delete for masters, matching every other
 module's convention).
 
+**Code review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH findings**,
+one accepted LOW (see `context/progress-tracker.md`'s Open Questions) plus two
+informational notes, both confirmed sound. **Merged into `main` and pushed 2026-09-11**
+(`git merge --no-ff feature/serial-number-tracking`, commit `08425e0`; `tsc`/`eslint`/
+`vitest`(1333/1333)/`next build` re-verified against the merged result before pushing;
+local feature branch deleted). Phase 5 (Inventory) is now closed in full.
+
 Batch Tracking (`feature/batch-tracking`) — the first of the two genuinely new
 engine-adjacent schema additions Phase 5 reserved (32-inventory-engine.md's own Do Not
 section deferred batch/serial tracking here). New `Product.isBatchTracked` (opt-in,
