@@ -351,10 +351,36 @@ three do), since it has no structural safeguard against an arbitrary entry.
 
 | #   | Feature         | Depends On     | Status |
 | --- | --------------- | -------------- | ------ |
-| 51  | Payment Voucher | Voucher Engine | ⬜     |
+| 51  | Payment Voucher | Voucher Engine | ✅     |
 | 52  | Receipt Voucher | Voucher Engine | ⬜     |
 | 53  | Contra Voucher  | Voucher Engine | ⬜     |
 | 54  | Journal Voucher | Voucher Engine | ⬜     |
+
+Payment Voucher (#51, `feature/payment-voucher`) implemented 2026-09-11. UI + validation
+only, no new Prisma model, per the spec's Goal (a Payment Voucher *is* a `Voucher`). New
+`src/modules/manual-vouchers/` (the shared module home this phase's four specs all use,
+though only Payment Voucher's own service/validation/actions/components exist so far) —
+`paymentVoucherService.postPaymentVoucher` validates exactly one Credit entry restricted
+to the Cash-in-Hand-or-BankAccount-linked ledger class and one-or-more Debit entries
+against any other active ledger, computes the Credit amount as the sum of the Debit
+lines server-side, then calls `voucherEngine.postVoucher` unmodified;
+`cancelPaymentVoucher` is a thin pass-through to `voucherEngine.cancelVoucher` rejecting
+a non-`PAYMENT` voucher id. Per the spec's explicit instruction, the Cash/Bank
+ledger-class check was extracted from `purchase-invoice-service.ts`'s
+`assertPaymentLedgersValid` into a new shared `src/lib/ledger-class.ts`
+(`assertLedgersAreCashOrBank`, parameterized by a `usageLabel` string) — Purchase Invoice
+now delegates to it with its prior behavior/messages unchanged (its own 53-test suite
+passes unmodified); `purchase-return-service.ts`'s near-identical
+`assertRefundLedgerValid` was deliberately left untouched, per that module's own
+pre-existing comment recording a decision to stay uncoupled from Purchase Invoice's code
+path — not silently revisited. New `/accounting/payment-vouchers` (list),
+`/accounting/payment-vouchers/new` (create), `/accounting/payment-vouchers/[id]`
+(read-only detail, Cancel gated on `approve`, no Edit — every voucher in this project is
+immutable once posted), a new "Payment Vouchers" card on the `/accounting` hub, and a
+`payment-vouchers` breadcrumb label. `npx tsc --noEmit`, `npx eslint src prisma`,
+`npx vitest run` (1367/1367), and `next build` all pass; browser-verified end-to-end
+(created, posted as `PMT-0001`, viewed, and cancelled a voucher — see
+`context/progress-tracker.md`'s Current Phase entry for the full walkthrough).
 
 ---
 
@@ -438,13 +464,16 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 7 — Accounting (#51–#54)**. Serial Number Tracking (#49, `feature/serial-
-number-tracking`, implemented 2026-09-11) closes Phase 5 in full — Opening Stock (#44),
-Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47), Batch Tracking
-(#48), Product Detail Page (#50), and now Serial Number Tracking (#49) are all
-implemented. See the paragraph below and `context/progress-tracker.md`'s Current Phase
-entry for the full record. Normal phase order now continues at Phase 7 (Accounting, the
-four manual voucher screens — Payment/Receipt/Contra/Journal Voucher, specs 52–55).
+➡ **Phase 7 — Accounting, Receipt Voucher (#52)** next. Payment Voucher (#51,
+`feature/payment-voucher`, implemented 2026-09-11) is Phase 7's first item — see the
+Phase 7 section above for the implementation record. Receipt/Contra/Journal Voucher
+(#52–#54) remain, all sharing the `src/modules/manual-vouchers/` module Payment Voucher
+established and the `assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`)
+Receipt and Contra Voucher will both reuse. Serial Number Tracking (#49,
+`feature/serial-number-tracking`, implemented 2026-09-11) closed Phase 5 in full — Opening
+Stock (#44), Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47),
+Batch Tracking (#48), Product Detail Page (#50), and Serial Number Tracking (#49) are all
+implemented.
 
 Serial Number Tracking (`feature/serial-number-tracking`) — the second of the two
 genuinely new engine-adjacent schema additions Phase 5 reserved, the structural mirror of

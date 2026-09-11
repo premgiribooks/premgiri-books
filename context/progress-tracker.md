@@ -66,7 +66,7 @@ Mapping so far:
 | 49           | Physical Verification (`49-physical-verification.md`)                           | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#47) — **implemented 2026-09-11** (git branch `feature/physical-verification`); fourth of Phase 5's six documents; new `PhysicalVerificationStatus` enum and `PhysicalVerification`/`PhysicalVerificationItem` models, numbered via the Document Number Engine (new `DocumentType.PHYSICAL_VERIFICATION` value, since spec 34's original list didn't reserve it); completion re-derives `systemQuantity`/`varianceQuantity` fresh inside the completing transaction via a newly tx-aware `inventoryEngine.getCurrentStock`, then posts one `StockTransactionType.PHYSICAL_VERIFICATION` movement per non-zero-variance line |
 | 50           | Batch Tracking (`50-batch-tracking.md`)                                          | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#48) — **implemented 2026-09-11** (git branch `feature/batch-tracking`); fifth of Phase 5's six documents; new `Product.isBatchTracked` flag, `ProductBatch` catalog model, additive nullable `StockTransaction.batchId`; Batches tab UI deliberately deferred (no Product detail page existed) — see feature-spec 56 |
 | 51           | Serial Number Tracking (`51-serial-number-tracking.md`)                         | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#49) — **implemented 2026-09-11** (git branch `feature/serial-number-tracking`); last item in Phase 5, closing it in full; depended on feature-spec 56 (Product Detail Page) for its own Serial Numbers tab's host page |
-| 52           | Payment Voucher (`52-payment-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#51) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#50 when feature-spec 56 (Phase 6 — Product Detail Page) was inserted ahead of this phase |
+| 52           | Payment Voucher (`52-payment-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#51) — **implemented 2026-09-11** (git branch `feature/payment-voucher`); first of the four manual voucher screens; renumbered from Phase 6/#50 when feature-spec 56 (Phase 6 — Product Detail Page) was inserted ahead of this phase |
 | 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#51, see spec 52's note |
 | 54           | Contra Voucher (`54-contra-voucher.md`)                                         | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#53) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#52, see spec 52's note |
 | 55           | Journal Voucher (`55-journal-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#54) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#53, see spec 52's note; last item in Phase 7, closing the Accounting phase |
@@ -75,6 +75,71 @@ Mapping so far:
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Feature-spec 52 — Payment Voucher implemented 2026-09-11** on branch
+  `feature/payment-voucher`, branched off `main` immediately after merging
+  `feature/serial-number-tracking` into it. First of the four manual voucher screens
+  (Phase 7 — Accounting, #51–#54) — Receipt/Contra/Journal Voucher (#52–#54) remain
+  next. Per `52-payment-voucher.md`'s Goal, this is UI + validation only: no new Prisma
+  model, since a Payment Voucher *is* a `Voucher` (its own `voucherType`, an
+  engine-generated `voucherNumber`, `voucherDate`, `narration`, `entries`) with nothing a
+  generic voucher shape doesn't already hold. New `src/modules/manual-vouchers/` — the
+  shared module home the spec designates for all four manual-voucher screens, though only
+  Payment Voucher's own service/validation/actions/components are built here (Receipt/
+  Contra/Journal are separate future tasks per `ai-workflow-rules.md`'s one-feature-at-a-
+  time rule, not implemented speculatively).
+  - **Shared Cash/Bank ledger-class helper extracted, per the spec's explicit
+    instruction**: `src/lib/ledger-class.ts`'s `assertLedgersAreCashOrBank` — the "active,
+    company-owned, either under Cash-in-Hand or carrying a BankAccount detail row"
+    restriction, previously duplicated inside `purchase-invoice-service.ts`'s
+    `assertPaymentLedgersValid`. That function now delegates to the shared helper instead
+    of re-deriving the check, preserving its exact prior behavior (parameterized by a
+    `usageLabel` string so each caller's rejection message still reads naturally — "for
+    payment" for Purchase Invoice, "for this payment" for Payment Voucher). Deliberately
+    **not** applied to `purchase-return-service.ts`'s own `assertRefundLedgerValid` — that
+    module's own comment already records an explicit prior decision to stay uncoupled
+    from Purchase Invoice's code path, and the spec scoped this extraction to Purchase
+    Invoice only; that decision is left undisturbed, not silently revisited.
+    `purchase-invoice-service.test.ts`'s existing 53-test suite passes unmodified after
+    the refactor.
+  - `paymentVoucherService`: `listPaymentVouchers` (scoped to `voucherType: "PAYMENT"` and
+    the current financial year), `getPaymentVoucher` (company- and voucher-type-scoped,
+    a cross-company id or a different voucher type both resolve identically to "not
+    found"), `listLedgerOptions` (the Create form's ledger pickers — every active company
+    ledger, each flagged `isCashOrBank`), `postPaymentVoucher` (validates exactly one
+    Credit entry restricted to the Cash/Bank class via the shared helper, one-or-more
+    Debit entries against any other active ledger, computes the Credit entry's amount as
+    the integer-paise-safe sum of the Debit lines — never trusted from the client — then
+    calls `voucherEngine.postVoucher` unmodified), `cancelPaymentVoucher` (thin
+    pass-through to `voucherEngine.cancelVoucher`, rejecting an id belonging to a
+    different voucher type). No repository file — all persistence goes through
+    `voucherEngine`'s own.
+  - New `/accounting/payment-vouchers` (list), `/new` (create — Credit/Cash-Bank picker,
+    a Debit-lines table with Add/Remove, narration, a running total for the user's own
+    convenience only), and `/[id]` (read-only detail, Cancel action gated on `approve`,
+    no Edit — a posted voucher is immutable, matching every other document in this
+    project). Added a "Payment Vouchers" card to the existing `/accounting` hub and a
+    `payment-vouchers` breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1367/1367, +34 from
+    this feature), and `next build` all pass; `/accounting/payment-vouchers*` appears in
+    the build route table.
+  - **Browser-verified end-to-end with Playwright** against the dev server: created a
+    Payment Voucher (Credit against the seeded "Cash" ledger, one Debit line against
+    another ledger, amount 250) → posted successfully as `PMT-0001` → the list correctly
+    showed the Debit ledger's name under "Paid To," the amount, and a Posted badge → the
+    detail page correctly showed both entries (Cash Credit 250.00, the other ledger Debit
+    250.00, Total 250.00) → Cancel produced a confirmation dialog, then flipped the status
+    to Cancelled with a toast. No manual test data was left behind requiring cleanup — the
+    one voucher created for this walkthrough was itself cancelled as part of the
+    walkthrough (vouchers have no delete path in this codebase, only Cancel, matching
+    every other module's no-hard-delete convention).
+  - **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW findings. Security review:
+    zero CRITICAL/HIGH/MEDIUM findings**, two informational notes (both confirmed as
+    intentional design choices, not gaps — `assertLedgersAreCashOrBank`'s scoping happens
+    in application code rather than the query's `where` clause, matching the pre-existing
+    pattern it was extracted from; `listLedgerOptions` is gated on `view` rather than
+    `create`, mirroring `ledgerService.listSelectableLedgers`'s existing convention for
+    read-only picker data).
 
 - **Feature-spec 51 — Serial Number Tracking implemented 2026-09-11** on branch
   `feature/serial-number-tracking`, branched off `main` immediately after merging

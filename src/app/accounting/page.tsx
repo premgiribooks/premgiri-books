@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookText, HandCoins, Landmark, ListTree, Receipt } from "lucide-react";
+import { BookText, HandCoins, Landmark, ListTree, Receipt, Wallet } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,12 @@ const ACCOUNTING_MODULES = [
     icon: HandCoins,
     title: "Income Heads",
     description: "Manage non-sales income ledgers under Direct and Indirect Incomes.",
+  },
+  {
+    href: "/accounting/payment-vouchers",
+    icon: Wallet,
+    title: "Payment Vouchers",
+    description: "Record money paid out that isn't already captured by a document's own payment lines.",
   },
 ] as const;
 

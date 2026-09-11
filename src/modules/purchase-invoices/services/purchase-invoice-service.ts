@@ -3,6 +3,7 @@ import { Prisma, type CompanySettings } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError, isUniqueConstraintError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
@@ -21,10 +22,6 @@ import {
   isPurchaseLedgerMappingComplete,
 } from "@/modules/company/utils/purchase-ledger-mapping";
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
-import {
-  ledgerRepository,
-  type LedgerForValidation,
-} from "@/modules/ledgers/repositories/ledger-repository";
 import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
 import { purchaseOrderService } from "@/modules/purchase-orders/services/purchase-order-service";
 import {
@@ -96,8 +93,6 @@ const GRN_LINE_MISMATCH_MESSAGE =
   "Every invoice line must match one of the linked goods receipt note's own lines exactly (same product, warehouse, and quantity).";
 const HSN_MISSING_MESSAGE_PREFIX = "HSN/SAC code is required for";
 const OVERPAYMENT_MESSAGE = "Total payments cannot exceed the invoice's grand total.";
-const PAYMENT_LEDGER_INVALID_MESSAGE_SUFFIX =
-  "is not a Cash-in-Hand or bank-linked ledger and cannot be used for payment.";
 
 const QUANTITY_TOLERANCE = 1e-6;
 
@@ -530,9 +525,16 @@ function assertGoodsReceiptNoteConsistent(
   }
 }
 
-/** Payment ledgers restricted, server-side, to the Cash-in-Hand group or a
+/**
+ * Payment ledgers restricted, server-side, to the Cash-in-Hand group or a
  * BankAccount-linked ledger (44-purchase-invoice.md's Ledger Posting rule) —
- * stricter than Sales Invoice's "any active company ledger". */
+ * stricter than Sales Invoice's "any active company ledger". Delegates the
+ * actual class check to the shared `assertLedgersAreCashOrBank` helper
+ * (52-payment-voucher.md's Project Context: extracted from this exact
+ * function so Payment Voucher's identical Cash/Bank restriction has one
+ * implementation, not a third copy) — this wrapper only keeps this module's
+ * own array-of-payments call shape and the empty-array short-circuit.
+ */
 async function assertPaymentLedgersValid(
   client: PrismaClientOrTransaction,
   companyId: string,
@@ -541,26 +543,12 @@ async function assertPaymentLedgersValid(
   if (payments.length === 0) {
     return;
   }
-  const groups = await ledgerGroupRepository.findMany(companyId);
-  const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
-
-  const ledgerIds = [...new Set(payments.map((payment) => payment.ledgerId))];
-  const ledgers = await ledgerRepository.findLedgersForValidation(client, ledgerIds);
-  const ledgersById = new Map<string, LedgerForValidation>(ledgers.map((ledger) => [ledger.id, ledger]));
-
-  for (const payment of payments) {
-    const ledger = ledgersById.get(payment.ledgerId);
-    if (!ledger || ledger.companyId !== companyId) {
-      throw new AppError("One or more payment ledgers were not found.");
-    }
-    if (!ledger.isActive) {
-      throw new AppError(`Ledger "${ledger.name}" is inactive and cannot be used for payment.`);
-    }
-    const isCashInHand = cashGroupIds.has(ledger.ledgerGroupId);
-    if (!isCashInHand && !ledger.hasBankAccount) {
-      throw new AppError(`Ledger "${ledger.name}" ${PAYMENT_LEDGER_INVALID_MESSAGE_SUFFIX}`);
-    }
-  }
+  await assertLedgersAreCashOrBank(
+    client,
+    companyId,
+    payments.map((payment) => payment.ledgerId),
+    "payment"
+  );
 }
 
 interface VoucherEntriesInput {
