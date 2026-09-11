@@ -41,6 +41,13 @@ vi.mock("@/lib/transaction", () => ({
   runInTransaction: runInTransactionMock,
 }));
 
+// inventory-engine.ts now re-exports getCurrentStock (inventory-queries.ts),
+// which imports the module-level `prisma` client for its own company-scope
+// check — mocked to a plain object so importing the real engine module
+// doesn't try to construct a live client, mirroring
+// inventory-queries.test.ts's identical convention.
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+
 import { AppError } from "@/lib/app-error";
 import { recordMovement, recordMovements, transferStock } from "@/engines/inventory/inventory-engine";
 

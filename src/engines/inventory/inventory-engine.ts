@@ -17,6 +17,7 @@ import {
   type StockMovementLineInput,
   type TransferStockInput,
 } from "@/engines/inventory/inventory-validation";
+import { getCurrentStock } from "@/engines/inventory/inventory-queries";
 import type { RecordedStockTransaction, TransferStockResult } from "@/engines/inventory/types";
 import {
   stockTransactionRepository,
@@ -264,4 +265,5 @@ export const inventoryEngine = {
   recordMovement,
   recordMovements,
   transferStock,
+  getCurrentStock,
 };

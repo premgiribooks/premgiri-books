@@ -295,8 +295,12 @@ export const stockTransactionRepository = {
    * `productId` given) shapes 32-inventory-engine.md describes are this
    * same array, just filtered differently.
    */
-  async aggregateCurrentStock(companyId: string, filters: CurrentStockFilters = {}): Promise<CurrentStockRow[]> {
-    const rows = await prisma.stockTransaction.groupBy({
+  async aggregateCurrentStock(
+    companyId: string,
+    filters: CurrentStockFilters = {},
+    client: PrismaClientOrTransaction = prisma
+  ): Promise<CurrentStockRow[]> {
+    const rows = await client.stockTransaction.groupBy({
       by: ["productId", "warehouseId", "direction"],
       where: {
         companyId,
