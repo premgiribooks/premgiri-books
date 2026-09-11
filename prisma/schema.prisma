@@ -76,42 +76,43 @@ model Company {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  settings          CompanySettings?
-  financialYears    FinancialYear[]
-  branches          Branch[]
-  users             User[]
-  roles             Role[]
-  ledgerGroups      LedgerGroup[]
-  ledgers           Ledger[]
-  bankAccounts      BankAccount[]
-  units             Unit[]
-  categories        Category[]
-  brands            Brand[]
-  hsnCodes          HsnCode[]
-  gstRates          GstRate[]
-  warehouses        Warehouse[]
-  products          Product[]
-  marginProfiles    MarginProfile[]
-  priceLists        PriceList[]
-  customers         Customer[]
-  suppliers         Supplier[]
-  purchaseOrders    PurchaseOrder[]
-  goodsReceiptNotes GoodsReceiptNote[]
-  purchaseInvoices  PurchaseInvoice[]
-  purchaseReturns   PurchaseReturn[]
-  stockAdjustments  StockAdjustment[]
-  stockTransfers    StockTransfer[]
-  auditLogs         AuditLog[]
-  documentSequences DocumentSequence[]
-  vouchers          Voucher[]
-  stockTransactions StockTransaction[]
-  quotations        Quotation[]
-  salesOrders       SalesOrder[]
-  deliveryChallans  DeliveryChallan[]
-  salesInvoices     SalesInvoice[]
-  salesReturns      SalesReturn[]
-  creditNotes       CreditNote[]
-  debitNotes        DebitNote[]
+  settings              CompanySettings?
+  financialYears        FinancialYear[]
+  branches              Branch[]
+  users                 User[]
+  roles                 Role[]
+  ledgerGroups          LedgerGroup[]
+  ledgers               Ledger[]
+  bankAccounts          BankAccount[]
+  units                 Unit[]
+  categories            Category[]
+  brands                Brand[]
+  hsnCodes              HsnCode[]
+  gstRates              GstRate[]
+  warehouses            Warehouse[]
+  products              Product[]
+  marginProfiles        MarginProfile[]
+  priceLists            PriceList[]
+  customers             Customer[]
+  suppliers             Supplier[]
+  purchaseOrders        PurchaseOrder[]
+  goodsReceiptNotes     GoodsReceiptNote[]
+  purchaseInvoices      PurchaseInvoice[]
+  purchaseReturns       PurchaseReturn[]
+  stockAdjustments      StockAdjustment[]
+  stockTransfers        StockTransfer[]
+  physicalVerifications PhysicalVerification[]
+  auditLogs             AuditLog[]
+  documentSequences     DocumentSequence[]
+  vouchers              Voucher[]
+  stockTransactions     StockTransaction[]
+  quotations            Quotation[]
+  salesOrders           SalesOrder[]
+  deliveryChallans      DeliveryChallan[]
+  salesInvoices         SalesInvoice[]
+  salesReturns          SalesReturn[]
+  creditNotes           CreditNote[]
+  debitNotes            DebitNote[]
 
   @@index([companyName])
 }
@@ -183,21 +184,22 @@ model FinancialYear {
 
   company Company @relation(fields: [companyId], references: [id])
 
-  documentSequences DocumentSequence[]
-  vouchers          Voucher[]
-  quotations        Quotation[]
-  salesOrders       SalesOrder[]
-  deliveryChallans  DeliveryChallan[]
-  salesInvoices     SalesInvoice[]
-  salesReturns      SalesReturn[]
-  creditNotes       CreditNote[]
-  debitNotes        DebitNote[]
-  purchaseOrders    PurchaseOrder[]
-  goodsReceiptNotes GoodsReceiptNote[]
-  purchaseInvoices  PurchaseInvoice[]
-  purchaseReturns   PurchaseReturn[]
-  stockAdjustments  StockAdjustment[]
-  stockTransfers    StockTransfer[]
+  documentSequences     DocumentSequence[]
+  vouchers              Voucher[]
+  quotations            Quotation[]
+  salesOrders           SalesOrder[]
+  deliveryChallans      DeliveryChallan[]
+  salesInvoices         SalesInvoice[]
+  salesReturns          SalesReturn[]
+  creditNotes           CreditNote[]
+  debitNotes            DebitNote[]
+  purchaseOrders        PurchaseOrder[]
+  goodsReceiptNotes     GoodsReceiptNote[]
+  purchaseInvoices      PurchaseInvoice[]
+  purchaseReturns       PurchaseReturn[]
+  stockAdjustments      StockAdjustment[]
+  stockTransfers        StockTransfer[]
+  physicalVerifications PhysicalVerification[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -252,8 +254,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company                      Company?              @relation(fields: [companyId], references: [id])
-  role                         Role?                 @relation(fields: [roleId], references: [id])
+  company                      Company?               @relation(fields: [companyId], references: [id])
+  role                         Role?                  @relation(fields: [roleId], references: [id])
   sessions                     Session[]
   vouchers                     Voucher[]
   quotations                   Quotation[]
@@ -271,6 +273,7 @@ model User {
   purchaseReturns              PurchaseReturn[]
   stockAdjustments             StockAdjustment[]
   stockTransfers               StockTransfer[]
+  physicalVerifications        PhysicalVerification[]
 
   @@index([companyId])
   @@index([roleId])
@@ -640,6 +643,7 @@ model Warehouse {
   stockAdjustmentItems        StockAdjustmentItem[]
   stockTransfersAsSource      StockTransfer[]        @relation("StockTransferSource")
   stockTransfersAsDestination StockTransfer[]        @relation("StockTransferDestination")
+  physicalVerifications       PhysicalVerification[]
 
   @@unique([companyId, name])
   @@unique([companyId, code])
@@ -712,17 +716,18 @@ model Product {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
-  priceListItems        PriceListItem[]
-  stockTransactions     StockTransaction[]
-  quotationItems        QuotationItem[]
-  salesOrderItems       SalesOrderItem[]
-  deliveryChallanItems  DeliveryChallanItem[]
-  salesInvoiceItems     SalesInvoiceItem[]
-  purchaseOrderItems    PurchaseOrderItem[]
-  goodsReceiptNoteItems GoodsReceiptNoteItem[]
-  purchaseInvoiceItems  PurchaseInvoiceItem[]
-  stockAdjustmentItems  StockAdjustmentItem[]
-  stockTransferItems    StockTransferItem[]
+  priceListItems            PriceListItem[]
+  stockTransactions         StockTransaction[]
+  quotationItems            QuotationItem[]
+  salesOrderItems           SalesOrderItem[]
+  deliveryChallanItems      DeliveryChallanItem[]
+  salesInvoiceItems         SalesInvoiceItem[]
+  purchaseOrderItems        PurchaseOrderItem[]
+  goodsReceiptNoteItems     GoodsReceiptNoteItem[]
+  purchaseInvoiceItems      PurchaseInvoiceItem[]
+  stockAdjustmentItems      StockAdjustmentItem[]
+  stockTransferItems        StockTransferItem[]
+  physicalVerificationItems PhysicalVerificationItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -1034,6 +1039,7 @@ enum DocumentType {
   PURCHASE_RETURN_VOUCHER
   STOCK_ADJUSTMENT
   STOCK_TRANSFER
+  PHYSICAL_VERIFICATION
 }
 
 // One row per (company, financial year, document type) — the sole owner of
@@ -1331,6 +1337,73 @@ model StockTransferItem {
   quantity        Decimal       @db.Decimal(14, 4)
 
   @@unique([stockTransferId, lineNumber])
+  @@index([productId])
+}
+
+enum PhysicalVerificationStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+// Physical Verification (feature-spec 49) — the stock-count reconciliation
+// document: a user records the physically counted quantity of each
+// product/warehouse pair being verified, and completing the count posts one
+// StockTransactionType.PHYSICAL_VERIFICATION movement per line with a
+// non-zero variance (reserved by spec 32 with no consumer until now).
+// DocumentType.PHYSICAL_VERIFICATION is a new value added by this spec's
+// migration — 34-document-number-engine.md's original list reserved
+// STOCK_ADJUSTMENT/STOCK_TRANSFER but not this one; the omission is treated
+// as incomplete, not deliberate, since a physical count is exactly the kind
+// of auditable, numbered business document that engine exists to number.
+// One warehouse per document, header-level — mirrors StockTransfer's
+// header-level warehouse decision (a count is a location-scoped event; a
+// multi-warehouse count is one document per warehouse, not one spanning
+// several).
+model PhysicalVerification {
+  id                 String                     @id @default(uuid())
+  companyId          String
+  company            Company                    @relation(fields: [companyId], references: [id])
+  financialYearId    String
+  financialYear      FinancialYear              @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at completePhysicalVerification — the same
+  // nullable-until-posted convention as StockAdjustment/StockTransfer.
+  verificationNumber String?
+  verificationDate   DateTime                   @db.Date
+  warehouseId        String
+  warehouse          Warehouse                  @relation(fields: [warehouseId], references: [id])
+  status             PhysicalVerificationStatus @default(DRAFT)
+  narration          String?
+  createdByUserId    String?
+  createdBy          User?                      @relation(fields: [createdByUserId], references: [id])
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  items PhysicalVerificationItem[]
+
+  @@unique([companyId, financialYearId, verificationNumber])
+  @@index([companyId, status])
+  @@index([warehouseId])
+}
+
+// systemQuantity/varianceQuantity are always overwritten at completion time
+// from a fresh inventoryEngine.getCurrentStock read inside the completing
+// transaction (never the draft-time preview, never client-supplied) —
+// 49-physical-verification.md's Data Model Decisions. Both default to 0 at
+// draft-creation time (a placeholder only; there is nothing meaningful to
+// store until completion computes the real snapshot).
+model PhysicalVerificationItem {
+  id                     String               @id @default(uuid())
+  physicalVerificationId String
+  physicalVerification   PhysicalVerification @relation(fields: [physicalVerificationId], references: [id])
+  lineNumber             Int
+  productId              String
+  product                Product              @relation(fields: [productId], references: [id])
+  systemQuantity         Decimal              @db.Decimal(14, 4)
+  countedQuantity        Decimal              @db.Decimal(14, 4)
+  varianceQuantity       Decimal              @db.Decimal(14, 4)
+
+  @@unique([physicalVerificationId, lineNumber])
   @@index([productId])
 }
 

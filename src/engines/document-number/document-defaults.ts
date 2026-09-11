@@ -33,6 +33,7 @@ export const DOCUMENT_TYPE_DEFAULT_PREFIXES: Record<DocumentType, string> = {
   PURCHASE_RETURN_VOUCHER: "PRV",
   STOCK_ADJUSTMENT: "STKADJ",
   STOCK_TRANSFER: "STKTRF",
+  PHYSICAL_VERIFICATION: "PHYVER",
 };
 
 /** Human-readable labels for the settings screen's document type column. */
@@ -60,4 +61,5 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   PURCHASE_RETURN_VOUCHER: "Purchase Return Voucher",
   STOCK_ADJUSTMENT: "Stock Adjustment",
   STOCK_TRANSFER: "Stock Transfer",
+  PHYSICAL_VERIFICATION: "Physical Verification",
 };

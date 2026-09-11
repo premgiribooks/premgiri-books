@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 import { AppError } from "@/lib/app-error";
 import { prisma } from "@/lib/prisma";
 import { stockTransactionRepository } from "@/modules/stock-transactions/repositories/stock-transaction-repository";
@@ -30,16 +32,28 @@ async function assertProductBelongsToCompany(companyId: string, productId: strin
 /**
  * Current stock (Sigma IN - Sigma OUT), grouped by (product, warehouse).
  * Passing both `productId` and `warehouseId` narrows to a single pair;
- * passing only `productId` returns its per-warehouse breakdown
+ * passing only `productId` returns its per-warehouse breakdown; passing only
+ * `warehouseId` returns that warehouse's per-product breakdown
  * (32-inventory-engine.md's Structure). Deliberately does not validate that
  * `productId`/`warehouseId` exist — an unknown id simply yields no rows
  * (matches Prisma `groupBy`'s natural behavior; no repository row to
  * company-scope-check against here since nothing is loaded by primary key).
+ *
+ * Accepts an optional `tx` so a caller re-deriving a fresh snapshot inside
+ * its own posting transaction (49-physical-verification.md's "re-read at
+ * completion time, never a stale draft-time value") observes the same
+ * Serializable snapshot as the write that follows it — mirrors
+ * stock-transaction-repository.ts's `sumStockForPairs` isolation contract.
+ * Omitted, this reads through the shared `prisma` client as before.
  */
 export async function getCurrentStock(
   companyId: string,
-  filters: CurrentStockFilters = {}
+  filters: CurrentStockFilters = {},
+  tx?: Prisma.TransactionClient
 ): Promise<CurrentStockRow[]> {
+  if (tx) {
+    return stockTransactionRepository.aggregateCurrentStock(companyId, filters, tx);
+  }
   return stockTransactionRepository.aggregateCurrentStock(companyId, filters);
 }
 

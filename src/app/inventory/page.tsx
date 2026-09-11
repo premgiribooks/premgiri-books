@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftRight, PackagePlus, SlidersHorizontal } from "lucide-react";
+import { ArrowLeftRight, ClipboardCheck, PackagePlus, SlidersHorizontal } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,8 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
 // Mirrors /purchase's hub (src/app/purchase/page.tsx) — the first card of
 // the Inventory hub (46-opening-stock.md's UI: "the first feature to
-// establish it"). Physical Verification will add its own card as it lands.
+// establish it"). Batch Tracking (the next Phase 5 document) will add its
+// own card as it lands.
 const INVENTORY_MODULES = [
   {
     href: "/inventory/opening-stock",
@@ -28,6 +29,12 @@ const INVENTORY_MODULES = [
     icon: ArrowLeftRight,
     title: "Stock Transfer",
     description: "Move stock for one or more products from one warehouse to another.",
+  },
+  {
+    href: "/inventory/verifications",
+    icon: ClipboardCheck,
+    title: "Physical Verification",
+    description: "Record physically counted stock and reconcile variances against the system.",
   },
 ] as const;
 
