@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { icon: Boxes, label: "Masters", href: "/masters", adminOnly: true },
   { icon: ShoppingCart, label: "Sales", href: "/sales" },
   { icon: Truck, label: "Purchase", href: "/purchase" },
-  { icon: Package, label: "Inventory" },
+  { icon: Package, label: "Inventory", href: "/inventory" },
   { icon: Calculator, label: "Accounting", href: "/accounting" },
   { icon: Receipt, label: "GST" },
   { icon: BarChart3, label: "Reports" },
