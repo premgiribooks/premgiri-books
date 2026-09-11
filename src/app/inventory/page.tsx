@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PackagePlus, SlidersHorizontal } from "lucide-react";
+import { ArrowLeftRight, PackagePlus, SlidersHorizontal } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,8 +9,7 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
 // Mirrors /purchase's hub (src/app/purchase/page.tsx) — the first card of
 // the Inventory hub (46-opening-stock.md's UI: "the first feature to
-// establish it"). Stock Transfer and Physical Verification will each add
-// their own card here as they land.
+// establish it"). Physical Verification will add its own card as it lands.
 const INVENTORY_MODULES = [
   {
     href: "/inventory/opening-stock",
@@ -23,6 +22,12 @@ const INVENTORY_MODULES = [
     icon: SlidersHorizontal,
     title: "Stock Adjustment",
     description: "Correct stock for a reason other than a sale, purchase, transfer, or physical count.",
+  },
+  {
+    href: "/inventory/transfers",
+    icon: ArrowLeftRight,
+    title: "Stock Transfer",
+    description: "Move stock for one or more products from one warehouse to another.",
   },
 ] as const;
 
