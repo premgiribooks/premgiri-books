@@ -114,11 +114,24 @@ export const createProductSchema = z
     // z.input/z.output split a Zod `.default()` introduces for
     // @hookform/resolvers/zod's Resolver typing.
     isBatchTracked: z.boolean(),
+    // Opt-in, TRADING-only, mutually exclusive with isBatchTracked
+    // (51-serial-number-tracking.md's Business Rules) — same shape and same
+    // reasoning as isBatchTracked above; the server-side immutability-once-
+    // moved rule likewise lives in product-repository.ts.
+    isSerialTracked: z.boolean(),
     description: DESCRIPTION_SCHEMA,
   })
   .refine((data) => !data.isBatchTracked || data.productType === "TRADING", {
     message: "Only a trading product can be batch-tracked.",
     path: ["isBatchTracked"],
+  })
+  .refine((data) => !data.isSerialTracked || data.productType === "TRADING", {
+    message: "Only a trading product can be serial-tracked.",
+    path: ["isSerialTracked"],
+  })
+  .refine((data) => !(data.isBatchTracked && data.isSerialTracked), {
+    message: "A product cannot be both batch-tracked and serial-tracked.",
+    path: ["isSerialTracked"],
   });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;

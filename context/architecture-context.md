@@ -191,6 +191,7 @@ Responsibilities
 - Stock Ledger
 - Stock Valuation
 - Batch Tracking (opt-in per product; `StockTransaction.batchId` optional, required only when the product is batch-tracked — see `50-batch-tracking.md`)
+- Serial Number Tracking (opt-in per product, mutually exclusive with Batch Tracking; `StockTransaction.serialId` optional, required only when the product is serial-tracked, and that line's quantity must equal exactly 1; `SerialNumber` is a static identity catalog with no stored status column — status/current warehouse are always derived from the serial's own movement history via `deriveSerialStatus` — see `51-serial-number-tracking.md`)
 
 ---
 

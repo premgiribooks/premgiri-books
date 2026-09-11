@@ -4,6 +4,7 @@ import { Prisma, type ProductType, type StockDirection } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { batchKey, pairKey } from "@/engines/inventory/inventory-validation";
+import type { SerialMovementRecord } from "@/engines/inventory/inventory-validation";
 import type {
   BatchStockFilters,
   BatchStockRow,
@@ -24,6 +25,7 @@ export interface ProductForMovement {
   isActive: boolean;
   productType: ProductType;
   isBatchTracked: boolean;
+  isSerialTracked: boolean;
   unit: { decimalPlaces: number };
 }
 
@@ -40,6 +42,15 @@ export interface BatchForMovement {
   companyId: string;
   productId: string;
   batchNumber: string;
+  isActive: boolean;
+}
+
+/** Serial lookup for the serial-required/forbidden and active checks recordMovements/transferStock enforce (51-serial-number-tracking.md). */
+export interface SerialForMovement {
+  id: string;
+  companyId: string;
+  productId: string;
+  serialValue: string;
   isActive: boolean;
 }
 
@@ -109,6 +120,7 @@ function toRecordedStockTransaction(raw: {
   referenceId: string | null;
   transferGroupId: string | null;
   batchId: string | null;
+  serialId: string | null;
   narration: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -127,6 +139,7 @@ function toRecordedStockTransaction(raw: {
     referenceId: raw.referenceId,
     transferGroupId: raw.transferGroupId,
     batchId: raw.batchId,
+    serialId: raw.serialId,
     narration: raw.narration,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
@@ -152,6 +165,7 @@ export const stockTransactionRepository = {
         isActive: true,
         productType: true,
         isBatchTracked: true,
+        isSerialTracked: true,
         unit: { select: { decimalPlaces: true } },
       },
     });
@@ -177,6 +191,55 @@ export const stockTransactionRepository = {
       where: { id: { in: [...batchIds] } },
       select: { id: true, companyId: true, productId: true, batchNumber: true, isActive: true },
     });
+  },
+
+  /** Serial lookup for the serial-scope/active checks (51-serial-number-tracking.md) — kept here, not in serial-number-repository.ts, for the identical single-repository-dependency reason as findBatchesForMovement. */
+  async findSerialsForMovement(
+    client: PrismaClientOrTransaction,
+    serialIds: readonly string[]
+  ): Promise<SerialForMovement[]> {
+    return client.serialNumber.findMany({
+      where: { id: { in: [...serialIds] } },
+      select: { id: true, companyId: true, productId: true, serialValue: true, isActive: true },
+    });
+  },
+
+  /**
+   * Each requested serial's full movement history, grouped by `serialId` —
+   * the engine's own read for `deriveSerialStatus`'s "cannot oversell an
+   * identity" OUT-availability check (51-serial-number-tracking.md). Always
+   * run on the caller's transaction so it observes the same Serializable
+   * snapshot as the insert that follows it, the same contract as
+   * `sumStockForPairs`/`sumStockForBatchTriples`.
+   */
+  async findSerialMovementHistory(
+    tx: Prisma.TransactionClient,
+    serialIds: readonly string[]
+  ): Promise<Map<string, SerialMovementRecord[]>> {
+    const result = new Map<string, SerialMovementRecord[]>();
+    if (serialIds.length === 0) {
+      return result;
+    }
+
+    const rows = await tx.stockTransaction.findMany({
+      where: { serialId: { in: [...serialIds] } },
+      select: { serialId: true, direction: true, transactionType: true, warehouseId: true, createdAt: true },
+    });
+
+    for (const row of rows) {
+      if (!row.serialId) {
+        continue;
+      }
+      const existing = result.get(row.serialId) ?? [];
+      existing.push({
+        direction: row.direction,
+        transactionType: row.transactionType,
+        warehouseId: row.warehouseId,
+        createdAt: row.createdAt,
+      });
+      result.set(row.serialId, existing);
+    }
+    return result;
   },
 
   /** The negative-stock gate (code-standards.md). Defaults to `false` if the company's settings row is somehow missing — the safer default. */
@@ -297,6 +360,7 @@ export const stockTransactionRepository = {
         referenceType: line.referenceType ?? null,
         referenceId: line.referenceId ?? null,
         batchId: line.batchId ?? null,
+        serialId: line.serialId ?? null,
         narration: line.narration ?? null,
       })),
     });
@@ -319,6 +383,7 @@ export const stockTransactionRepository = {
       quantity: number;
       transactionDate: Date;
       batchId: string | null;
+      serialId: string | null;
       narration: string | null;
     }
   ): Promise<TransferStockResult> {
@@ -337,6 +402,7 @@ export const stockTransactionRepository = {
           transactionDate: input.transactionDate,
           transferGroupId,
           batchId: input.batchId,
+          serialId: input.serialId,
           narration: input.narration,
         },
       }),
@@ -352,6 +418,7 @@ export const stockTransactionRepository = {
           transactionDate: input.transactionDate,
           transferGroupId,
           batchId: input.batchId,
+          serialId: input.serialId,
           narration: input.narration,
         },
       }),

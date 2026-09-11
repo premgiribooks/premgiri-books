@@ -110,6 +110,7 @@ export function ProductOverviewPanel({ product }: ProductOverviewPanelProps) {
           </DetailField>
           <DetailField label="Default Warehouse">{optionName(product.defaultWarehouse)}</DetailField>
           <DetailField label="Batch Tracking">{product.isBatchTracked ? "Enabled" : "Disabled"}</DetailField>
+          <DetailField label="Serial Number Tracking">{product.isSerialTracked ? "Enabled" : "Disabled"}</DetailField>
         </div>
       </section>
     </div>

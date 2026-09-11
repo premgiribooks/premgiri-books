@@ -4,23 +4,23 @@ import { AppShell } from "@/components/layout/app-shell";
 import { BreadcrumbLabelSetter } from "@/components/layout/breadcrumb-label-setter";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
-import { ProductBatchesPanel } from "@/modules/products/components/product-batches-panel";
 import { ProductDetailTabs } from "@/modules/products/components/product-detail-tabs";
+import { ProductSerialNumbersPanel } from "@/modules/products/components/product-serial-numbers-panel";
 import { productService } from "@/modules/products/services/product-service";
-import { productBatchService } from "@/modules/product-batches/services/product-batch-service";
+import { serialNumberService } from "@/modules/serial-numbers/services/serial-number-service";
 
-interface ProductBatchesPageProps {
+interface ProductSerialNumbersPageProps {
   params: Promise<{ id: string }>;
 }
 
 /**
- * Batches tab of the Product detail view (56-product-detail-page.md) —
- * wires in Batch Tracking's (spec 50) unmodified `ProductBatchTable`/
- * `ProductBatchForm` for a batch-tracked product. Visiting this route for a
- * non-batch-tracked product redirects to Overview, matching the spec's
+ * Serial Numbers tab of the Product detail view (51-serial-number-
+ * tracking.md, landing on the Product detail page feature-spec 56 built) —
+ * mirrors the Batches tab page exactly. Visiting this route for a
+ * non-serial-tracked product redirects to Overview, matching the spec's
  * Business Rules.
  */
-export default async function ProductBatchesPage({ params }: ProductBatchesPageProps) {
+export default async function ProductSerialNumbersPage({ params }: ProductSerialNumbersPageProps) {
   const { id } = await params;
 
   const user = await getCurrentCompanyUser();
@@ -34,15 +34,15 @@ export default async function ProductBatchesPage({ params }: ProductBatchesPageP
     notFound();
   }
 
-  if (!product.isBatchTracked) {
+  if (!product.isSerialTracked) {
     redirect(`/masters/products/${product.id}`);
   }
 
-  const [isAdmin, canCreate, canEdit, batches] = await Promise.all([
+  const [isAdmin, canCreate, canEdit, serialNumbers] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "masters", "create"),
     hasPermission(user, "masters", "edit"),
-    productBatchService.listBatches(product.id),
+    serialNumberService.listSerialNumbers(product.id),
   ]);
 
   return (
@@ -58,10 +58,15 @@ export default async function ProductBatchesPage({ params }: ProductBatchesPageP
           productId={product.id}
           isBatchTracked={product.isBatchTracked}
           isSerialTracked={product.isSerialTracked}
-          active="batches"
+          active="serial-numbers"
         />
 
-        <ProductBatchesPanel productId={product.id} batches={batches} canCreate={canCreate} canEdit={canEdit} />
+        <ProductSerialNumbersPanel
+          productId={product.id}
+          serialNumbers={serialNumbers}
+          canCreate={canCreate}
+          canEdit={canEdit}
+        />
       </div>
     </AppShell>
   );

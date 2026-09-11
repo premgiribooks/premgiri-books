@@ -57,6 +57,7 @@ function toPersistData(data: CreateProductInput): ProductPersistData {
     purchasePrice: data.purchasePrice ?? null,
     minStockLevel: data.minStockLevel ?? null,
     isBatchTracked: data.isBatchTracked,
+    isSerialTracked: data.isSerialTracked,
     description: data.description ?? null,
   };
 }

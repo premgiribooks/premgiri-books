@@ -25,10 +25,37 @@ export function isRecordNotFoundError(error: unknown): boolean {
 }
 
 /**
+ * The violated constraint's column names, however this Prisma client/driver
+ * reports them. Historically (and still true for some providers) that was a
+ * plain `meta.target` string array. The Postgres driver adapter this project
+ * runs on (`@prisma/client` 7.8.0) instead nests it under
+ * `meta.driverAdapterError.cause.constraint.fields`, with each entry
+ * Postgres-quoted (e.g. `"companyId"`, quote characters included) — found by
+ * inspecting a real P2002 thrown against a live database, since neither
+ * shape is documented against this exact version. Checking both keeps this
+ * helper correct regardless of which shape a given error arrives in.
+ */
+function violatedConstraintColumns(error: Prisma.PrismaClientKnownRequestError): string[] {
+  const meta = error.meta as
+    | { target?: unknown; driverAdapterError?: { cause?: { constraint?: { fields?: unknown } } } }
+    | undefined;
+
+  if (Array.isArray(meta?.target)) {
+    return meta.target as string[];
+  }
+
+  const fields = meta?.driverAdapterError?.cause?.constraint?.fields;
+  if (Array.isArray(fields)) {
+    return fields.map((field) => String(field).replace(/^"|"$/g, ""));
+  }
+
+  return [];
+}
+
+/**
  * Optionally narrowed to a specific column for models with more than one
  * unique constraint (e.g. Unit's per-company name and symbol), so callers
- * can produce a field-specific friendly message. Prisma reports the violated
- * constraint's columns in `meta.target`.
+ * can produce a field-specific friendly message.
  */
 export function isUniqueConstraintError(error: unknown, column?: string): boolean {
   if (
@@ -40,8 +67,7 @@ export function isUniqueConstraintError(error: unknown, column?: string): boolea
   if (!column) {
     return true;
   }
-  const target = error.meta?.target;
-  return Array.isArray(target) && target.includes(column);
+  return violatedConstraintColumns(error).includes(column);
 }
 
 /**
