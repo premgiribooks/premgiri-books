@@ -959,10 +959,26 @@ GSTIN-present ones, the two only coincide when no Table 7-eligible line exists i
 period; documented in-line rather than silently assumed). 1539/1539 total suite
 passing (90 in `src/modules/gst`). `npx tsc --noEmit`, `npx eslint src prisma` (0
 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and `next
-build` all pass; `/gst/gstr-2` appears in the build route table. **Not yet
-code-reviewed, security-reviewed, or merged into `main`** — that review is queued
-next, learning from the HSN Summary process slip (review before merge this time, not
-after).
+build` all pass; `/gst/gstr-2` appears in the build route table.
+
+**code-reviewer and security-reviewer both ran on `feature/gstr-2` (commit `d2837a8`)
+before merge this time** (learning from the HSN Summary process slip): **both
+APPROVE, zero CRITICAL/HIGH/MEDIUM findings.** code-reviewer confirmed Table 3/Table 7
+grouping matches the spec's Business Rules exactly (including the deliberate Table
+3/Table 7 overlap for a nil-rated registered-supplier line, verified as a defensible
+reading of the spec text rather than a bug), confirmed Tables 4/5/8/9/11 are never
+partially computed, confirmed Tables 6/10/12/13 are absent from the shape, and
+confirmed zero `GstFilingRecord`/filing-repository references anywhere (grep-clean) —
+two LOW notes (an unused `gstr2-actions.ts` server action, matching the identical
+pre-existing pattern in `gstr1-actions.ts`/`hsn-summary-actions.ts`; an unreachable
+defensive fallback in `buildCompositionAndExemptSupplies`), neither a regression.
+security-reviewer confirmed company-scoping, permission enforcement (page + service
+layer), input validation, and Purchase Invoice/Return document-link IDOR safety (the
+linked detail pages independently re-verify `companyId` ownership and their own
+`purchase`/`view` permission) — two LOW/informational notes (the page's own
+`isValidCalendarDate` check doesn't independently enforce `to >= from`, matching every
+sibling GST page's identical pre-existing pattern; harmless since an inverted range
+just yields an empty result set). Neither review found anything requiring a fix.
 
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
