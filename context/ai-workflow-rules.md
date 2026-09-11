@@ -25,8 +25,16 @@ The documentation hierarchy is:
     code-standards.md
             ↓
     progress-tracker.md
+            ↓
+    context/Phases/phase-tracker.md
 
 AI agents must always use these documents as the single source of truth.
+
+`context/Phases/phase-tracker.md` is the granular, day-to-day live status board
+(per-item `#` numbering, its own Progress Legend); `progress-tracker.md` is the
+sequential-implementation-order log (Current Phase / Next Up / Open Questions).
+They are two different trackers, not duplicates of each other — both must stay
+current at all times (see Tracker Update Rule below).
 
 Never invent business behavior.
 
@@ -408,8 +416,36 @@ Whenever implementation status changes
 Update
 
 -   progress-tracker.md
+-   context/Phases/phase-tracker.md
 
 Documentation must always match implementation.
+
+------------------------------------------------------------------------
+
+# Tracker Update Rule (Always Required)
+
+ALWAYS update BOTH trackers — `progress-tracker.md` AND
+`context/Phases/phase-tracker.md` — as the final step of every feature,
+fix, or task, whether or not the user explicitly asks for it. This is not
+optional and never waits for a separate request.
+
+Update them:
+
+-   The moment a feature/task is implemented (not only once fully shipped) —
+    status, what changed, deviations, and open questions.
+-   Again after code review / security review findings come back — record
+    the verdict and the disposition of every finding (fixed / accepted /
+    deferred), not just "review passed."
+-   Again after any merge to `main` — record what was merged and the
+    resulting branch/commit state.
+-   Before pointing at what comes "next" — the Next Up / Current Feature
+    section must name the actual next item per the phase order, not a
+    stale pointer from a prior session.
+
+A task is not complete until both trackers reflect it. Treat a tracker
+update as part of the deliverable itself, the same as passing
+tsc/ESLint/tests/build — never a follow-up someone has to ask for
+separately.
 
 ------------------------------------------------------------------------
 
@@ -681,7 +717,8 @@ Before marking the feature complete, verify:
 -   Pull Request title and description prepared.
 -   Pull Request merged into `main` (Merge to Main Before Starting the
     Next Branch above) before any new branch is created.
--   `progress-tracker.md` updated.
+-   `progress-tracker.md` AND `context/Phases/phase-tracker.md` both
+    updated (see Tracker Update Rule).
 
 # Code Quality Checklist
 
@@ -707,7 +744,8 @@ Verify
 2.  No architecture rules are violated.
 3.  Business rules are followed.
 4.  Documentation is updated.
-5.  progress-tracker.md reflects the current implementation state.
+5.  progress-tracker.md AND context/Phases/phase-tracker.md both reflect
+    the current implementation state (see Tracker Update Rule).
 6.  No duplicated code has been introduced.
 
 Only then begin the next feature.
