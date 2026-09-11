@@ -10,6 +10,8 @@ const {
   findProductsForMovementMock,
   findWarehousesForMovementMock,
   findBatchesForMovementMock,
+  findSerialsForMovementMock,
+  findSerialMovementHistoryMock,
   findAllowNegativeStockMock,
   sumStockForPairsMock,
   sumStockForBatchTriplesMock,
@@ -21,6 +23,8 @@ const {
   findProductsForMovementMock: vi.fn(),
   findWarehousesForMovementMock: vi.fn(),
   findBatchesForMovementMock: vi.fn(),
+  findSerialsForMovementMock: vi.fn(),
+  findSerialMovementHistoryMock: vi.fn(),
   findAllowNegativeStockMock: vi.fn(),
   sumStockForPairsMock: vi.fn(),
   sumStockForBatchTriplesMock: vi.fn(),
@@ -35,6 +39,8 @@ vi.mock("@/modules/stock-transactions/repositories/stock-transaction-repository"
     findProductsForMovement: findProductsForMovementMock,
     findWarehousesForMovement: findWarehousesForMovementMock,
     findBatchesForMovement: findBatchesForMovementMock,
+    findSerialsForMovement: findSerialsForMovementMock,
+    findSerialMovementHistory: findSerialMovementHistoryMock,
     findAllowNegativeStock: findAllowNegativeStockMock,
     sumStockForPairs: sumStockForPairsMock,
     sumStockForBatchTriples: sumStockForBatchTriplesMock,
@@ -73,6 +79,7 @@ const TRADING_PRODUCT_A = {
   isActive: true,
   productType: "TRADING" as const,
   isBatchTracked: false,
+  isSerialTracked: false,
   unit: { decimalPlaces: 2 },
 };
 
@@ -83,15 +90,25 @@ const TRADING_PRODUCT_B = {
   isActive: true,
   productType: "TRADING" as const,
   isBatchTracked: false,
+  isSerialTracked: false,
   unit: { decimalPlaces: 0 },
 };
 
 const BATCH_TRACKED_PRODUCT_A = { ...TRADING_PRODUCT_A, isBatchTracked: true };
+const SERIAL_TRACKED_PRODUCT_A = { ...TRADING_PRODUCT_A, isSerialTracked: true, unit: { decimalPlaces: 0 } };
 
 const ACTIVE_WAREHOUSE_A = { id: WAREHOUSE_A, companyId: COMPANY_ID, name: "Main Store", isActive: true };
 const ACTIVE_WAREHOUSE_B = { id: WAREHOUSE_B, companyId: COMPANY_ID, name: "Branch Store", isActive: true };
 
 const ACTIVE_BATCH_A = { id: BATCH_A, companyId: COMPANY_ID, productId: PRODUCT_A, batchNumber: "B-001", isActive: true };
+const SERIAL_A = "66666666-6666-4666-8666-666666666666";
+const ACTIVE_SERIAL_A = {
+  id: SERIAL_A,
+  companyId: COMPANY_ID,
+  productId: PRODUCT_A,
+  serialValue: "IMEI-0001",
+  isActive: true,
+};
 
 function purchaseLine(overrides: Record<string, unknown> = {}) {
   return {
@@ -121,6 +138,8 @@ beforeEach(() => {
   findProductsForMovementMock.mockReset().mockResolvedValue([TRADING_PRODUCT_A, TRADING_PRODUCT_B]);
   findWarehousesForMovementMock.mockReset().mockResolvedValue([ACTIVE_WAREHOUSE_A, ACTIVE_WAREHOUSE_B]);
   findBatchesForMovementMock.mockReset().mockResolvedValue([]);
+  findSerialsForMovementMock.mockReset().mockResolvedValue([]);
+  findSerialMovementHistoryMock.mockReset().mockResolvedValue(new Map());
   findAllowNegativeStockMock.mockReset().mockResolvedValue(false);
   sumStockForPairsMock.mockReset().mockResolvedValue(new Map());
   sumStockForBatchTriplesMock.mockReset().mockResolvedValue(new Map());
@@ -374,6 +393,200 @@ describe("recordMovements — batch tracking", () => {
   });
 });
 
+describe("recordMovements — serial tracking", () => {
+  function serialLine(overrides: Record<string, unknown> = {}) {
+    return {
+      productId: PRODUCT_A,
+      warehouseId: WAREHOUSE_A,
+      transactionType: "PURCHASE",
+      direction: "IN",
+      quantity: 1,
+      transactionDate: "2026-07-01",
+      ...overrides,
+    };
+  }
+
+  it("rejects a serial-tracked product's line with no serialId", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    await expect(recordMovements(COMPANY_ID, [serialLine()])).rejects.toThrow("serial-tracked");
+  });
+
+  it("rejects a non-serial-tracked product's line with a serialId", async () => {
+    await expect(recordMovements(COMPANY_ID, [serialLine({ serialId: SERIAL_A })])).rejects.toThrow(
+      "not serial-tracked"
+    );
+  });
+
+  it("rejects a serial-tracked line with quantity other than 1", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    await expect(
+      recordMovements(COMPANY_ID, [serialLine({ serialId: SERIAL_A, quantity: 2 })])
+    ).rejects.toThrow("exactly 1");
+  });
+
+  it("rejects a serialId belonging to a different product", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([{ ...ACTIVE_SERIAL_A, productId: PRODUCT_B }]);
+    await expect(
+      recordMovements(COMPANY_ID, [serialLine({ serialId: SERIAL_A })])
+    ).rejects.toThrow("Serial number not found.");
+  });
+
+  it("rejects a cross-company serialId", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([{ ...ACTIVE_SERIAL_A, companyId: OTHER_COMPANY_ID }]);
+    await expect(
+      recordMovements(COMPANY_ID, [serialLine({ serialId: SERIAL_A })])
+    ).rejects.toThrow("Serial number not found.");
+  });
+
+  it("rejects an inactive serial", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([{ ...ACTIVE_SERIAL_A, isActive: false }]);
+    await expect(
+      recordMovements(COMPANY_ID, [serialLine({ serialId: SERIAL_A })])
+    ).rejects.toThrow("is inactive");
+  });
+
+  it("accepts a valid serial-tracked IN line and passes serialId through to createMany", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+
+    await recordMovements(COMPANY_ID, [serialLine({ serialId: SERIAL_A })]);
+
+    expect(createManyMock).toHaveBeenCalledWith(
+      FAKE_TX,
+      COMPANY_ID,
+      expect.arrayContaining([expect.objectContaining({ serialId: SERIAL_A })])
+    );
+  });
+
+  it("rejects an OUT movement for a serial that is not currently IN_STOCK", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findSerialMovementHistoryMock.mockResolvedValue(new Map());
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        serialLine({ serialId: SERIAL_A, transactionType: "SALES", direction: "OUT" }),
+      ])
+    ).rejects.toThrow("not currently in stock");
+  });
+
+  it("allows an OUT movement for a serial currently IN_STOCK at the same warehouse", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findSerialMovementHistoryMock.mockResolvedValue(
+      new Map([
+        [
+          SERIAL_A,
+          [
+            {
+              direction: "IN",
+              transactionType: "PURCHASE",
+              warehouseId: WAREHOUSE_A,
+              createdAt: new Date("2026-07-01T00:00:00.000Z"),
+            },
+          ],
+        ],
+      ])
+    );
+    // The identity check passes; the product-level quantity demand check
+    // (unaffected by serial tracking) also needs sufficient stock to reach.
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 1]]));
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        serialLine({ serialId: SERIAL_A, transactionType: "SALES", direction: "OUT" }),
+      ])
+    ).resolves.toBeDefined();
+  });
+
+  it("rejects an OUT movement for a serial IN_STOCK at a different warehouse", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findSerialMovementHistoryMock.mockResolvedValue(
+      new Map([
+        [
+          SERIAL_A,
+          [
+            {
+              direction: "IN",
+              transactionType: "PURCHASE",
+              warehouseId: WAREHOUSE_B,
+              createdAt: new Date("2026-07-01T00:00:00.000Z"),
+            },
+          ],
+        ],
+      ])
+    );
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        serialLine({ serialId: SERIAL_A, warehouseId: WAREHOUSE_A, transactionType: "SALES", direction: "OUT" }),
+      ])
+    ).rejects.toThrow("not currently in stock");
+  });
+
+  it("a serial already SOLD cannot be moved OUT again without an intervening return", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findSerialMovementHistoryMock.mockResolvedValue(
+      new Map([
+        [
+          SERIAL_A,
+          [
+            {
+              direction: "IN",
+              transactionType: "PURCHASE",
+              warehouseId: WAREHOUSE_A,
+              createdAt: new Date("2026-07-01T00:00:00.000Z"),
+            },
+            {
+              direction: "OUT",
+              transactionType: "SALES",
+              warehouseId: WAREHOUSE_A,
+              createdAt: new Date("2026-07-02T00:00:00.000Z"),
+            },
+          ],
+        ],
+      ])
+    );
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        serialLine({ serialId: SERIAL_A, transactionType: "SALES", direction: "OUT" }),
+      ])
+    ).rejects.toThrow("not currently in stock");
+  });
+
+  it("rejects the same serialId moved OUT more than once in the same request, before any repository call", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        serialLine({ serialId: SERIAL_A, transactionType: "SALES", direction: "OUT" }),
+        serialLine({ serialId: SERIAL_A, transactionType: "SALES", direction: "OUT" }),
+      ])
+    ).rejects.toThrow("more than once in the same request");
+    expect(findProductsForMovementMock).not.toHaveBeenCalled();
+  });
+
+  it("still enforces the availability check even when allowNegativeStock is on", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findAllowNegativeStockMock.mockResolvedValue(true);
+    findSerialMovementHistoryMock.mockResolvedValue(new Map());
+
+    await expect(
+      recordMovements(COMPANY_ID, [
+        serialLine({ serialId: SERIAL_A, transactionType: "SALES", direction: "OUT" }),
+      ])
+    ).rejects.toThrow("not currently in stock");
+  });
+});
+
 describe("recordMovements — isolation", () => {
   it("uses Serializable isolation with retry when the batch contains an OUT line", async () => {
     sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 100]]));
@@ -503,6 +716,70 @@ describe("transferStock", () => {
       COMPANY_ID,
       expect.arrayContaining([expect.objectContaining({ warehouseId: WAREHOUSE_A, batchId: BATCH_A })])
     );
+  });
+
+  it("rejects a serial-tracked product's transfer with no serialId", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    await expect(transferStock(COMPANY_ID, transferInput())).rejects.toThrow("serial-tracked");
+  });
+
+  it("rejects a non-serial-tracked product's transfer with a serialId", async () => {
+    await expect(transferStock(COMPANY_ID, transferInput({ serialId: SERIAL_A }))).rejects.toThrow(
+      "not serial-tracked"
+    );
+  });
+
+  it("passes serialId through to createTransferPair for a valid serial transfer", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findSerialMovementHistoryMock.mockResolvedValue(
+      new Map([
+        [
+          SERIAL_A,
+          [
+            {
+              direction: "IN",
+              transactionType: "PURCHASE",
+              warehouseId: WAREHOUSE_A,
+              createdAt: new Date("2026-07-01T00:00:00.000Z"),
+            },
+          ],
+        ],
+      ])
+    );
+    sumStockForPairsMock.mockResolvedValue(new Map([[`${PRODUCT_A}::${WAREHOUSE_A}`, 1]]));
+
+    await transferStock(COMPANY_ID, transferInput({ serialId: SERIAL_A, quantity: 1 }));
+
+    expect(createTransferPairMock).toHaveBeenCalledWith(
+      FAKE_TX,
+      COMPANY_ID,
+      expect.objectContaining({ serialId: SERIAL_A })
+    );
+  });
+
+  it("rejects a serial transfer when the serial is not currently at the source warehouse", async () => {
+    findProductsForMovementMock.mockResolvedValue([SERIAL_TRACKED_PRODUCT_A]);
+    findSerialsForMovementMock.mockResolvedValue([ACTIVE_SERIAL_A]);
+    findSerialMovementHistoryMock.mockResolvedValue(
+      new Map([
+        [
+          SERIAL_A,
+          [
+            {
+              direction: "IN",
+              transactionType: "PURCHASE",
+              warehouseId: WAREHOUSE_B,
+              createdAt: new Date("2026-07-01T00:00:00.000Z"),
+            },
+          ],
+        ],
+      ])
+    );
+
+    await expect(
+      transferStock(COMPANY_ID, transferInput({ serialId: SERIAL_A, quantity: 1 }))
+    ).rejects.toThrow("not currently in stock");
   });
 });
 

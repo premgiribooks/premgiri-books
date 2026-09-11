@@ -19,6 +19,7 @@ export interface RecordedStockTransaction {
   referenceId: string | null;
   transferGroupId: string | null;
   batchId: string | null;
+  serialId: string | null;
   narration: string | null;
   createdAt: Date;
   updatedAt: Date;

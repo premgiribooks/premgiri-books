@@ -65,7 +65,7 @@ Mapping so far:
 | 48           | Stock Transfer (`48-stock-transfer.md`)                                          | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#46) — **implemented 2026-09-11** (git branch `feature/stock-adjustment`, continued); third of Phase 5's six documents; new `StockTransfer`/`StockTransferItem` models (header-level source/destination warehouse, per-line product/quantity only), posted/cancelled via `inventoryEngine.transferStock` once per line inside one Serializable transaction |
 | 49           | Physical Verification (`49-physical-verification.md`)                           | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#47) — **implemented 2026-09-11** (git branch `feature/physical-verification`); fourth of Phase 5's six documents; new `PhysicalVerificationStatus` enum and `PhysicalVerification`/`PhysicalVerificationItem` models, numbered via the Document Number Engine (new `DocumentType.PHYSICAL_VERIFICATION` value, since spec 34's original list didn't reserve it); completion re-derives `systemQuantity`/`varianceQuantity` fresh inside the completing transaction via a newly tx-aware `inventoryEngine.getCurrentStock`, then posts one `StockTransactionType.PHYSICAL_VERIFICATION` movement per non-zero-variance line |
 | 50           | Batch Tracking (`50-batch-tracking.md`)                                          | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#48) — **implemented 2026-09-11** (git branch `feature/batch-tracking`); fifth of Phase 5's six documents; new `Product.isBatchTracked` flag, `ProductBatch` catalog model, additive nullable `StockTransaction.batchId`; Batches tab UI deliberately deferred (no Product detail page existed) — see feature-spec 56 |
-| 51           | Serial Number Tracking (`51-serial-number-tracking.md`)                         | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#49) — **spec drafted, not implemented**; last item in Phase 5; now also depends on feature-spec 56 (Product Detail Page) for its own Serial Numbers tab's host page |
+| 51           | Serial Number Tracking (`51-serial-number-tracking.md`)                         | `context/Phases/phase-tracker.md` Phase 5 — Inventory (#49) — **implemented 2026-09-11** (git branch `feature/serial-number-tracking`); last item in Phase 5, closing it in full; depended on feature-spec 56 (Product Detail Page) for its own Serial Numbers tab's host page |
 | 52           | Payment Voucher (`52-payment-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#51) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#50 when feature-spec 56 (Phase 6 — Product Detail Page) was inserted ahead of this phase |
 | 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#51, see spec 52's note |
 | 54           | Contra Voucher (`54-contra-voucher.md`)                                         | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#53) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#52, see spec 52's note |
@@ -75,6 +75,72 @@ Mapping so far:
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Feature-spec 51 — Serial Number Tracking implemented 2026-09-11** on branch
+  `feature/serial-number-tracking`, branched off `main` immediately after merging
+  `feature/product-detail-page` into it. Closes Phase 5 (Inventory) in full — see
+  `context/Phases/phase-tracker.md`'s Current Feature entry for the complete
+  implementation record (schema, engine changes, deviations, and the browser-verification
+  narrative). Summary:
+  - New `Product.isSerialTracked` (opt-in, TRADING-only, mutually exclusive with
+    `isBatchTracked`, immutable once moved — the identical rule shape as `isBatchTracked`,
+    one dimension further), new `SerialNumber` catalog model (no stored status column —
+    status/current warehouse always derived from movement history via a new pure
+    `deriveSerialStatus`), and an additive nullable `StockTransaction.serialId` — migration
+    `20260911081719_serial_number_tracking`, which also added the two raw-SQL CHECK
+    constraints (`product_batch_serial_mutually_exclusive`,
+    `stock_transaction_batch_xor_serial`) feature-spec 50's own migration had deferred.
+  - `recordMovements`/`transferStock` (`inventory-engine.ts`) gained
+    `assertSerialRequirement`/`assertSerialQuantity`/`assertUsableSerial` plus an
+    identity-and-warehouse-scoped "cannot oversell an identity" availability check that
+    runs unconditionally (independent of `allowNegativeStock`, unlike the quantity-based
+    checks) and a structural guard rejecting the same `serialId` moved OUT twice in one
+    request.
+  - New `serial-numbers` module (repository/service/validation/actions/components),
+    a `<SerialSelector>` component (not yet wired into any document's line editor — a
+    follow-up task per document, same posture as `<BatchSelector>`), and a new
+    `/masters/products/[id]/serial-numbers` tab wired via `getProductDetailTabs`'s new
+    `isSerialTracked` gate.
+  - **Real bug found and fixed during browser verification, not just automated tests**:
+    a duplicate serial-value registration surfaced a generic "Something went wrong" toast
+    instead of the friendly per-field message. Root cause (confirmed from the live server
+    log): the shared `isUniqueConstraintError(error, column)` helper
+    (`src/lib/prisma-errors.ts`) only checked the legacy `error.meta.target` array shape;
+    this project's actual `@prisma/client` 7.8.0 Postgres driver adapter instead reports
+    violated columns at `meta.driverAdapterError.cause.constraint.fields` (Postgres-quoted
+    entries, e.g. `"companyId"`), with no `meta.target` at all. Every consumer of this
+    shared helper across the whole codebase (products, warehouses, units, ledgers,
+    batches, and now serial numbers) was silently affected — masked because every
+    existing test for it mocked only the legacy shape. Fixed by checking both shapes; new
+    `src/lib/prisma-errors.test.ts` (no test file existed for this helper before) covers
+    both. **Recorded as a pattern for future work**: this was a pre-existing, codebase-wide
+    latent defect, not something this feature introduced — fixing the one shared helper
+    fixed every caller at once, and any future Prisma client upgrade should re-verify this
+    helper's assumed error shape against a real thrown error, not just existing mocks.
+  - The local dev database's migration history had a pre-existing checksum mismatch on
+    the unrelated, already-merged `20260911060923_batch_tracking` migration (line-ending/
+    edit-after-apply artifact, not caused by this session) that made `prisma migrate dev`
+    refuse to proceed short of a full `migrate reset` — avoided as disproportionate;
+    applied this feature's migration instead via `prisma db execute` (running the
+    generated SQL directly) followed by `prisma migrate resolve --applied`, verified
+    afterward with a clean `prisma migrate status`.
+  - **Browser-verified end-to-end with Playwright** against the dev server (reusing this
+    machine's cached Chromium build): created a serial-tracked product → confirmed the
+    Batch Tracking toggle auto-disables with an explanatory message the instant Serial
+    Number Tracking is turned on, and vice versa → its Serial Numbers tab appeared with no
+    Batches tab → bulk-registered two serials via pasted multi-line input ("2 serial
+    numbers registered successfully") → registered a third value mixed with a duplicate of
+    an already-registered one (the duplicate failed with the now-fixed friendly message,
+    the dialog retained only the failed value for retry, the new value still succeeded) →
+    deactivated one serial, then reactivated it. All test products created for this
+    walkthrough were deactivated afterward (this codebase has no hard-delete for masters,
+    matching every other module's convention).
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1333/1333), and
+    `next build` all pass. **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW
+    findings. Security review: zero CRITICAL/HIGH findings**, one LOW (accepted, not
+    fixed — see Open Questions) plus two informational notes (the `deriveSerialStatus`
+    tie-break and unit-level-only concurrency test coverage, both confirmed as sound/
+    consistent with this codebase's existing conventions, no action needed).
 
 - **Feature-spec 56 — Product Detail Page implemented 2026-09-11** on branch
   `feature/product-detail-page`, branched off `main` immediately after merging
@@ -914,6 +980,13 @@ Mapping so far:
 
 ## Next Up
 
+- **2026-09-11 — Phase 5 (Inventory) is now fully closed** (feature-spec 51, Serial
+  Number Tracking, was its last remaining item). Per `context/Phases/phase-tracker.md`'s
+  Current Feature entry, the next feature in phase order is **Phase 7 — Accounting**
+  (the four manual voucher screens: Payment Voucher #52, Receipt Voucher #53, Contra
+  Voucher #54, Journal Voucher #55 — all spec-drafted, none implemented). Per
+  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time —
+  awaiting explicit instruction before starting the next one.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
@@ -934,6 +1007,7 @@ Mapping so far:
 
 ## Open Questions
 
+- **Accepted, not fixed: `serialNumberService.listSerialNumbers`/`listSerialOptions` (and their repository methods) don't independently verify a client-supplied `productId` belongs to the caller's company before querying** (found during feature-spec 51's security review, 2026-09-11). `SerialNumber` rows are always created with the product's own `companyId` (enforced in `serialNumberRepository.create`), so a cross-tenant `productId` in the `where: { companyId, productId }` filter simply yields zero rows — not an IDOR, the compound `AND` is the actual safety net, and every route that calls these methods (the Serial Numbers tab page) already resolves the product through the company-scoped `productService.getProduct(id)` first. Exact parity with the pre-existing, already-shipped `productBatchService.listBatches`/`listBatchOptions` (`50-batch-tracking.md`), which has the identical shape — not a regression introduced by this feature. Left as-is to keep this feature's scope to itself (`ai-workflow-rules.md`'s one-feature-at-a-time rule); a future pass could add the same explicit product-ownership check `getSerialNumber`/`getSerialStatus` already use to both modules at once, so a later refactor to how `companyId` gets populated on either catalog row doesn't silently reopen a real IDOR.
 - **New — Company Admin's own `/company/[id]/edit` page (GST State, address, contact — the fields `updateCompanyProfile` owns) has no direct sidebar entry point** (found 2026-09-10 while helping a user locate the GST State field for Sales Orders). Reachable only via Masters → "Company Management" card → `/company` list page → its Edit button; `src/components/layout/sidebar.tsx`'s `NAV_ITEMS` has no "Company" item at all. This technically satisfies `08-company-management.md`'s Navigation section ("Add Company Management under Masters"), so not changed without an explicit decision — flagged since a first-time Company Admin has no obvious way to discover this page exists.
 - ~~New — the Super Admin/Company Admin architecture migration is only partially started (schema only)~~ — **resolved 2026-07-13, same day**: the full migration (auth, sessions, navigation, permissions) was completed per explicit user instruction; see the Completed entry above and `architecture-context.md`'s User Hierarchy/Authorization Flow sections.
 - **New — the migration's `Role`/`User` FKs use `ON DELETE SET NULL`, which could produce a `COMPANY` user with a null company or role** (found during the 2026-07-13 review documented in the Completed entry above, `context/current-error/09-platform-company-split-review-fixes.md`). `current-user.ts`'s `CompanyCurrentUser`/`assertHasRole()` both assume a `COMPANY` user always has both — a hard delete of a referenced `Company` or `Role` would silently violate that via the FK's `SET NULL` behavior rather than being blocked. Not attacker-reachable today: no code path hard-deletes a `Company` or `Role` (both are activate/deactivate-only, matching every other master in this codebase), and every other Company-owned child table (`FinancialYear`, `LedgerGroup`, `Ledger`, `BankAccount`, and now per-company `Role` itself) defaults to `ON DELETE RESTRICT`, which already blocks `Company` deletion outright as long as any exist. Flagged as a defensive-design gap for if a future hard-delete/cleanup feature is ever added, not a live bug.

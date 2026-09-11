@@ -124,6 +124,118 @@ export function batchKey(productId: string, warehouseId: string, batchId: string
   return `${productId}::${warehouseId}::${batchId}::batch`;
 }
 
+/**
+ * `serialId` is required on a movement line when the product is
+ * `isSerialTracked`, and forbidden otherwise (51-serial-number-tracking.md's
+ * Business Rules) — checked against the loaded product's own flag, never the
+ * client's claim about it. Mirrors `batchRequirementError`'s predicate+message
+ * split.
+ */
+export function serialRequirementError(
+  productName: string,
+  isSerialTracked: boolean,
+  serialId: string | undefined
+): string | null {
+  if (isSerialTracked && !serialId) {
+    return `Product "${productName}" is serial-tracked — select a serial number for this movement.`;
+  }
+  if (!isSerialTracked && serialId) {
+    return `Product "${productName}" is not serial-tracked — a serial number cannot be attached to its movements.`;
+  }
+  return null;
+}
+
+/**
+ * A serial-tracked movement line's quantity must always equal exactly 1 — a
+ * serial identifies one physical unit (51-serial-number-tracking.md's
+ * Decisions), regardless of what the product's own unit `decimalPlaces`
+ * would otherwise permit.
+ */
+export function serialQuantityError(
+  productName: string,
+  isSerialTracked: boolean,
+  quantity: number
+): string | null {
+  if (isSerialTracked && quantity !== 1) {
+    return `Product "${productName}" is serial-tracked — each movement line must have a quantity of exactly 1.`;
+  }
+  return null;
+}
+
+/**
+ * Every stored fact about one serial's movement needed to derive its current
+ * state — the minimal projection of a StockTransaction row.
+ */
+export interface SerialMovementRecord {
+  direction: StockDirection;
+  transactionType: StockTransactionType;
+  warehouseId: string;
+  createdAt: Date;
+}
+
+/**
+ * A serial's derived status (51-serial-number-tracking.md's Decisions):
+ * `SerialNumber` is a static identity catalog with no stored status column —
+ * status and current warehouse are always read from the serial's own
+ * movement history.
+ */
+export type SerialStatus = "NO_MOVEMENTS" | "IN_STOCK" | "SOLD" | "RETURNED" | "OUT_OF_STOCK";
+
+export interface DerivedSerialStatus {
+  status: SerialStatus;
+  /** The serial's current location — set only while `status` is `IN_STOCK`. */
+  warehouseId: string | null;
+}
+
+/**
+ * Derives a serial's current status and warehouse from its full movement
+ * history, ordered by nothing in particular (this function sorts it) — the
+ * latest row by `createdAt` wins. Ties (identical `createdAt`, which every
+ * `transferStock` call produces for its linked OUT+IN pair, since Postgres's
+ * `now()`/`CURRENT_TIMESTAMP` default is stable for the whole transaction
+ * that writes both rows) resolve to IN: a simultaneous inflow always wins
+ * over a simultaneous outflow, since the unit is still somewhere, not gone.
+ */
+export function deriveSerialStatus(transactions: readonly SerialMovementRecord[]): DerivedSerialStatus {
+  if (transactions.length === 0) {
+    return { status: "NO_MOVEMENTS", warehouseId: null };
+  }
+
+  const latestTime = Math.max(...transactions.map((transaction) => transaction.createdAt.getTime()));
+  const latestGroup = transactions.filter((transaction) => transaction.createdAt.getTime() === latestTime);
+
+  const inRow = latestGroup.find((transaction) => transaction.direction === "IN");
+  if (inRow) {
+    return { status: "IN_STOCK", warehouseId: inRow.warehouseId };
+  }
+
+  const outRow = latestGroup[0];
+  if (outRow.transactionType === "SALES") {
+    return { status: "SOLD", warehouseId: null };
+  }
+  if (outRow.transactionType === "PURCHASE_RETURN") {
+    return { status: "RETURNED", warehouseId: null };
+  }
+  return { status: "OUT_OF_STOCK", warehouseId: null };
+}
+
+/**
+ * The "cannot oversell an identity" guard (51-serial-number-tracking.md's
+ * Business Rules) — a serial may only be moved OUT of the warehouse it is
+ * currently derived to be IN_STOCK at, the identity-level analog of the
+ * batch/product quantity check. Pure predicate; the engine throws.
+ */
+export function serialAvailabilityError(
+  serialValue: string,
+  derived: DerivedSerialStatus,
+  warehouseId: string
+): string | null {
+  if (derived.status !== "IN_STOCK" || derived.warehouseId !== warehouseId) {
+    return `Serial "${serialValue}" is not currently in stock at the selected warehouse and cannot be moved out.`;
+  }
+  return null;
+}
+
 export interface AggregatedDemand {
   productId: string;
   warehouseId: string;
@@ -242,6 +354,7 @@ export const stockMovementLineSchema = z
     referenceType: z.string().trim().max(50, "Reference type must be at most 50 characters").optional(),
     referenceId: z.uuid("Reference id must be a valid id").optional(),
     batchId: z.uuid("Select a valid batch").optional(),
+    serialId: z.uuid("Select a valid serial number").optional(),
     narration: z.string().trim().max(500, "Narration must be at most 500 characters").optional(),
   })
   .refine((data) => Boolean(data.referenceType) === Boolean(data.referenceId), {
@@ -261,6 +374,7 @@ export const transferStockInputSchema = z
     quantity: z.number("Quantity must be a number").positive("Quantity must be greater than zero"),
     transactionDate: z.string().trim().refine(isValidCalendarDate, "Enter a valid transaction date"),
     batchId: z.uuid("Select a valid batch").optional(),
+    serialId: z.uuid("Select a valid serial number").optional(),
     narration: z.string().trim().max(500, "Narration must be at most 500 characters").optional(),
   })
   .refine((data) => data.sourceWarehouseId !== data.destinationWarehouseId, {

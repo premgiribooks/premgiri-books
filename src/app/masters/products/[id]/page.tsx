@@ -70,7 +70,12 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
           ) : null}
         </div>
 
-        <ProductDetailTabs productId={product.id} isBatchTracked={product.isBatchTracked} active="overview" />
+        <ProductDetailTabs
+          productId={product.id}
+          isBatchTracked={product.isBatchTracked}
+          isSerialTracked={product.isSerialTracked}
+          active="overview"
+        />
 
         <ProductOverviewPanel product={product} />
       </div>

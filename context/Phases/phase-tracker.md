@@ -438,15 +438,78 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 5 — Serial Number Tracking (#49)**. Phase 6 — Product Detail Page (#50) is now
-complete (`feature/product-detail-page`, implemented 2026-09-11) — see
-`context/progress-tracker.md`'s Current Feature entry for the full record. Opening Stock
-(#44), Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47), Batch
-Tracking (#48), and Product Detail Page (#50) are all implemented; only Serial Number
-Tracking (#49), the last item of Phase 5, remains. Its own spec
-(`51-serial-number-tracking.md`) can now wire its Serial Numbers tab into the Product
-detail view this phase built, exactly as intended. After #49, normal phase order
-continues at Phase 7 (Accounting, #51–#54).
+➡ **Phase 7 — Accounting (#51–#54)**. Serial Number Tracking (#49, `feature/serial-
+number-tracking`, implemented 2026-09-11) closes Phase 5 in full — Opening Stock (#44),
+Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47), Batch Tracking
+(#48), Product Detail Page (#50), and now Serial Number Tracking (#49) are all
+implemented. See the paragraph below and `context/progress-tracker.md`'s Current Phase
+entry for the full record. Normal phase order now continues at Phase 7 (Accounting, the
+four manual voucher screens — Payment/Receipt/Contra/Journal Voucher, specs 52–55).
+
+Serial Number Tracking (`feature/serial-number-tracking`) — the second of the two
+genuinely new engine-adjacent schema additions Phase 5 reserved, the structural mirror of
+Batch Tracking (#48) one dimension further: identity-scoped instead of lot-scoped. New
+`Product.isSerialTracked` (opt-in, TRADING-only, mutually exclusive with
+`isBatchTracked`, immutable once the product has any StockTransaction), new
+`SerialNumber` catalog model (`(companyId, productId, serialValue)` unique — two products
+may share a serial format), and one additive nullable `StockTransaction.serialId` column
+(migration `20260911081719_serial_number_tracking`, which also added the two raw-SQL
+CHECK constraints — `product_batch_serial_mutually_exclusive` and
+`stock_transaction_batch_xor_serial` — feature-spec 50's own migration had deferred
+here). `serialId` was threaded as an optional field through the Inventory Engine's
+`stockMovementLineSchema`/`transferStockInputSchema` and a new
+`assertSerialRequirement`/`assertSerialQuantity`/`assertUsableSerial` set in
+`inventory-engine.ts` — required when `product.isSerialTracked`, forbidden otherwise, and
+that line's quantity must equal exactly 1 regardless of the product's unit precision.
+`SerialNumber` carries no stored status column — a new pure `deriveSerialStatus`
+(`inventory-validation.ts`) derives `IN_STOCK`/`SOLD`/`RETURNED`/`OUT_OF_STOCK`/
+`NO_MOVEMENTS` and the current warehouse from the serial's own movement history, with
+same-`createdAt` ties (the pair `transferStock` writes in one transaction) resolved in
+favor of IN. The "cannot oversell an identity" OUT-availability check is identity- and
+warehouse-scoped (an OUT line/transfer may only move a serial from the warehouse it is
+currently derived to be IN_STOCK at) and runs unconditionally, independent of
+`allowNegativeStock` — a deliberate strengthening beyond the batch/product quantity
+checks, since identity correctness isn't a quantity-tolerance setting. A structural guard
+in `assertLinesWellFormed` also rejects the same `serialId` appearing as OUT more than
+once within a single `recordMovements` call. New `serial-numbers` module (repository/
+service/validation/actions/components) plus a `<SerialSelector>` component and an
+`isSerialTracked` toggle wired into the existing Product create/edit form, mutually
+disabling the batch-tracking toggle and vice versa. `npx tsc --noEmit`, `npx eslint src
+prisma`, `npx vitest run` (1333 tests), and `next build` all pass.
+
+**Real bug found and fixed during browser verification, not just automated tests**: a
+duplicate-serial-value registration surfaced the generic "Something went wrong" toast
+instead of the friendly "A serial number with this value already exists for this
+product." message. Root cause, confirmed from the live server log: the shared
+`isUniqueConstraintError(error, column)` helper (`src/lib/prisma-errors.ts`) only checked
+the legacy `error.meta.target` array shape, but this project's actual `@prisma/client`
+7.8.0 Postgres driver adapter reports the violated columns at
+`meta.driverAdapterError.cause.constraint.fields` instead (each entry Postgres-quoted,
+e.g. `"companyId"`), with no `meta.target` at all — so every consumer of this shared
+helper across the whole codebase (products, warehouses, units, ledgers, batches, and now
+serial numbers) was silently falling through to the generic error path on a real
+uniqueness violation, previously masked because every existing test for it mocks the
+legacy shape only. Fixed by checking both shapes (`src/lib/prisma-errors.ts`); added
+`src/lib/prisma-errors.test.ts` (new file — none existed before) covering both. This was
+a pre-existing, codebase-wide latent defect, not something this feature introduced;
+fixing the one shared helper fixes every caller at once.
+
+A live Postgres was available; the migration was applied via `prisma db execute` +
+`prisma migrate resolve --applied` rather than `prisma migrate dev`, because the local
+dev database's migration history had a pre-existing checksum mismatch on the unrelated,
+already-merged `20260911060923_batch_tracking` migration (a line-ending/edit-after-apply
+artifact, not something this session caused) that made `migrate dev`'s drift check refuse
+to proceed without a full `migrate reset` (rejected as disproportionate and destructive
+for a checksum-only discrepancy). **Manually verified end-to-end in a browser** via
+Playwright against the dev server (reusing this machine's cached Chromium build): created
+a serial-tracked product (confirmed the Batch Tracking toggle auto-disables with an
+explanatory message and vice versa) → its Serial Numbers tab appeared (no Batches tab) →
+bulk-registered two serials via pasted multi-line input → registered a third mixed with a
+duplicate of an already-registered value (duplicate failed with the now-fixed friendly
+message, the dialog retained only the failed value for retry, the new value still
+succeeded) → deactivated one serial, toggled it back active → deactivated all test
+products afterward (this codebase has no hard-delete for masters, matching every other
+module's convention).
 
 Batch Tracking (`feature/batch-tracking`) — the first of the two genuinely new
 engine-adjacent schema additions Phase 5 reserved (32-inventory-engine.md's own Do Not
@@ -472,12 +535,12 @@ prisma`, `npx vitest run` (1253 tests), and `next build` all pass.
 
 **Known deviations/deferrals from the spec, recorded per `ai-workflow-rules.md`:**
 
-1. **The mutual-exclusion CHECK constraint (batch/serial) is deferred to feature-spec
-   51's own migration** — `Product.isSerialTracked` doesn't exist yet, so a Postgres
-   `CHECK` referencing it cannot be written now. The exact deferred SQL is documented as
-   a comment block at the end of `prisma/migrations/20260911060923_batch_tracking/migration.sql`;
-   spec 51 must add it. The two spec-mandated test cases for this ("mutual exclusion,
-   either order") are correspondingly not yet written — add them alongside spec 51.
+1. ~~The mutual-exclusion CHECK constraint (batch/serial) is deferred to feature-spec
+   51's own migration~~ — **resolved 2026-09-11**: added by
+   `prisma/migrations/20260911081719_serial_number_tracking/migration.sql` exactly as
+   deferred here (`product_batch_serial_mutually_exclusive` and
+   `stock_transaction_batch_xor_serial`). The mutual-exclusion test cases (both
+   directions) are written in `product-schema.test.ts`.
 2. ~~The Batches tab / page route is on hold~~ — **resolved 2026-09-11** by Phase 6 —
    Product Detail Page (#50, `feature/product-detail-page`): `/masters/products/[id]/
    batches` now renders `ProductBatchTable`/`ProductBatchForm` unmodified, gated behind

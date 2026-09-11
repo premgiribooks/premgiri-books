@@ -92,6 +92,7 @@ model Company {
   warehouses            Warehouse[]
   products              Product[]
   productBatches        ProductBatch[]
+  serialNumbers         SerialNumber[]
   marginProfiles        MarginProfile[]
   priceLists            PriceList[]
   customers             Customer[]
@@ -689,10 +690,11 @@ enum ProductType {
 // `isBatchTracked` (50-batch-tracking.md) — opt-in, TRADING-only (Zod-gated),
 // immutable once the product has any StockTransaction (mirrors the
 // unitId/productType rule above, enforced in product-repository.ts). Mutually
-// exclusive with the future `isSerialTracked` (feature-spec 51, not yet
-// implemented) — the spec's DB-level CHECK constraint for that exclusion is
-// deferred to spec 51's own migration since `isSerialTracked` does not exist
-// yet; see context/progress-tracker.md for the exact deferred statement.
+// exclusive with `isSerialTracked` (51-serial-number-tracking.md) — enforced
+// both in product-repository.ts and by the raw-SQL CHECK constraint
+// `product_batch_serial_mutually_exclusive` added in this feature's own
+// migration (see that migration.sql's own note for why it could not be added
+// alongside isBatchTracked's migration).
 model Product {
   id                 String         @id @default(uuid())
   companyId          String
@@ -720,6 +722,7 @@ model Product {
   purchasePrice      Decimal?       @db.Decimal(14, 2)
   minStockLevel      Decimal?       @db.Decimal(14, 4)
   isBatchTracked     Boolean        @default(false)
+  isSerialTracked    Boolean        @default(false)
   description        String?
   isActive           Boolean        @default(true)
   createdAt          DateTime       @default(now())
@@ -738,6 +741,7 @@ model Product {
   stockTransferItems        StockTransferItem[]
   physicalVerificationItems PhysicalVerificationItem[]
   batches                   ProductBatch[]
+  serialNumbers             SerialNumber[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -777,6 +781,36 @@ model ProductBatch {
   stockTransactions StockTransaction[]
 
   @@unique([companyId, productId, batchNumber])
+  @@index([companyId, productId])
+}
+
+// Serial identity catalog for a serial-tracked product
+// (51-serial-number-tracking.md) — the per-unit analog of ProductBatch, for
+// products where each physical unit has its own identity (IMEI, device
+// serial, equipment tag) rather than a lot/batch grouping. `SerialNumber`
+// is a STATIC identity registry only — it has no stored `status` column.
+// A serial's current status/warehouse is always derived from its latest
+// StockTransaction row (inventory-queries.ts's getSerialStatus), never
+// stored here, mirroring ProductBatch's "batch quantity is never stored"
+// invariant one dimension further. `serialValue` uniqueness is scoped to
+// (companyId, productId) — two different products may share a colliding
+// serial format. No update/delete beyond isActive; a serial is never
+// renamed once created (a wrong value is corrected by deactivating it and
+// registering the correct one).
+model SerialNumber {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  serialValue String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stockTransactions StockTransaction[]
+
+  @@unique([companyId, productId, serialValue])
   @@index([companyId, productId])
 }
 
@@ -1234,6 +1268,12 @@ enum StockDirection {
 // when the movement's product is isBatchTracked, forbidden otherwise
 // (enforced in inventory-engine.ts, never left to the caller). Batch
 // quantity is never stored — see ProductBatch's doc comment.
+// `serialId` (51-serial-number-tracking.md, additive amendment) — optional;
+// required when the movement's product is isSerialTracked, forbidden
+// otherwise, and its line's quantity must always equal exactly 1 (enforced
+// in inventory-engine.ts). A row may carry `batchId` or `serialId` but never
+// both — enforced by the raw-SQL CHECK constraint
+// `stock_transaction_batch_xor_serial` in this feature's own migration.
 model StockTransaction {
   id              String               @id @default(uuid())
   companyId       String
@@ -1252,6 +1292,8 @@ model StockTransaction {
   transferGroupId String?
   batchId         String?
   batch           ProductBatch?        @relation(fields: [batchId], references: [id])
+  serialId        String?
+  serial          SerialNumber?        @relation(fields: [serialId], references: [id])
   narration       String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -1261,6 +1303,7 @@ model StockTransaction {
   @@index([referenceType, referenceId])
   @@index([transferGroupId])
   @@index([batchId])
+  @@index([serialId])
 }
 
 enum StockAdjustmentStatus {

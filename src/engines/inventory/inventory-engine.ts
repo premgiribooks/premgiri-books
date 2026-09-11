@@ -8,6 +8,7 @@ import {
   aggregateOutDemand,
   batchKey,
   batchRequirementError,
+  deriveSerialStatus,
   directionErrorMessage,
   hasSufficientStock,
   hasValidQuantityPrecision,
@@ -15,8 +16,12 @@ import {
   isFutureTransactionDate,
   pairKey,
   recordMovementsInputSchema,
+  serialAvailabilityError,
+  serialQuantityError,
+  serialRequirementError,
   toUtcDate,
   transferStockInputSchema,
+  type SerialMovementRecord,
   type StockMovementLineInput,
   type TransferStockInput,
 } from "@/engines/inventory/inventory-validation";
@@ -26,6 +31,7 @@ import {
   stockTransactionRepository,
   type BatchForMovement,
   type ProductForMovement,
+  type SerialForMovement,
   type WarehouseForMovement,
 } from "@/modules/stock-transactions/repositories/stock-transaction-repository";
 
@@ -110,6 +116,68 @@ function assertUsableBatch(
   return batch;
 }
 
+/**
+ * `serialId` is required when the product is `isSerialTracked`, and
+ * forbidden otherwise (51-serial-number-tracking.md's Business Rules) —
+ * checked against the loaded product's own flag, never the client's claim
+ * about it.
+ */
+function assertSerialRequirement(product: ProductForMovement, serialId: string | undefined): void {
+  const error = serialRequirementError(product.name, product.isSerialTracked, serialId);
+  if (error) {
+    throw new AppError(error);
+  }
+}
+
+/** A serial-tracked movement line's quantity must always equal exactly 1. */
+function assertSerialQuantity(product: ProductForMovement, quantity: number): void {
+  const error = serialQuantityError(product.name, product.isSerialTracked, quantity);
+  if (error) {
+    throw new AppError(error);
+  }
+}
+
+/**
+ * A referenced serial must belong to the caller's company AND the same
+ * product, and be active at movement time — never leaking existence across
+ * company/product boundaries (mirrors assertUsableBatch).
+ */
+function assertUsableSerial(
+  serial: SerialForMovement | undefined,
+  companyId: string,
+  productId: string
+): SerialForMovement {
+  if (!serial || serial.companyId !== companyId || serial.productId !== productId) {
+    throw new AppError("Serial number not found.");
+  }
+  if (!serial.isActive) {
+    throw new AppError(`Serial "${serial.serialValue}" is inactive and cannot record stock movements.`);
+  }
+  return serial;
+}
+
+/**
+ * The identity-level "cannot oversell" guard (51-serial-number-tracking.md's
+ * Business Rules) — an OUT movement against a serial-tracked line may only
+ * move a serial out of the warehouse it is currently derived to be IN_STOCK
+ * at. Takes a pre-fetched history map (one batched `findSerialMovementHistory`
+ * call covers every serial referenced by the whole batch — no N+1) and runs
+ * unconditionally, even when `allowNegativeStock` is set: that setting
+ * permits aggregate quantity to go negative, not a specific identified unit
+ * to be moved from somewhere it never was.
+ */
+function assertSerialAvailable(
+  serial: SerialForMovement,
+  historyBySerialId: ReadonlyMap<string, readonly SerialMovementRecord[]>,
+  warehouseId: string
+): void {
+  const derived = deriveSerialStatus(historyBySerialId.get(serial.id) ?? []);
+  const error = serialAvailabilityError(serial.serialValue, derived, warehouseId);
+  if (error) {
+    throw new AppError(error);
+  }
+}
+
 /** Mirrors product-repository.ts's assertMinStockLevelPrecision / pricing-engine.ts's assertQuantityPrecision. */
 function assertQuantityPrecision(quantity: number, decimalPlaces: number): void {
   if (!hasValidQuantityPrecision(quantity, decimalPlaces)) {
@@ -123,12 +191,23 @@ function assertQuantityPrecision(quantity: number, decimalPlaces: number): void 
 
 /** Structural checks that need no database access — run before any repository call (mirrors voucher-engine.ts's balance check). */
 function assertLinesWellFormed(lines: readonly StockMovementLineInput[], now: Date): void {
+  const seenOutSerialIds = new Set<string>();
   for (const line of lines) {
     if (!isDirectionAllowed(line.transactionType, line.direction)) {
       throw new AppError(directionErrorMessage(line.transactionType));
     }
     if (isFutureTransactionDate(toUtcDate(line.transactionDate), now)) {
       throw new AppError("Transaction date cannot be in the future.");
+    }
+    // A serial can leave stock at most once per request — two OUT lines for
+    // the same serialId in one call would both read the same pre-insert
+    // history and both pass the availability check below, double-selling
+    // the identical unit in a single atomic write.
+    if (line.direction === "OUT" && line.serialId) {
+      if (seenOutSerialIds.has(line.serialId)) {
+        throw new AppError("The same serial number cannot be moved out more than once in the same request.");
+      }
+      seenOutSerialIds.add(line.serialId);
     }
   }
 }
@@ -137,21 +216,25 @@ async function loadMovementReferences(
   client: PrismaClientOrTransaction,
   productIds: readonly string[],
   warehouseIds: readonly string[],
-  batchIds: readonly string[]
+  batchIds: readonly string[],
+  serialIds: readonly string[]
 ): Promise<{
   productById: Map<string, ProductForMovement>;
   warehouseById: Map<string, WarehouseForMovement>;
   batchById: Map<string, BatchForMovement>;
+  serialById: Map<string, SerialForMovement>;
 }> {
-  const [products, warehouses, batches] = await Promise.all([
+  const [products, warehouses, batches, serials] = await Promise.all([
     stockTransactionRepository.findProductsForMovement(client, productIds),
     stockTransactionRepository.findWarehousesForMovement(client, warehouseIds),
     batchIds.length > 0 ? stockTransactionRepository.findBatchesForMovement(client, batchIds) : Promise.resolve([]),
+    serialIds.length > 0 ? stockTransactionRepository.findSerialsForMovement(client, serialIds) : Promise.resolve([]),
   ]);
   return {
     productById: new Map(products.map((product) => [product.id, product])),
     warehouseById: new Map(warehouses.map((warehouse) => [warehouse.id, warehouse])),
     batchById: new Map(batches.map((batch) => [batch.id, batch])),
+    serialById: new Map(serials.map((serial) => [serial.id, serial])),
   };
 }
 
@@ -170,11 +253,13 @@ async function recordMovementsInTransaction(
   const productIds = [...new Set(lines.map((line) => line.productId))];
   const warehouseIds = [...new Set(lines.map((line) => line.warehouseId))];
   const batchIds = [...new Set(lines.flatMap((line) => (line.batchId ? [line.batchId] : [])))];
-  const { productById, warehouseById, batchById } = await loadMovementReferences(
+  const serialIds = [...new Set(lines.flatMap((line) => (line.serialId ? [line.serialId] : [])))];
+  const { productById, warehouseById, batchById, serialById } = await loadMovementReferences(
     tx,
     productIds,
     warehouseIds,
-    batchIds
+    batchIds,
+    serialIds
   );
 
   for (const line of lines) {
@@ -184,6 +269,28 @@ async function recordMovementsInTransaction(
     assertBatchRequirement(product, line.batchId);
     if (line.batchId) {
       assertUsableBatch(batchById.get(line.batchId), companyId, line.productId);
+    }
+    assertSerialRequirement(product, line.serialId);
+    assertSerialQuantity(product, line.quantity);
+    if (line.serialId) {
+      assertUsableSerial(serialById.get(line.serialId), companyId, line.productId);
+    }
+  }
+
+  // The identity-level analog of the quantity-based demand/availability
+  // checks below — always enforced, independent of allowNegativeStock (see
+  // assertSerialAvailable's own doc comment).
+  const outSerialLines = lines.filter(
+    (line): line is StockMovementLineInput & { serialId: string } => line.direction === "OUT" && Boolean(line.serialId)
+  );
+  if (outSerialLines.length > 0) {
+    const outSerialIds = [...new Set(outSerialLines.map((line) => line.serialId))];
+    const historyBySerialId = await stockTransactionRepository.findSerialMovementHistory(tx, outSerialIds);
+    for (const line of outSerialLines) {
+      const serial = serialById.get(line.serialId);
+      if (serial) {
+        assertSerialAvailable(serial, historyBySerialId, line.warehouseId);
+      }
     }
   }
 
@@ -281,11 +388,13 @@ async function transferStockInTransaction(
   input: TransferStockInput
 ): Promise<TransferStockResult> {
   const batchIds = input.batchId ? [input.batchId] : [];
-  const { productById, warehouseById, batchById } = await loadMovementReferences(
+  const serialIds = input.serialId ? [input.serialId] : [];
+  const { productById, warehouseById, batchById, serialById } = await loadMovementReferences(
     tx,
     [input.productId],
     [input.sourceWarehouseId, input.destinationWarehouseId],
-    batchIds
+    batchIds,
+    serialIds
   );
 
   const product = assertMovableProduct(productById.get(input.productId), companyId);
@@ -295,6 +404,19 @@ async function transferStockInTransaction(
   assertBatchRequirement(product, input.batchId);
   if (input.batchId) {
     assertUsableBatch(batchById.get(input.batchId), companyId, input.productId);
+  }
+  assertSerialRequirement(product, input.serialId);
+  assertSerialQuantity(product, input.quantity);
+  const serial = input.serialId
+    ? assertUsableSerial(serialById.get(input.serialId), companyId, input.productId)
+    : undefined;
+
+  // The identity-level check always runs, independent of allowNegativeStock
+  // (see assertSerialAvailable's own doc comment) — a transfer's OUT side
+  // must originate from wherever the serial is actually derived to be.
+  if (serial) {
+    const historyBySerialId = await stockTransactionRepository.findSerialMovementHistory(tx, [serial.id]);
+    assertSerialAvailable(serial, historyBySerialId, input.sourceWarehouseId);
   }
 
   const allowNegativeStock = await stockTransactionRepository.findAllowNegativeStock(companyId);
@@ -329,6 +451,7 @@ async function transferStockInTransaction(
     quantity: input.quantity,
     transactionDate: toUtcDate(input.transactionDate),
     batchId: input.batchId ?? null,
+    serialId: input.serialId ?? null,
     narration: input.narration ?? null,
   });
 }

@@ -28,6 +28,7 @@ export interface ProductPersistData {
   purchasePrice: number | null;
   minStockLevel: number | null;
   isBatchTracked: boolean;
+  isSerialTracked: boolean;
   description: string | null;
 }
 
@@ -129,20 +130,27 @@ const SERIALIZABLE_RETRY = {
  * note). `isBatchTracked` inherits the identical rule
  * (50-batch-tracking.md): flipping it after movements exist would leave
  * historical rows in an ambiguous state (batch-tracked movements with no
- * batch, or a sudden batch requirement retroactively unsatisfiable). Only
- * one `findFirst` runs regardless of how many of the three fields changed —
- * an update that leaves all three alone must keep working even once
- * movements exist.
+ * batch, or a sudden batch requirement retroactively unsatisfiable).
+ * `isSerialTracked` inherits the same rule for the same reason, one
+ * dimension further (51-serial-number-tracking.md). Only one `findFirst`
+ * runs regardless of how many of the four fields changed — an update that
+ * leaves all four alone must keep working even once movements exist.
  */
 async function assertImmutableFieldsIfMovementsExist(
   tx: Prisma.TransactionClient,
   productId: string,
   data: ProductPersistData,
-  existing: { unitId: string; productType: ProductType; isBatchTracked: boolean }
+  existing: {
+    unitId: string;
+    productType: ProductType;
+    isBatchTracked: boolean;
+    isSerialTracked: boolean;
+  }
 ): Promise<void> {
   const unitOrTypeChanged = data.unitId !== existing.unitId || data.productType !== existing.productType;
   const batchTrackedChanged = data.isBatchTracked !== existing.isBatchTracked;
-  if (!unitOrTypeChanged && !batchTrackedChanged) {
+  const serialTrackedChanged = data.isSerialTracked !== existing.isSerialTracked;
+  if (!unitOrTypeChanged && !batchTrackedChanged && !serialTrackedChanged) {
     return;
   }
 
@@ -159,8 +167,13 @@ async function assertImmutableFieldsIfMovementsExist(
       "This product has recorded stock movements — its unit and product type can no longer be changed."
     );
   }
+  if (batchTrackedChanged) {
+    throw new AppError(
+      "This product has recorded stock movements — batch tracking can no longer be turned on or off."
+    );
+  }
   throw new AppError(
-    "This product has recorded stock movements — batch tracking can no longer be turned on or off."
+    "This product has recorded stock movements — serial tracking can no longer be turned on or off."
   );
 }
 

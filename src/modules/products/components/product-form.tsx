@@ -66,6 +66,7 @@ export function ProductForm({ product, options, hasStockTransactions = false }: 
       purchasePrice: product?.purchasePrice ?? undefined,
       minStockLevel: product?.minStockLevel ?? undefined,
       isBatchTracked: product?.isBatchTracked ?? false,
+      isSerialTracked: product?.isSerialTracked ?? false,
       description: product?.description ?? "",
     },
   });

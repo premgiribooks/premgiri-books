@@ -1,6 +1,6 @@
 "use client";
 
-import type { Control } from "react-hook-form";
+import { useWatch, type Control } from "react-hook-form";
 
 import {
   FormControl,
@@ -41,6 +41,13 @@ export function ProductStockSection({
   hasStockTransactions,
 }: ProductStockSectionProps) {
   const step = unitDecimalPlaces === 0 ? "1" : `0.${"0".repeat(unitDecimalPlaces - 1)}1`;
+
+  // Mutual exclusion (51-serial-number-tracking.md's Business Rules,
+  // reusing 50-batch-tracking.md's rule) — selecting one disables the other
+  // in the UI, reinforcing the server-side mutual exclusion the schema and
+  // repository both enforce.
+  const isBatchTracked = useWatch({ control, name: "isBatchTracked" });
+  const isSerialTracked = useWatch({ control, name: "isSerialTracked" });
 
   return (
     <section className="flex flex-col gap-4">
@@ -91,7 +98,7 @@ export function ProductStockSection({
         control={control}
         name="isBatchTracked"
         render={({ field }) => {
-          const disabled = productType !== "TRADING" || hasStockTransactions;
+          const disabled = productType !== "TRADING" || hasStockTransactions || isSerialTracked;
           return (
             <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
               <div className="space-y-0.5">
@@ -101,7 +108,40 @@ export function ProductStockSection({
                     ? "This product has recorded stock movements — batch tracking can no longer be turned on or off."
                     : productType !== "TRADING"
                       ? "Only a trading product can be batch-tracked."
-                      : "Track stock in named batches (lot number, manufacture/expiry dates) for this product. Once enabled, every stock movement for it must select a batch — this must be wired into each document's line editor separately before it takes effect there."}
+                      : isSerialTracked
+                        ? "This product is serial-tracked — a product cannot be both batch- and serial-tracked."
+                        : "Track stock in named batches (lot number, manufacture/expiry dates) for this product. Once enabled, every stock movement for it must select a batch — this must be wired into each document's line editor separately before it takes effect there."}
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={disabled}
+                />
+              </FormControl>
+            </FormItem>
+          );
+        }}
+      />
+
+      <FormField
+        control={control}
+        name="isSerialTracked"
+        render={({ field }) => {
+          const disabled = productType !== "TRADING" || hasStockTransactions || isBatchTracked;
+          return (
+            <FormItem className="flex flex-row items-center justify-between gap-4 rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel>Serial Number Tracking</FormLabel>
+                <FormDescription>
+                  {hasStockTransactions
+                    ? "This product has recorded stock movements — serial tracking can no longer be turned on or off."
+                    : productType !== "TRADING"
+                      ? "Only a trading product can be serial-tracked."
+                      : isBatchTracked
+                        ? "This product is batch-tracked — a product cannot be both batch- and serial-tracked."
+                        : "Track stock by individual serial number (IMEI, device serial, equipment tag) for this product. Once enabled, every stock movement for it must select a serial number — this must be wired into each document's line editor separately before it takes effect there."}
                 </FormDescription>
               </div>
               <FormControl>

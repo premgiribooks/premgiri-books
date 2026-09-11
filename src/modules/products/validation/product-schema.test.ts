@@ -21,6 +21,7 @@ const VALID_INPUT = {
   purchasePrice: 150.5,
   minStockLevel: 10.25,
   isBatchTracked: false,
+  isSerialTracked: false,
   description: "200-page ruled notebook",
 };
 
@@ -40,13 +41,14 @@ describe("createProductSchema", () => {
     expect(result.sellingPrice).toBe(199.99);
   });
 
-  it("accepts the minimal field set — only name, code, type, unit, and isBatchTracked are required", () => {
+  it("accepts the minimal field set — only name, code, type, unit, isBatchTracked, and isSerialTracked are required", () => {
     const result = createProductSchema.parse({
       name: "Consulting",
       productCode: "SRV-01",
       productType: "SERVICE",
       unitId: UNIT_ID,
       isBatchTracked: false,
+      isSerialTracked: false,
     });
 
     expect(result.barcode).toBeUndefined();
@@ -160,6 +162,7 @@ describe("createProductSchema", () => {
         productType: "SERVICE",
         unitId: UNIT_ID,
         isBatchTracked: true,
+        isSerialTracked: false,
       });
       expect(result.success).toBe(false);
     });
@@ -171,8 +174,79 @@ describe("createProductSchema", () => {
         productType: "EXPENSE",
         unitId: UNIT_ID,
         isBatchTracked: true,
+        isSerialTracked: false,
       });
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe("isSerialTracked", () => {
+    it("is required", () => {
+      const withoutFlag: Record<string, unknown> = { ...VALID_INPUT };
+      delete withoutFlag.isSerialTracked;
+      expect(createProductSchema.safeParse(withoutFlag).success).toBe(false);
+    });
+
+    it("accepts true for a TRADING product", () => {
+      expect(createProductSchema.parse({ ...VALID_INPUT, isSerialTracked: true }).isSerialTracked).toBe(
+        true
+      );
+    });
+
+    it("rejects true for a SERVICE product", () => {
+      const result = createProductSchema.safeParse({
+        name: "Consulting",
+        productCode: "SRV-01",
+        productType: "SERVICE",
+        unitId: UNIT_ID,
+        isBatchTracked: false,
+        isSerialTracked: true,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects true for an EXPENSE product", () => {
+      const result = createProductSchema.safeParse({
+        name: "Office rent",
+        productCode: "EXP-01",
+        productType: "EXPENSE",
+        unitId: UNIT_ID,
+        isBatchTracked: false,
+        isSerialTracked: true,
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("batch/serial mutual exclusion", () => {
+    it("rejects a product with both isBatchTracked and isSerialTracked true", () => {
+      const result = createProductSchema.safeParse({
+        ...VALID_INPUT,
+        isBatchTracked: true,
+        isSerialTracked: true,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts isBatchTracked true with isSerialTracked false", () => {
+      expect(
+        createProductSchema.safeParse({ ...VALID_INPUT, isBatchTracked: true, isSerialTracked: false })
+          .success
+      ).toBe(true);
+    });
+
+    it("accepts isSerialTracked true with isBatchTracked false", () => {
+      expect(
+        createProductSchema.safeParse({ ...VALID_INPUT, isBatchTracked: false, isSerialTracked: true })
+          .success
+      ).toBe(true);
+    });
+
+    it("accepts both flags false", () => {
+      expect(
+        createProductSchema.safeParse({ ...VALID_INPUT, isBatchTracked: false, isSerialTracked: false })
+          .success
+      ).toBe(true);
     });
   });
 });
