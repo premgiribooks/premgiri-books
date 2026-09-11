@@ -18,10 +18,13 @@ export interface Gstr1TaxBreakup {
   totalAmount: number;
 }
 
-/** Table 4 (B2B), Table 5 (B2C Large), and Table 9B/9C's registered rows — one row group per source document. */
+/** Table 4 (B2B), Table 5 (B2C Large), and Table 9B/9C's registered rows —
+ * one row group per source document. SALES_RETURN appears here (Table
+ * 4/5 only, never 9B/9C) with negative amounts, netting a return's effect
+ * into whichever table its own GSTIN/rate/place-of-supply place it in. */
 export interface Gstr1DocumentGroup {
   documentId: string;
-  documentType: "SALES_INVOICE" | "CREDIT_NOTE" | "DEBIT_NOTE";
+  documentType: "SALES_INVOICE" | "SALES_RETURN" | "CREDIT_NOTE" | "DEBIT_NOTE";
   documentNumber: string;
   documentDate: Date;
   partyId: string | null;

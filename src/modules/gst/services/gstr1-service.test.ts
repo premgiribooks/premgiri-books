@@ -306,7 +306,7 @@ describe("gstr1Service.getGstr1Return — Credit/Debit Notes and Sales Return ex
     expect(result.b2b).toHaveLength(0);
   });
 
-  it("never includes a Sales Return line in any table (asserts absence, not just matching totals)", async () => {
+  it("never classifies a Sales Return line into either Credit/Debit Note table", async () => {
     getOutwardSupplyLinesMock.mockResolvedValue([
       {
         documentType: "SALES_RETURN",
@@ -333,12 +333,155 @@ describe("gstr1Service.getGstr1Return — Credit/Debit Notes and Sales Return ex
 
     const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
 
-    expect(result.b2b).toHaveLength(0);
-    expect(result.b2cLarge).toHaveLength(0);
-    expect(result.b2cSmall).toHaveLength(0);
-    expect(result.nilRated).toHaveLength(0);
     expect(result.creditDebitNotesRegistered).toHaveLength(0);
     expect(result.creditDebitNotesUnregistered).toHaveLength(0);
+    // Its negative effect must land somewhere in B2B/B2C/Nil-rated instead —
+    // see the netting tests below.
+    expect(result.b2b).toHaveLength(1);
+  });
+});
+
+describe("gstr1Service.getGstr1Return — Sales Return netting (regression: previously excluded entirely)", () => {
+  function registeredInvoiceLine(overrides: Partial<GstSupplyLine>) {
+    return salesInvoiceLine({
+      documentType: "SALES_INVOICE",
+      documentId: "inv-net-1",
+      partyGstin: "27AAAAA0000A1Z5",
+      igst: 0,
+      cgst: 90,
+      sgst: 90,
+      taxableAmount: 1000,
+      totalAmount: 1180,
+      ...overrides,
+    });
+  }
+
+  function registeredReturnLine(overrides: Partial<GstSupplyLine>) {
+    return salesInvoiceLine({
+      documentType: "SALES_RETURN",
+      documentId: "sr-net-1",
+      partyGstin: "27AAAAA0000A1Z5",
+      igst: 0,
+      cgst: -90,
+      sgst: -90,
+      taxableAmount: -1000,
+      totalAmount: -1180,
+      ...overrides,
+    });
+  }
+
+  it("nets a registered Sales Return's negative amount into Table 4 (B2B)'s totals", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([registeredInvoiceLine({}), registeredReturnLine({})]);
+
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+
+    expect(result.b2b).toHaveLength(2);
+    const netTaxable = result.b2b.reduce((sum, group) => sum + group.taxableAmount, 0);
+    const netTotal = result.b2b.reduce((sum, group) => sum + group.totalAmount, 0);
+    expect(netTaxable).toBe(0);
+    expect(netTotal).toBe(0);
+  });
+
+  it("nets an unregistered Sales Return's negative amount into the same B2C Small consolidated bucket", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([
+      salesInvoiceLine({
+        documentId: "inv-net-2",
+        partyGstin: null,
+        placeOfSupplyStateCode: "27",
+        ratePercent: 18,
+        igst: 0,
+        cgst: 90,
+        sgst: 90,
+        taxableAmount: 1000,
+        totalAmount: 1180,
+      }),
+      salesInvoiceLine({
+        documentType: "SALES_RETURN",
+        documentId: "sr-net-2",
+        partyGstin: null,
+        placeOfSupplyStateCode: "27",
+        ratePercent: 18,
+        igst: 0,
+        cgst: -90,
+        sgst: -90,
+        taxableAmount: -1000,
+        totalAmount: -1180,
+      }),
+    ]);
+
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+
+    expect(result.b2cSmall).toHaveLength(1);
+    expect(result.b2cSmall[0].taxableAmount).toBe(0);
+    expect(result.b2cSmall[0].totalAmount).toBe(0);
+  });
+
+  it("nets a nil-rated Sales Return's negative amount into Table 8's totals", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([
+      salesInvoiceLine({
+        documentId: "inv-net-3",
+        partyGstin: null,
+        ratePercent: 0,
+        igst: 0,
+        cgst: 0,
+        sgst: 0,
+        taxableAmount: 500,
+        totalAmount: 500,
+      }),
+      salesInvoiceLine({
+        documentType: "SALES_RETURN",
+        documentId: "sr-net-3",
+        partyGstin: null,
+        ratePercent: 0,
+        igst: 0,
+        cgst: 0,
+        sgst: 0,
+        taxableAmount: -500,
+        totalAmount: -500,
+      }),
+    ]);
+
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+
+    expect(result.nilRated).toHaveLength(1);
+    expect(result.nilRated[0].taxableAmount).toBe(0);
+    expect(result.nilRated[0].totalAmount).toBe(0);
+  });
+});
+
+describe("gstr1Service.getGstr1Return — B2C Large threshold uses the invoice's FULL value including nil-rated lines", () => {
+  it("classifies an unregistered inter-state invoice as B2C Large when the taxed + nil-rated lines together exceed the threshold, even though the taxed portion alone does not", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([
+      salesInvoiceLine({
+        documentId: "inv-mixed-1",
+        partyGstin: null,
+        ratePercent: 18,
+        igst: 27000,
+        cgst: 0,
+        sgst: 0,
+        taxableAmount: 150000,
+        totalAmount: 177000,
+      }),
+      salesInvoiceLine({
+        documentId: "inv-mixed-1",
+        partyGstin: null,
+        ratePercent: 0,
+        igst: 0,
+        cgst: 0,
+        sgst: 0,
+        taxableAmount: 80000,
+        totalAmount: 80000,
+      }),
+    ]);
+
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+
+    // 177000 (taxed) + 80000 (nil) = 257000 > 250000 -> B2C Large, even
+    // though the taxed-only portion (177000) alone would not cross it.
+    expect(result.b2cLarge).toHaveLength(1);
+    expect(result.b2cSmall).toHaveLength(0);
+    expect(result.nilRated).toHaveLength(1);
+    expect(result.nilRated[0].taxableAmount).toBe(80000);
   });
 });
 

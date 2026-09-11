@@ -5,6 +5,7 @@ import type { Gstr1DocumentGroup } from "@/types/gstr1";
 
 const DOCUMENT_DETAIL_HREF: Record<Gstr1DocumentGroup["documentType"], (id: string) => string> = {
   SALES_INVOICE: (id) => `/sales/invoices/${id}`,
+  SALES_RETURN: (id) => `/sales/returns/${id}`,
   CREDIT_NOTE: (id) => `/sales/credit-notes/${id}`,
   DEBIT_NOTE: (id) => `/sales/debit-notes/${id}`,
 };

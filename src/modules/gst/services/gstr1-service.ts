@@ -116,11 +116,28 @@ interface Gstr1SalesInvoiceClassification {
 }
 
 /**
+ * Classifies Sales Invoice lines AND Sales Return lines together — a Sales
+ * Return's negative amounts must reduce whichever B2B/B2C/Nil-rated table
+ * its own (GSTIN/rate/place-of-supply) properties place it into, per
+ * 58-gstr-1.md's Business Rules ("a Sales Return's financial effect is
+ * already netted into whichever B2B/B2C table its source invoice's lines
+ * fall into, via getOutwardSupplyLines's signed aggregation"). A return has
+ * no `sourceDocumentId` on its GstSupplyLine (only its own return id), so it
+ * cannot be merged into the exact same row as its source invoice — it lands
+ * as its own (negative) row in Table 4/5 when GSTIN is present, or nets
+ * directly into the same consolidated (place, rate) bucket in Table 7/8
+ * when it isn't. Either way the period's Table 4/5/7/8 TOTALS come out
+ * correct — excluding returns entirely (as an earlier version of this
+ * function did) systematically overstated every table by the full value of
+ * every return in the period.
+ *
  * Table 8 (Nil-rated/Exempt) takes every ratePercent === 0 line first,
  * regardless of GSTIN — real-world GSTR-1 reports nil-rated/exempt supplies
  * separately from B2B/B2C entirely, not merged into either. Every remaining
  * line then splits on GSTIN presence (Business Rules: "classification is
- * driven by GSTIN presence, not customerMode").
+ * driven by GSTIN presence, not customerMode"). Sales Return lines are never
+ * classified into 9B/9C — only real CreditNote/DebitNote rows are (see
+ * classifyNoteLines).
  */
 function classifySalesInvoiceLines(lines: GstSupplyLine[]): Gstr1SalesInvoiceClassification {
   const nilRatedLines: GstSupplyLine[] = [];
@@ -137,30 +154,39 @@ function classifySalesInvoiceLines(lines: GstSupplyLine[]): Gstr1SalesInvoiceCla
     }
   }
 
-  // Group unregistered lines by invoice first, to test each invoice's own
+  // Group unregistered TAXED lines by invoice, to test each invoice's own
   // value against the B2C Large threshold (Business Rules: "that invoice's
-  // grandTotal (not just this one line)"). The sum of an invoice's own
-  // already-fetched line totalAmounts stands in for the stored
-  // SalesInvoice.grandTotal column — off by at most that invoice's roundOff
-  // paisa, immaterial to a ₹2,50,000 statutory threshold — since reading the
-  // raw invoice would mean a second query outside getOutwardSupplyLines,
-  // which this module's Code Standards forbids ("no GST arithmetic invented
-  // here; this module only classifies/groups").
-  const byInvoice = new Map<string, GstSupplyLine[]>();
+  // grandTotal (not just this one line)"). The threshold decision itself
+  // uses that invoice's FULL value including any nil-rated lines it also
+  // has (tracked separately below) — carving nil-rated lines out before
+  // summing would understate the invoice's real value and could flip a
+  // borderline invoice into the wrong bucket; the nil-rated lines
+  // themselves still only ever get reported under Table 8, never 5/7.
+  // `igst !== 0` (not `> 0`) so a Sales Return's negated igst still counts
+  // as inter-state.
+  const taxedLinesByInvoice = new Map<string, GstSupplyLine[]>();
+  const invoiceTotalByDocumentId = new Map<string, number>();
   for (const line of unregisteredLines) {
-    const existing = byInvoice.get(line.documentId);
-    if (existing) {
-      existing.push(line);
+    const existingTaxed = taxedLinesByInvoice.get(line.documentId);
+    if (existingTaxed) {
+      existingTaxed.push(line);
     } else {
-      byInvoice.set(line.documentId, [line]);
+      taxedLinesByInvoice.set(line.documentId, [line]);
     }
+    invoiceTotalByDocumentId.set(line.documentId, (invoiceTotalByDocumentId.get(line.documentId) ?? 0) + line.totalAmount);
+  }
+  for (const line of nilRatedLines) {
+    if (line.partyGstin) {
+      continue;
+    }
+    invoiceTotalByDocumentId.set(line.documentId, (invoiceTotalByDocumentId.get(line.documentId) ?? 0) + line.totalAmount);
   }
 
   const b2cLargeLines: GstSupplyLine[] = [];
   const b2cSmallLines: GstSupplyLine[] = [];
-  for (const invoiceLines of byInvoice.values()) {
-    const isInterState = invoiceLines.some((line) => line.igst > 0);
-    const invoiceTotal = invoiceLines.reduce((sum, line) => sum + line.totalAmount, 0);
+  for (const [documentId, invoiceLines] of taxedLinesByInvoice) {
+    const isInterState = invoiceLines.some((line) => line.igst !== 0);
+    const invoiceTotal = invoiceTotalByDocumentId.get(documentId) ?? 0;
     if (isInterState && invoiceTotal > B2C_LARGE_THRESHOLD_RUPEES) {
       b2cLargeLines.push(...invoiceLines);
     } else {
@@ -201,17 +227,18 @@ export const gstr1Service = {
 
     const lines = await gstReportEngine.getOutwardSupplyLines(user.companyId, filters.from, filters.to);
 
-    const salesInvoiceLines = lines.filter((line) => line.documentType === "SALES_INVOICE");
-    // Debit Notes are reported only under Table 9C (registered) / 9B
-    // (unregistered), never under Table 4 — mirrors real GSTR-1's own table
-    // structure. Sales Return lines are deliberately excluded from every
-    // table — 58-gstr-1.md's Project Context: a Sales Return carries no
-    // statutory GST-document label of its own, only Credit/Debit Note does;
-    // its financial effect is only ever visible via the source invoice's
-    // own posted figures, not re-shown as a separate GSTR-1 row.
+    // Sales Return lines are classified alongside Sales Invoice lines (see
+    // classifySalesInvoiceLines's own doc comment) — their negative amounts
+    // net into whichever B2B/B2C/Nil-rated table their own properties place
+    // them in. Debit Notes are reported only under Table 9C (registered) /
+    // 9B (unregistered), never under Table 4 — mirrors real GSTR-1's own
+    // table structure.
+    const salesInvoiceAndReturnLines = lines.filter(
+      (line) => line.documentType === "SALES_INVOICE" || line.documentType === "SALES_RETURN"
+    );
     const noteLines = lines.filter((line) => line.documentType === "CREDIT_NOTE" || line.documentType === "DEBIT_NOTE");
 
-    const { b2b, b2cLarge, b2cSmall, nilRated } = classifySalesInvoiceLines(salesInvoiceLines);
+    const { b2b, b2cLarge, b2cSmall, nilRated } = classifySalesInvoiceLines(salesInvoiceAndReturnLines);
     const { registered, unregistered } = classifyNoteLines(noteLines);
 
     return {
