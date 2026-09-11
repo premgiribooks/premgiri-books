@@ -101,6 +101,67 @@ Mapping so far:
 
 ## Current Phase
 
+- **Feature-spec 58 — GSTR-1 implemented 2026-09-11** on branch `feature/gstr-1`,
+  branched from the updated `main` (not yet merged back). Second item of Phase 8 — GST
+  (#56). Classifies `getOutwardSupplyLines` (spec 57) into the in-scope statutory
+  tables: Table 4 (B2B, invoice-wise, GSTIN present), Table 5 (B2C Large, invoice-wise,
+  unregistered inter-state invoices whose full value exceeds ₹2,50,000 —
+  `B2C_LARGE_THRESHOLD_RUPEES`), Table 7 (B2C Small, consolidated by
+  placeOfSupplyStateCode × ratePercent), Table 8 (Nil-rated/Exempt, ratePercent === 0,
+  checked before the B2B/B2C split regardless of GSTIN), and Table 9B/9C (Credit/Debit
+  Notes, split registered/unregistered) — pure in-memory grouping, no new GST
+  arithmetic. New `GstFilingRecord` model (shared, unmodified, by the future GSTR-3B via
+  its `returnType` discriminator) for an advisory-only "mark period filed"/"reopen
+  period" workflow gated on `gst`/`approve` — never blocks a new posting into an
+  already-filed period. New `CompanySettings.gstFilingFrequency` (Monthly/Quarterly)
+  drives the period selector; added to the existing `/settings/sales-ledgers` page,
+  gated by `settings`/`edit` like that page's existing ledger-mapping section. New
+  `/gst/gstr-1` screen (period selector spanning the active Financial Year, filing
+  status banner, the five classified tables, a disabled Export stub, and a forward-noted
+  Table 12/HSN Summary placeholder pending spec 60) — wired the `/gst` hub's GSTR-1
+  card. Two decisions recorded during implementation, both confirmed reasonable by code
+  review:
+  1. **Debit Notes are reported only under Table 9B/9C, never Table 4** — the spec's
+     Business Rules prose literally said "every Sales Invoice / Debit Note line" for
+     Table 4, but this contradicts the spec's own Goal scope table (Debit Notes listed
+     only under item "9B/9C") and real-world GSTR-1 table semantics. Implemented per the
+     Goal table and real-world semantics; documented inline and in the commit message.
+  2. **Sales Return lines are classified alongside Sales Invoice lines** (not merged
+     into the exact same row as their source invoice, since a `GstSupplyLine` carries no
+     `sourceDocumentId` back to the parent invoice) — their negative amounts net into
+     whichever B2B/B2C/Nil-rated table their own GSTIN/rate/place-of-supply place them
+     in, satisfying the spec's "netted into whichever B2B/B2C table" requirement at the
+     table-total level. Excluded entirely from Table 9B/9C (Credit/Debit Notes only).
+  37 new vitest cases (22 in the service test alone) — full suite 1508/1508 passing.
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2 pre-existing unrelated
+  warnings), `npx vitest run`, and `next build` all pass; `/gst/gstr-1` appears in the
+  build route table.
+
+  **Post-implementation code review + security review** (agents run in parallel): code
+  review found 0 CRITICAL, **1 HIGH, 1 MEDIUM**, 1 LOW (informational, no action —
+  confirmed the Debit-Note-under-9B/9C deviation above was reasonable and already
+  documented); security review found 0 CRITICAL/HIGH/MEDIUM, 1 LOW (accepted, see
+  below). **Both real findings fixed**:
+  - **HIGH, fixed**: an earlier version of `classifySalesInvoiceLines` excluded
+    `SALES_RETURN` lines entirely rather than netting them, systematically
+    **overstating** Table 4/5/7/8's taxable value/tax by the full amount of every return
+    in the period — a real statutory-return correctness bug, not cosmetic. Fixed per
+    decision 2 above; the review's own suggested fix direction was followed exactly.
+  - **MEDIUM, fixed**: the B2C Large ₹2,50,000 threshold summed only an unregistered
+    invoice's non-nil-rated lines, understating a mixed-rate invoice's true value and
+    risking misclassification near the boundary. Fixed to sum the invoice's FULL value
+    (taxed + nil-rated lines together) for the threshold decision, while still routing
+    only the nil-rated lines to Table 8.
+  - **Security LOW, accepted as-is**: `markPeriodFiled`'s check-then-write
+    (`findOne` then `upsert`) has a theoretical TOCTOU race under two concurrent
+    filing requests — accepted because the feature is explicitly advisory-only (never
+    gates real financial data), the race is confined to one company's one record's
+    metadata (`arn`/`filedAt`/`filedByUserId`), and both actors would already need
+    `gst`/`approve` on the same company.
+  - Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0
+    errors), `npx vitest run` (1508/1508, 5 new regression tests: 3 netting + 1
+    threshold + 1 note-table-exclusion), and `next build` all pass.
+
 - **`feature/receipt-voucher` merged into `main` 2026-09-11** (Receipt Voucher #52,
   Contra Voucher #53, Journal Voucher #54, plus the feature-spec 57–81 drafting batch
   below), closing Phase 7 (Accounting) in full, per `ai-workflow-rules.md`'s
@@ -1366,13 +1427,16 @@ Mapping so far:
 - **2026-09-11 — Phase 7 (Accounting) is complete and merged into `main`**
   (Payment #52, Receipt #53, Contra #54, Journal Voucher #55 —
   `feature/receipt-voucher` merged, checks re-verified green). **Phase 8 (GST)
-  is under way: GST Registers (#55/spec 57) is implemented, reviewed (code +
-  security, all findings fixed), and merged into `main`** (`feature/gst-registers`,
-  `--no-ff` merge, no conflicts, checks re-verified green against the merged
-  result — `ac10ffa`). Per `phase-tracker.md`, **GSTR-1 (#56/spec 58) is
-  next**; GSTR-3B (#57/spec 59) and HSN Summary (#58/spec 60) remain after
-  it. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked
-  on at a time — awaiting explicit instruction before starting GSTR-1.
+  is under way: GST Registers (#55/spec 57) is implemented, reviewed, and
+  merged into `main`** (`feature/gst-registers`, `--no-ff` merge, no
+  conflicts, checks re-verified green — `ac10ffa`). **GSTR-1 (#56/spec 58) is
+  implemented, reviewed (code + security, all real findings fixed), on
+  `feature/gstr-1`** (not yet merged into `main`). Per `phase-tracker.md`,
+  **GSTR-3B (#57/spec 59) is next** after this branch merges; HSN Summary
+  (#58/spec 60) remains after that. Per `ai-workflow-rules.md`, only one
+  feature/subsystem should be worked on at a time — awaiting explicit
+  instruction before starting GSTR-3B, and before merging `feature/gstr-1`
+  into `main`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
