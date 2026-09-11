@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookText, HandCoins, Landmark, ListTree, PiggyBank, Receipt, Wallet } from "lucide-react";
+import { ArrowLeftRight, BookText, HandCoins, Landmark, ListTree, PiggyBank, Receipt, Wallet } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +49,12 @@ const ACCOUNTING_MODULES = [
     icon: PiggyBank,
     title: "Receipt Vouchers",
     description: "Record money received that isn't already captured by a document's own payment lines.",
+  },
+  {
+    href: "/accounting/contra-vouchers",
+    icon: ArrowLeftRight,
+    title: "Contra Vouchers",
+    description: "Record fund movement strictly between the company's own Cash/Bank ledgers.",
   },
 ] as const;
 

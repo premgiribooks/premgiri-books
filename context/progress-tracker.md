@@ -76,6 +76,58 @@ Mapping so far:
 
 ## Current Phase
 
+- **Feature-spec 54 — Contra Voucher implemented 2026-09-11** on branch
+  `feature/receipt-voucher` (continuing the same branch — not yet merged to
+  `main`). Third of the four manual voucher screens (Phase 7 — Accounting,
+  #51–#54) — Journal Voucher (#55) remains next and last. Per
+  `54-contra-voucher.md`'s Goal, this is the **strictest** of the four by
+  entry count: unlike Payment/Receipt's "one restricted side, one-or-more
+  free side," a Contra Voucher is exactly one Debit + one Credit entry, both
+  restricted to the Cash-in-Hand-or-`BankAccount`-linked ledger class, with
+  the two ledgers required to differ. No new Prisma model — a Contra Voucher
+  *is* a `Voucher` reusing the already-existing `VoucherType.CONTRA`/
+  `DocumentType.CONTRA_VOUCHER`.
+  - `contraVoucherService` (new `src/modules/manual-vouchers/services/
+    contra-voucher-service.ts`): `listContraVouchers` (scoped to
+    `voucherType: "CONTRA"` and the current financial year), `getContraVoucher`
+    (company- and voucher-type-scoped), `postContraVoucher` (validates via the
+    shared `assertLedgersAreCashOrBank` helper applied to **both**
+    `fromLedgerId`/`toLedgerId` at once — the one place this spec's
+    restriction is wider than Payment/Receipt's single-side check — then posts
+    a fixed one-Debit/one-Credit entry pair at the single client-supplied
+    `amount`, unlike Payment/Receipt's server-computed sum-of-lines, since
+    there is only ever one entry per side here), `cancelContraVoucher` (thin
+    pass-through to `voucherEngine.cancelVoucher`, rejecting an id belonging to
+    a different voucher type). Source ≠ destination is enforced by a
+    `contra-voucher-schema.ts` object-level Zod `.refine` (`fromLedgerId !==
+    toLedgerId`) rather than a second service-level check, since the schema's
+    own `.parse()` already runs server-side inside `postContraVoucher` and
+    can't be bypassed by a client. No repository file and no new
+    `listLedgerOptions` method — reuses `paymentVoucherService.listLedgerOptions()`
+    directly, same as Receipt Voucher.
+  - New `/accounting/contra-vouchers` (list — Number, Date, From, To, Amount,
+    Status, Actions), `/new` (create — two Cash/Bank-restricted ledger
+    pickers, a single amount field, narration — **no add-line control**,
+    since the entry count is fixed at exactly one pair, the one place this
+    screen's form meaningfully diverges from Payment/Receipt's variable-length
+    line table), and `/[id]` (read-only detail, Cancel action gated on
+    `approve`, no Edit). Added a "Contra Vouchers" card to the `/accounting`
+    hub (third of the four) and a `contra-vouchers` breadcrumb label.
+  - `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1415/1415,
+    +23 from this feature), and `next build` all pass;
+    `/accounting/contra-vouchers*` appears in the build route table.
+  - **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW findings. Security
+    review: zero CRITICAL/HIGH/MEDIUM findings** — both confirmed the
+    both-sides ledger-class restriction, the fixed 2-entry shape, and the
+    source-≠-destination rule are all enforced server-side (never trusted
+    from the client), and that a cross-company or wrong-type voucher id
+    resolves identically to "not found" with no information leakage.
+  - **Not yet browser-verified** — no browser/Playwright tool was available to
+    the agent this session (unlike Payment/Receipt Voucher's prior sessions).
+    Manual click-through UAT (post a Contra Voucher between two Cash/Bank
+    ledgers, confirm the list/detail views and Cancel flow) is still needed
+    before merge. **Not yet committed.**
+
 - **Feature-spec 53 — Receipt Voucher implemented 2026-09-11** on branch
   `feature/receipt-voucher`, branched off `main` immediately after merging
   `feature/payment-voucher` into it. Second of the four manual voucher screens
@@ -1107,13 +1159,11 @@ Mapping so far:
 
 ## Next Up
 
-- **2026-09-11 — Phase 5 (Inventory) is now fully closed** (feature-spec 51, Serial
-  Number Tracking, was its last remaining item). Per `context/Phases/phase-tracker.md`'s
-  Current Feature entry, the next feature in phase order is **Phase 7 — Accounting**
-  (the four manual voucher screens: Payment Voucher #52, Receipt Voucher #53, Contra
-  Voucher #54, Journal Voucher #55 — all spec-drafted, none implemented). Per
-  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time —
-  awaiting explicit instruction before starting the next one.
+- **2026-09-11 — Payment (#52), Receipt (#53), and now Contra Voucher (#54) are
+  implemented**, leaving **Journal Voucher (feature-spec 55, tracker #54)** as the
+  fourth and last manual voucher screen in Phase 7 — Accounting, and the last item
+  in Phase 7 overall. Per `ai-workflow-rules.md`, only one feature/subsystem should
+  be worked on at a time — awaiting explicit instruction before starting it.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

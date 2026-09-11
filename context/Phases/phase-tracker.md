@@ -352,8 +352,8 @@ three do), since it has no structural safeguard against an arbitrary entry.
 | #   | Feature         | Depends On     | Status |
 | --- | --------------- | -------------- | ------ |
 | 51  | Payment Voucher | Voucher Engine | ✅     |
-| 52  | Receipt Voucher | Voucher Engine | ⬜     |
-| 53  | Contra Voucher  | Voucher Engine | ⬜     |
+| 52  | Receipt Voucher | Voucher Engine | ✅     |
+| 53  | Contra Voucher  | Voucher Engine | ✅     |
 | 54  | Journal Voucher | Voucher Engine | ⬜     |
 
 Payment Voucher (#51, `feature/payment-voucher`) implemented 2026-09-11. UI + validation
@@ -383,6 +383,26 @@ immutable once posted), a new "Payment Vouchers" card on the `/accounting` hub, 
 `context/progress-tracker.md`'s Current Phase entry for the full walkthrough). **Code
 review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM findings.
 Merged into `main` and pushed 2026-09-11** (commit `923c137`).
+
+Receipt Voucher (#52, `feature/receipt-voucher`, spec file `53-receipt-voucher.md`)
+implemented 2026-09-11 — the direct mirror of Payment Voucher with the ledger
+direction reversed (one Debit entry restricted to Cash/Bank, one-or-more free Credit
+lines). Reuses `paymentVoucherService.listLedgerOptions()` rather than duplicating it.
+Committed (`798ebdd`), merged into `main`. See `context/progress-tracker.md`'s Current
+Phase entry for the full implementation record and browser-verification walkthrough.
+
+Contra Voucher (#53, `feature/receipt-voucher`, spec file `54-contra-voucher.md`)
+implemented 2026-09-11 — the strictest of the four: exactly one Debit + one Credit
+entry, both sides restricted to the Cash-in-Hand-or-BankAccount-linked ledger class via
+`assertLedgersAreCashOrBank` applied to both ledger ids at once, source ≠ destination
+enforced by the Zod schema's object-level `.refine`. No add-line control in the form —
+the entry count is fixed. Reuses `paymentVoucherService.listLedgerOptions()`. **Code
+review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM findings.**
+`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1415/1415, +23), and
+`next build` all pass; `/accounting/contra-vouchers*` appears in the build route table.
+Not yet browser-verified (no browser tool available this session) and not yet
+committed — see `context/progress-tracker.md`'s Current Phase entry for the full
+implementation record.
 
 ---
 
@@ -466,12 +486,11 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 7 — Accounting, Receipt Voucher (#52)** next. Payment Voucher (#51,
-`feature/payment-voucher`, implemented 2026-09-11) is Phase 7's first item — see the
-Phase 7 section above for the implementation record. Receipt/Contra/Journal Voucher
-(#52–#54) remain, all sharing the `src/modules/manual-vouchers/` module Payment Voucher
-established and the `assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`)
-Receipt and Contra Voucher will both reuse. Serial Number Tracking (#49,
+➡ **Phase 7 — Accounting, Journal Voucher (#54)** next — the fourth and last manual
+voucher screen. Payment Voucher (#51), Receipt Voucher (#52), and Contra Voucher (#53)
+are all implemented (see the Phase 7 section above for each's implementation record),
+all sharing the `src/modules/manual-vouchers/` module Payment Voucher established and
+the `assertLedgersAreCashOrBank` shared helper (`src/lib/ledger-class.ts`). Serial Number Tracking (#49,
 `feature/serial-number-tracking`, implemented 2026-09-11) closed Phase 5 in full — Opening
 Stock (#44), Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47),
 Batch Tracking (#48), Product Detail Page (#50), and Serial Number Tracking (#49) are all
