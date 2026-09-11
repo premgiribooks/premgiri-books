@@ -467,7 +467,7 @@ header note already established for tracker-vs-spec-file numbering:
 | 57  | GSTR-3B       | GST Engine | ✅     |
 | 58  | HSN Summary   | GST Engine | ✅     |
 | 80  | GSTR-2        | GST Registers (#55) | ✅     |
-| 81  | ITC Register  | GST Registers (#55); GSTR-3B (#57) | ⬜     |
+| 81  | ITC Register  | GST Registers (#55); GSTR-3B (#57) | ✅     |
 
 **GST Registers (#55) implemented 2026-09-11** on branch `feature/gst-registers`. Added
 `getOutwardSupplyLines`/`getInwardSupplyLines` to `src/engines/gst/` (`gst-report-queries.ts`
@@ -988,6 +988,86 @@ prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx vitest run`
 1539/1539, `next build` with `/gst/gstr-2` confirmed in the route table). Branch
 deleted both locally and on origin. **This closes out GSTR-2 (#80) in full** — status
 below updated to ✅. ITC Register (#81) is now the one remaining Phase 8 item.
+
+**ITC Register (#81) implemented 2026-09-11** on branch `feature/itc-register`, per
+`83-itc-register.md`, per explicit user instruction ("start ITC Register"). Pure
+read-only in-memory grouping over `getInwardSupplyLines` (spec 57) — no new Prisma
+model, enum, or migration (the fourth Phase 8 spec, after GST Registers/HSN Summary/
+GSTR-2, to add none). `itcRegisterService.getItcRegister()` computes:
+- **Rate-wise summary** — grouped by `ratePercent` alone (no place-of-supply
+  dimension, unlike GSTR-1's Table 7), ascending.
+- **Party-wise (supplier-wise) summary** — grouped by `partyId` (falling back to
+  `partyName` only in the theoretical null-`partyId` case, never actually hit for
+  inward lines), sorted by total ITC (`cgst+sgst+igst+cess`, not the
+  taxable-inclusive `totalAmount`) descending so the largest credit sources surface
+  first.
+- **HSN-wise summary** — grouped by `hsnCode` alone (no rate dimension, unlike
+  `60-hsn-summary.md`'s own (hsnCode, ratePercent) grouping), with the "No HSN
+  Assigned" bucket always rendered last, mirroring `hsn-summary-service.ts`'s own
+  convention.
+- **Transaction-level detail** — the underlying `getInwardSupplyLines` lines
+  themselves, rendered via `GstRegisterTable` reused unmodified from
+  `57-gst-registers.md`'s own Inward Register (no re-implementation).
+- Every line is treated as fully eligible ITC (Business Rules) — a
+  permanently-visible eligibility disclaimer (`ItcRegisterEligibilityDisclaimer`, no
+  dismiss state) renders unconditionally above the filter bar on every page load.
+
+A Purchase Return's already-signed negative line (from `getInwardSupplyLines`) nets
+its parent invoice's group down correctly in all three summaries — verified by a
+dedicated test — since grouping operates directly on the already-signed tax fields,
+never re-deriving them.
+
+**Deviation from the spec's UI section, recorded per this project's own
+discrepancy-recording convention**: rather than literally reusing
+`Gstr1ConsolidatedTable`'s shape (which hard-codes a Place of Supply column this
+report has no equivalent dimension for) or `HsnSummaryTable` (which carries
+GSTR-1-Table-12-specific fields — codeType, description, UQC, quantity — that have
+no meaning for an inward tax-credit report), three small dedicated components were
+built instead (`ItcRegisterRateSummaryTable`, `ItcRegisterPartySummaryTable`,
+`ItcRegisterHsnSummaryTable`), each following the same title/table/footer-total
+visual shape as their nearest sibling. A new `ItcRegisterReconciliationTotal`
+component renders the spec's required "grand-total row visibly labeled as
+reconciling with GSTR-3B's Table 4(A)(5)" as a distinct page element (the actual
+ITC figure, `cgst+sgst+igst+cess`, not the taxable-inclusive total) rather than
+folding it into one of the three summary tables' own footers.
+
+UI: new `/gst/itc-register` page — disclaimer banner, the shared
+`GstReportFilterBar` (Supplier party-dropdown via
+`gstRegisterService.listPartyOptions("INWARD")`, reused unmodified), the
+reconciliation-total banner, the three summary tables, then the transaction detail
+table. Wired the `/gst` hub's new ITC Register card (previously absent — the hub's
+five existing cards were GST Registers/GSTR-1/GSTR-3B/HSN Summary/GSTR-2) and added
+`"itc-register": "ITC Register"` to `breadcrumbs.ts`.
+
+Testing: 7 new service tests (`itc-register-service.test.ts` — permission gate,
+multi-supplier/multi-rate/multi-HSN grouping, party-wise descending sort by actual
+ITC, Purchase Return netting across all three summaries, "No HSN Assigned" bucket,
+optional-filter application, cross-company isolation) plus a dedicated cross-service
+reconciliation test (`itc-register-gstr3b-reconciliation.test.ts`) asserting the
+report's own totals (and the rate-wise summary's own sum, not just the top-level
+totals field) equal `gstr3bService`'s Table 4(A)(5) `allOtherItc` row exactly, across
+a fixture spanning multiple suppliers, rates, HSN codes, and a Purchase Return.
+1547/1547 total suite passing. `npx tsc --noEmit`, `npx eslint src prisma` (0 errors,
+the same 2 pre-existing unrelated warnings), `npx vitest run`, and `next build` all
+pass; `/gst/itc-register` appears in the build route table.
+
+**code-reviewer and security-reviewer both ran on `feature/itc-register` before
+merge** (continuing the GSTR-2 precedent): **both APPROVE, zero CRITICAL/HIGH/MEDIUM
+findings.** code-reviewer confirmed the rate/party/HSN grouping logic is correct
+(including Purchase Return netting and the "No HSN Assigned" bucket), confirmed no
+GST arithmetic is invented (every figure is summed straight off `GstSupplyLine`'s
+already-computed fields), confirmed the disclaimer renders unconditionally, and
+confirmed the GSTR-3B reconciliation test is a genuine cross-service check — one LOW
+note (no test explicitly titled "cross-company isolation," though the permission/
+company-scoping call itself was exercised), addressed by adding that dedicated test
+before merge. security-reviewer confirmed company-scoping (companyId derived solely
+from the session, never client-supplied), permission enforcement (page + service
+layer), input validation via the shared `gstReportFiltersSchema`, no XSS/injection
+risk in the new components, and no cross-company leakage through the reused
+`listPartyOptions("INWARD")` party dropdown — zero findings of any severity.
+
+**Merged into `main`** — see the merge record for commit/branch details once
+completed.
 
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
