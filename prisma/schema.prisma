@@ -100,6 +100,7 @@ model Company {
   purchaseInvoices  PurchaseInvoice[]
   purchaseReturns   PurchaseReturn[]
   stockAdjustments  StockAdjustment[]
+  stockTransfers    StockTransfer[]
   auditLogs         AuditLog[]
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
@@ -196,6 +197,7 @@ model FinancialYear {
   purchaseInvoices  PurchaseInvoice[]
   purchaseReturns   PurchaseReturn[]
   stockAdjustments  StockAdjustment[]
+  stockTransfers    StockTransfer[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -268,6 +270,7 @@ model User {
   purchaseInvoiceItemOverrides PurchaseInvoiceItem[]
   purchaseReturns              PurchaseReturn[]
   stockAdjustments             StockAdjustment[]
+  stockTransfers               StockTransfer[]
 
   @@index([companyId])
   @@index([roleId])
@@ -628,13 +631,15 @@ model Warehouse {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  products              Product[]
-  stockTransactions     StockTransaction[]
-  deliveryChallanItems  DeliveryChallanItem[]
-  salesInvoiceItems     SalesInvoiceItem[]
-  goodsReceiptNoteItems GoodsReceiptNoteItem[]
-  purchaseInvoiceItems  PurchaseInvoiceItem[]
-  stockAdjustmentItems  StockAdjustmentItem[]
+  products                    Product[]
+  stockTransactions           StockTransaction[]
+  deliveryChallanItems        DeliveryChallanItem[]
+  salesInvoiceItems           SalesInvoiceItem[]
+  goodsReceiptNoteItems       GoodsReceiptNoteItem[]
+  purchaseInvoiceItems        PurchaseInvoiceItem[]
+  stockAdjustmentItems        StockAdjustmentItem[]
+  stockTransfersAsSource      StockTransfer[]        @relation("StockTransferSource")
+  stockTransfersAsDestination StockTransfer[]        @relation("StockTransferDestination")
 
   @@unique([companyId, name])
   @@unique([companyId, code])
@@ -717,6 +722,7 @@ model Product {
   goodsReceiptNoteItems GoodsReceiptNoteItem[]
   purchaseInvoiceItems  PurchaseInvoiceItem[]
   stockAdjustmentItems  StockAdjustmentItem[]
+  stockTransferItems    StockTransferItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -1263,6 +1269,69 @@ model StockAdjustmentItem {
   @@unique([stockAdjustmentId, lineNumber])
   @@index([productId])
   @@index([warehouseId])
+}
+
+enum StockTransferStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+// Stock Transfer (feature-spec 48) — the numbered document that moves stock
+// for one or more products from one warehouse to another within the same
+// company, using the Inventory Engine's already-existing transferStock API
+// (StockTransactionType.TRANSFER, reserved by spec 32 with no consumer until
+// now; DocumentType.STOCK_TRANSFER reserved by spec 34). Deliberately a
+// single POSTED state, not a DRAFT -> IN_TRANSIT -> COMPLETED workflow — see
+// 48-stock-transfer.md's Data Model Decisions: the engine's transferStock
+// already writes the OUT/IN pair atomically in one call, so modeling an
+// in-transit gap would mean not using it as built. No GST or Voucher Engine
+// call anywhere — a transfer has zero net stock change company-wide and zero
+// financial consequence.
+model StockTransfer {
+  id                     String              @id @default(uuid())
+  companyId              String
+  company                Company             @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear       @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postStockTransfer — the same
+  // nullable-until-posted convention as PurchaseInvoice/StockAdjustment.
+  transferNumber         String?
+  transferDate           DateTime            @db.Date
+  sourceWarehouseId      String
+  sourceWarehouse        Warehouse           @relation("StockTransferSource", fields: [sourceWarehouseId], references: [id])
+  destinationWarehouseId String
+  destinationWarehouse   Warehouse           @relation("StockTransferDestination", fields: [destinationWarehouseId], references: [id])
+  status                 StockTransferStatus @default(DRAFT)
+  narration              String?
+  createdByUserId        String?
+  createdBy              User?               @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  items StockTransferItem[]
+
+  @@unique([companyId, financialYearId, transferNumber])
+  @@index([companyId, status])
+  @@index([sourceWarehouseId])
+  @@index([destinationWarehouseId])
+}
+
+// sourceWarehouseId/destinationWarehouseId are header-level, not per-line —
+// a single Stock Transfer document moves goods between exactly two
+// warehouses; a transfer spanning more than two locations is two separate
+// documents (48-stock-transfer.md's Data Model Decisions).
+model StockTransferItem {
+  id              String        @id @default(uuid())
+  stockTransferId String
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id])
+  lineNumber      Int
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Decimal       @db.Decimal(14, 4)
+
+  @@unique([stockTransferId, lineNumber])
+  @@index([productId])
 }
 
 // Purchase Order (feature-spec 42) — the company's commitment to buy from a
