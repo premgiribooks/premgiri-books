@@ -65,6 +65,8 @@ const REFUND_LEDGER_INVALID_MESSAGE_SUFFIX =
 const RETURN_DATE_BEFORE_INVOICE_MESSAGE = "Return date cannot be before the invoice date.";
 const ZERO_VALUE_MESSAGE = "A purchase return cannot consist entirely of zero-value lines.";
 const SUPPLIER_LEDGER_UNRESOLVED_MESSAGE = "The source invoice's supplier ledger could not be resolved.";
+const INVOICE_REASSIGNMENT_MESSAGE =
+  "Cannot change the invoice a return is linked to — cancel this draft and create a new return against the other invoice instead.";
 
 const QUANTITY_TOLERANCE = 1e-6;
 
@@ -464,6 +466,9 @@ export const purchaseReturnService = {
     }
 
     const data = updatePurchaseReturnSchema.parse(input);
+    if (data.purchaseInvoiceId !== existing.purchaseInvoiceId) {
+      throw new AppError(INVOICE_REASSIGNMENT_MESSAGE);
+    }
     const resolved = await resolvePurchaseReturnInput(user.companyId, data);
 
     const header = buildHeaderPersistData(

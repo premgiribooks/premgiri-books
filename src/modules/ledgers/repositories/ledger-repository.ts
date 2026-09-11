@@ -15,6 +15,15 @@ import type {
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
+export interface LedgerForValidation {
+  id: string;
+  name: string;
+  companyId: string;
+  isActive: boolean;
+  ledgerGroupId: string;
+  hasBankAccount: boolean;
+}
+
 export interface LedgerCreateData {
   name: string;
   ledgerGroupId: string;
@@ -150,7 +159,7 @@ export const ledgerRepository = {
   async findLedgersForValidation(
     client: PrismaClientOrTransaction,
     ledgerIds: readonly string[]
-  ): Promise<{ id: string; name: string; companyId: string; isActive: boolean; ledgerGroupId: string; hasBankAccount: boolean }[]> {
+  ): Promise<LedgerForValidation[]> {
     const rows = await client.ledger.findMany({
       where: { id: { in: [...ledgerIds] } },
       select: {

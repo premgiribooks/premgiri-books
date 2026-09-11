@@ -458,6 +458,48 @@ describe("createDraft", () => {
   });
 });
 
+describe("updateDraft", () => {
+  it("updates a DRAFT return's lines/refund details when the invoice is left unchanged", async () => {
+    findByIdMock.mockResolvedValueOnce(purchaseReturnRow());
+    replaceItemsAndUpdateMock.mockResolvedValueOnce(purchaseReturnRow({ reason: "Damaged in transit" }));
+
+    await purchaseReturnService.updateDraft(RETURN_ID, validInput({ reason: "Damaged in transit" }));
+
+    expect(replaceItemsAndUpdateMock).toHaveBeenCalledWith(
+      FAKE_TX,
+      RETURN_ID,
+      COMPANY_ID,
+      ["DRAFT"],
+      expect.objectContaining({ purchaseInvoiceId: INVOICE_ID, reason: "Damaged in transit" }),
+      expect.any(Array)
+    );
+  });
+
+  it("rejects re-pointing a draft return to a different purchase invoice", async () => {
+    findByIdMock.mockResolvedValueOnce(purchaseReturnRow({ purchaseInvoiceId: INVOICE_ID }));
+    const otherInvoiceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+    await expect(
+      purchaseReturnService.updateDraft(RETURN_ID, validInput({ purchaseInvoiceId: otherInvoiceId }))
+    ).rejects.toThrow("Cannot change the invoice a return is linked to");
+    expect(replaceItemsAndUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects updating a return that no longer belongs to this company", async () => {
+    findByIdMock.mockResolvedValueOnce(purchaseReturnRow({ companyId: OTHER_COMPANY_ID }));
+    await expect(purchaseReturnService.updateDraft(RETURN_ID, validInput())).rejects.toThrow(
+      "Purchase return not found."
+    );
+  });
+
+  it("rejects updating a return that is no longer DRAFT", async () => {
+    findByIdMock.mockResolvedValueOnce(purchaseReturnRow({ status: "POSTED" }));
+    await expect(purchaseReturnService.updateDraft(RETURN_ID, validInput())).rejects.toThrow(
+      "can no longer be changed"
+    );
+  });
+});
+
 describe("postPurchaseReturn — orchestration and ledger entries", () => {
   it("posts: generates returnNumber, records OUT stock, posts a balanced reversing voucher, LEDGER_ADJUSTMENT debits the supplier ledger", async () => {
     findByIdMock.mockResolvedValueOnce(purchaseReturnRow()).mockResolvedValueOnce(purchaseReturnRow());

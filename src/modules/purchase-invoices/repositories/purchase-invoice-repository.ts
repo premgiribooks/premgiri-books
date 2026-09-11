@@ -230,15 +230,6 @@ export interface PurchaseInvoicePaymentPersistData {
   reference: string | null;
 }
 
-export interface LedgerForValidation {
-  id: string;
-  name: string;
-  companyId: string;
-  isActive: boolean;
-  ledgerGroupId: string;
-  hasBankAccount: boolean;
-}
-
 export const purchaseInvoiceRepository = {
   async findMany(
     companyId: string,
@@ -516,38 +507,6 @@ export const purchaseInvoiceRepository = {
   async findCompanyStateCode(companyId: string): Promise<string | null> {
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { stateCode: true } });
     return company?.stateCode ?? null;
-  },
-
-  /**
-   * Batched lookup for the Ledger Mapping Validation (44-purchase-invoice.md's
-   * Posting/Ledger Posting sections) and payment-ledger validation — a
-   * single shape covers both: `ledgerGroupId` for the group-membership
-   * check the six Company Settings mappings need, `hasBankAccount` for the
-   * "Cash-in-Hand or bank-linked ledger" payment-ledger restriction.
-   */
-  async findLedgersForValidation(
-    client: PrismaClientOrTransaction,
-    ledgerIds: readonly string[]
-  ): Promise<LedgerForValidation[]> {
-    const rows = await client.ledger.findMany({
-      where: { id: { in: [...ledgerIds] } },
-      select: {
-        id: true,
-        name: true,
-        companyId: true,
-        isActive: true,
-        ledgerGroupId: true,
-        bankAccount: { select: { id: true } },
-      },
-    });
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      companyId: row.companyId,
-      isActive: row.isActive,
-      ledgerGroupId: row.ledgerGroupId,
-      hasBankAccount: row.bankAccount !== null,
-    }));
   },
 
   /** Every active company ledger, with enough group/bank-link info for the

@@ -81,7 +81,6 @@ vi.mock("@/modules/purchase-invoices/repositories/purchase-invoice-repository", 
     findInvoiceableProducts: findInvoiceableProductsMock,
     findSelectableWarehouses: findSelectableWarehousesMock,
     findCompanyStateCode: findCompanyStateCodeMock,
-    findLedgersForValidation: findLedgersForValidationMock,
     findActiveLedgersForPaymentPicker: findActiveLedgersForPaymentPickerMock,
   },
 }));

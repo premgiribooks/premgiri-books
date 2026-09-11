@@ -21,11 +21,14 @@ import {
   isPurchaseLedgerMappingComplete,
 } from "@/modules/company/utils/purchase-ledger-mapping";
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
+import {
+  ledgerRepository,
+  type LedgerForValidation,
+} from "@/modules/ledgers/repositories/ledger-repository";
 import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
 import { purchaseOrderService } from "@/modules/purchase-orders/services/purchase-order-service";
 import {
   purchaseInvoiceRepository,
-  type LedgerForValidation,
   type PurchaseInvoiceHeaderPersistData,
   type PurchaseInvoiceLinePersistData,
   type PurchaseInvoicePaymentPersistData,
@@ -542,7 +545,7 @@ async function assertPaymentLedgersValid(
   const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
 
   const ledgerIds = [...new Set(payments.map((payment) => payment.ledgerId))];
-  const ledgers = await purchaseInvoiceRepository.findLedgersForValidation(client, ledgerIds);
+  const ledgers = await ledgerRepository.findLedgersForValidation(client, ledgerIds);
   const ledgersById = new Map<string, LedgerForValidation>(ledgers.map((ledger) => [ledger.id, ledger]));
 
   for (const payment of payments) {
