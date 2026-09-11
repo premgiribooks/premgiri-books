@@ -1,4 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// gst-engine.ts now also re-exports getOutwardSupplyLines/getInwardSupplyLines
+// (57-gst-registers.md), which import the module-level `prisma` client —
+// mocked here so importing the barrel doesn't try to construct a live client
+// (voucher-engine.test.ts's identical convention), since this file only
+// exercises the pure calculation functions.
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { gstEngine } from "@/engines/gst/gst-engine";
 
