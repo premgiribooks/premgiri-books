@@ -466,7 +466,7 @@ header note already established for tracker-vs-spec-file numbering:
 | 56  | GSTR-1        | GST Engine | ✅     |
 | 57  | GSTR-3B       | GST Engine | ✅     |
 | 58  | HSN Summary   | GST Engine | ✅     |
-| 80  | GSTR-2        | GST Registers (#55) | ⬜     |
+| 80  | GSTR-2        | GST Registers (#55) | 🟨     |
 | 81  | ITC Register  | GST Registers (#55); GSTR-3B (#57) | ⬜     |
 
 **GST Registers (#55) implemented 2026-09-11** on branch `feature/gst-registers`. Added
@@ -902,8 +902,84 @@ extraction candidate, not fixed). security-reviewer confirmed company-scoping,
 authorization, input validation, and error handling are all sound, with one LOW/
 informational note (unbounded/unpaginated date range, an existing pattern shared with GST
 Registers, not introduced here). Neither MEDIUM/LOW blocks anything — both deferred as
-optional follow-ups. GSTR-2 (#80) and ITC Register (#81) remain the two
-outstanding Phase 8 items; **GSTR-2 is next, per explicit user instruction.**
+optional follow-ups. **GSTR-2 (#80) is now implemented** on branch `feature/gstr-2` (see
+the Phase 8 section above for the full record) — **not yet reviewed or merged.** ITC
+Register (#81) remains the one outstanding Phase 8 item.
+
+**GSTR-2 (#80) implemented 2026-09-11** on branch `feature/gstr-2`, per
+`82-gstr-2.md`. Pure read-only aggregation over `getInwardSupplyLines` (spec 57) — no
+new Prisma model, enum, or migration, and no `GstFilingRecord` interaction anywhere
+(the first Phase 8 return service with no filing concept at all, matching the spec's
+Filing section). `gstr2Service.getGstr2Return()` computes:
+- **Table 3** (registered supplies) — one row per Purchase Invoice/Purchase Return
+  document (`buildRegisteredSupplies`, filtered to `partyGstin` present), carrying the
+  spec's explicit reverse-charge caveat (no `isReverseCharge` flag exists anywhere, so
+  every registered-supplier line lands here regardless of actual RCM status). A
+  Purchase Return keeps its own `documentId` (its own return, not its parent invoice)
+  and lands as its own negative row rather than merging into the invoice's row — the
+  period's total still nets to zero, verified by a dedicated test.
+- **Table 7** (composition/exempt) — consolidated **by party** (`partyId`), not by
+  (place, rate) the way GSTR-1's own Table 7 is — a deliberate divergence the spec
+  itself calls for. Filtered to `partyGstin` absent **or** `ratePercent = 0`,
+  independently of Table 3's own filter — a nil-rated line from a registered supplier
+  therefore legitimately appears in **both** Table 3 and Table 7 (unlike GSTR-1, where
+  nil-rated routing is mutually exclusive with B2B); a test locks this in explicitly
+  so it isn't mistaken for a bug later.
+- **Tables 4/5/8/9/11** — always `computed: false`, `amount: 0`, non-empty reason
+  (reverse charge, import/SEZ, ISD credit, TDS/TCS credit, ITC reversal — each a
+  distinct pre-existing gap named in `57-gst-registers.md`/`59-gstr-3b.md`).
+- **Tables 6/10/12/13** — absent from the return shape entirely (not even a labeled
+  ₹0 row) — amendments, advances, output-tax mismatch, and purchase-side HSN summary
+  all have no data shape to render against, per the spec's own Business Rules.
+
+UI: `/gst/gstr-2` reuses `Gstr1PeriodSelector` (month/quarter, from `CompanySettings.
+gstFilingFrequency` + the active Financial Year — no filing-status banner, since
+there is nothing to file), a static banner stating the view is derived entirely from
+posted purchases and does not reflect GSTR-2A/2B or portal data, then Tables 3/4/5/7/
+8/9/11 in statutory order. New components `Gstr2DocumentGroupTable` (Table 3) and
+`Gstr2PartyConsolidatedTable` (Table 7) — reimplemented rather than reusing
+`Gstr1DocumentGroupTable`/`Gstr1ConsolidatedTable` directly, since both this spec's
+document-type/href set (Purchase Invoice/Return) and Table 7's grouping key (party,
+not place+rate) differ from GSTR-1's own shapes; `Gstr2NotTrackedSection` covers
+Tables 4/5/8/9/11 uniformly. The not-tracked badge itself (`Gstr3bRowNote`) is
+imported unmodified from spec 59's own components, per the spec's explicit "no
+duplicate badge component" instruction. Wired the `/gst` hub's GSTR-2 card (previously
+absent — the hub's original four cards were GST Registers/GSTR-1/GSTR-3B/HSN Summary
+only) and added `"gstr-2": "GSTR-2"` to `breadcrumbs.ts`.
+
+Testing: 10 new service tests (`gstr2-service.test.ts` — Table 3 grouping/netting,
+Table 7 party consolidation, the Table 3/Table 7 overlap case above, every
+not-computed row's shape, company-scoping) plus a dedicated cross-service
+reconciliation test (`gstr2-gstr3b-reconciliation.test.ts`) asserting Table 3's
+cgst/sgst/igst/cess totals equal `gstr3bService`'s Table 4(A)(5) exactly, for a
+fixture scoped to registered-supplier-only lines (the precondition under which the
+spec's literal "Table 3's total reconciles exactly with (A)(5)" claim holds — since
+GSTR-3B's (A)(5) sums *all* inward lines while GSTR-2's Table 3 only sums
+GSTIN-present ones, the two only coincide when no Table 7-eligible line exists in the
+period; documented in-line rather than silently assumed). 1539/1539 total suite
+passing (90 in `src/modules/gst`). `npx tsc --noEmit`, `npx eslint src prisma` (0
+errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and `next
+build` all pass; `/gst/gstr-2` appears in the build route table.
+
+**code-reviewer and security-reviewer both ran on `feature/gstr-2` (commit `d2837a8`)
+before merge this time** (learning from the HSN Summary process slip): **both
+APPROVE, zero CRITICAL/HIGH/MEDIUM findings.** code-reviewer confirmed Table 3/Table 7
+grouping matches the spec's Business Rules exactly (including the deliberate Table
+3/Table 7 overlap for a nil-rated registered-supplier line, verified as a defensible
+reading of the spec text rather than a bug), confirmed Tables 4/5/8/9/11 are never
+partially computed, confirmed Tables 6/10/12/13 are absent from the shape, and
+confirmed zero `GstFilingRecord`/filing-repository references anywhere (grep-clean) —
+two LOW notes (an unused `gstr2-actions.ts` server action, matching the identical
+pre-existing pattern in `gstr1-actions.ts`/`hsn-summary-actions.ts`; an unreachable
+defensive fallback in `buildCompositionAndExemptSupplies`), neither a regression.
+security-reviewer confirmed company-scoping, permission enforcement (page + service
+layer), input validation, and Purchase Invoice/Return document-link IDOR safety (the
+linked detail pages independently re-verify `companyId` ownership and their own
+`purchase`/`view` permission) — two LOW/informational notes (the page's own
+`isValidCalendarDate` check doesn't independently enforce `to >= from`, matching every
+sibling GST page's identical pre-existing pattern; harmless since an inverted range
+just yields an empty result set). Neither review found anything requiring a fix.
+
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
 

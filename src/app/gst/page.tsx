@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpenText, FileSpreadsheet, FileText, ListChecks } from "lucide-react";
+import { BookOpenText, FileSpreadsheet, FileText, ListChecks, ReceiptText } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,13 @@ const GST_MODULES = [
     icon: ListChecks,
     title: "HSN Summary",
     description: "HSN-wise grouped outward turnover, the same data GSTR-1's Table 12 embeds.",
+    available: true,
+  },
+  {
+    href: "/gst/gstr-2",
+    icon: ReceiptText,
+    title: "GSTR-2",
+    description: "Read-only inward-supply reporting view, in the original (suspended) GSTR-2 return's table shape.",
     available: true,
   },
 ] as const;
