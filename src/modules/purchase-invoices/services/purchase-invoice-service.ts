@@ -14,19 +14,21 @@ import { inventoryEngine } from "@/engines/inventory/inventory-engine";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import type { VoucherEntryLineInput } from "@/engines/voucher/voucher-validation";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
-import {
-  CASH_IN_HAND_GROUP_NAME,
-  DUTIES_AND_TAXES_GROUP_NAME,
-  PURCHASE_ACCOUNTS_GROUP_NAME,
-} from "@/modules/ledger-groups/constants/default-groups";
+import { CASH_IN_HAND_GROUP_NAME } from "@/modules/ledger-groups/constants/default-groups";
 import { ledgerGroupRepository } from "@/modules/ledger-groups/repositories/ledger-group-repository";
-import { assertPurchaseLedgerMappingComplete, isPurchaseLedgerMappingComplete } from "@/modules/company/utils/purchase-ledger-mapping";
+import {
+  assertPurchaseLedgerMappingValid,
+  isPurchaseLedgerMappingComplete,
+} from "@/modules/company/utils/purchase-ledger-mapping";
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
+import {
+  ledgerRepository,
+  type LedgerForValidation,
+} from "@/modules/ledgers/repositories/ledger-repository";
 import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
 import { purchaseOrderService } from "@/modules/purchase-orders/services/purchase-order-service";
 import {
   purchaseInvoiceRepository,
-  type LedgerForValidation,
   type PurchaseInvoiceHeaderPersistData,
   type PurchaseInvoiceLinePersistData,
   type PurchaseInvoicePaymentPersistData,
@@ -528,61 +530,6 @@ function assertGoodsReceiptNoteConsistent(
   }
 }
 
-/**
- * All six Company Settings ledger mappings (44-purchase-invoice.md's Ledger
- * Mapping Validation — Option B: checked unconditionally on every posting
- * regardless of THIS invoice's own supply type/cess/round-off amount).
- * `purchaseLedgerId` must be under "Purchase Accounts" (or a descendant);
- * the four input-tax mappings under "Duties & Taxes" (or a descendant);
- * `roundOffLedgerId` (shared with Sales Invoice) any active company ledger.
- * Each mapping's ledger must also be active and owned by this company.
- */
-async function assertLedgerMappingValid(
-  client: PrismaClientOrTransaction,
-  companyId: string,
-  settingsOrNull: CompanySettings | null
-): Promise<void> {
-  assertPurchaseLedgerMappingComplete(settingsOrNull);
-  const settings = settingsOrNull;
-
-  const groups = await ledgerGroupRepository.findMany(companyId);
-  const purchaseAccountIds = getGroupSubtreeIds(groups, [PURCHASE_ACCOUNTS_GROUP_NAME]);
-  const dutiesAndTaxesIds = getGroupSubtreeIds(groups, [DUTIES_AND_TAXES_GROUP_NAME]);
-
-  const checks: { key: keyof CompanySettings; label: string; allowedGroupIds: ReadonlySet<string> | null; groupLabel: string }[] = [
-    { key: "purchaseLedgerId", label: "Purchase Account", allowedGroupIds: purchaseAccountIds, groupLabel: PURCHASE_ACCOUNTS_GROUP_NAME },
-    { key: "inputCgstLedgerId", label: "Input CGST", allowedGroupIds: dutiesAndTaxesIds, groupLabel: DUTIES_AND_TAXES_GROUP_NAME },
-    { key: "inputSgstLedgerId", label: "Input SGST", allowedGroupIds: dutiesAndTaxesIds, groupLabel: DUTIES_AND_TAXES_GROUP_NAME },
-    { key: "inputIgstLedgerId", label: "Input IGST", allowedGroupIds: dutiesAndTaxesIds, groupLabel: DUTIES_AND_TAXES_GROUP_NAME },
-    { key: "inputCessLedgerId", label: "Input Cess", allowedGroupIds: dutiesAndTaxesIds, groupLabel: DUTIES_AND_TAXES_GROUP_NAME },
-    { key: "roundOffLedgerId", label: "Round Off", allowedGroupIds: null, groupLabel: "" },
-  ];
-
-  const ledgerIds = checks.map((check) => settings[check.key] as string);
-  const ledgers = await purchaseInvoiceRepository.findLedgersForValidation(client, ledgerIds);
-  const ledgersById = new Map(ledgers.map((ledger) => [ledger.id, ledger]));
-
-  for (const check of checks) {
-    const ledgerId = settings[check.key] as string;
-    const ledger = ledgersById.get(ledgerId);
-    if (!ledger || ledger.companyId !== companyId) {
-      throw new AppError(
-        `The "${check.label}" ledger mapping in Settings > Sales & Purchase GST Ledgers is invalid — select a valid ledger.`
-      );
-    }
-    if (!ledger.isActive) {
-      throw new AppError(
-        `The "${check.label}" ledger is inactive. Configure an active ledger in Settings > Sales & Purchase GST Ledgers.`
-      );
-    }
-    if (check.allowedGroupIds && !check.allowedGroupIds.has(ledger.ledgerGroupId)) {
-      throw new AppError(
-        `The "${check.label}" ledger must belong to the "${check.groupLabel}" ledger group. Configure it in Settings > Sales & Purchase GST Ledgers.`
-      );
-    }
-  }
-}
-
 /** Payment ledgers restricted, server-side, to the Cash-in-Hand group or a
  * BankAccount-linked ledger (44-purchase-invoice.md's Ledger Posting rule) —
  * stricter than Sales Invoice's "any active company ledger". */
@@ -598,7 +545,7 @@ async function assertPaymentLedgersValid(
   const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
 
   const ledgerIds = [...new Set(payments.map((payment) => payment.ledgerId))];
-  const ledgers = await purchaseInvoiceRepository.findLedgersForValidation(client, ledgerIds);
+  const ledgers = await ledgerRepository.findLedgersForValidation(client, ledgerIds);
   const ledgersById = new Map<string, LedgerForValidation>(ledgers.map((ledger) => [ledger.id, ledger]));
 
   for (const payment of payments) {
@@ -945,7 +892,7 @@ export const purchaseInvoiceService = {
         }
 
         const settingsOrNull = await companySettingsService.getSettings(user.companyId);
-        await assertLedgerMappingValid(tx, user.companyId, settingsOrNull);
+        await assertPurchaseLedgerMappingValid(tx, user.companyId, settingsOrNull);
         const settings = settingsOrNull as CompanySettings;
 
         const supplier = await verifySupplier(tx, user.companyId, current.supplierId);

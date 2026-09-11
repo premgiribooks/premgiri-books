@@ -15,6 +15,15 @@ import type {
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
+export interface LedgerForValidation {
+  id: string;
+  name: string;
+  companyId: string;
+  isActive: boolean;
+  ledgerGroupId: string;
+  hasBankAccount: boolean;
+}
+
 export interface LedgerCreateData {
   name: string;
   ledgerGroupId: string;
@@ -134,6 +143,41 @@ export const ledgerRepository = {
     return rows.map((row) => ({
       id: row.id,
       link: row.bankAccount ? "bankAccount" : row.customer ? "customer" : "supplier",
+    }));
+  },
+
+  /**
+   * Company/group/active/bank-link fields for a batch of ledger ids,
+   * accepting the caller's own transaction client — the shared read every
+   * "is this a valid ledger for posting X" check across modules derives
+   * from (Purchase Invoice's and Purchase Return's Company Settings
+   * ledger-mapping validation, and Purchase Invoice's/Purchase Return's
+   * payment/refund-ledger restriction). Kept here rather than duplicated
+   * per-module, since it is pure Ledger data with nothing document-specific
+   * about it.
+   */
+  async findLedgersForValidation(
+    client: PrismaClientOrTransaction,
+    ledgerIds: readonly string[]
+  ): Promise<LedgerForValidation[]> {
+    const rows = await client.ledger.findMany({
+      where: { id: { in: [...ledgerIds] } },
+      select: {
+        id: true,
+        name: true,
+        companyId: true,
+        isActive: true,
+        ledgerGroupId: true,
+        bankAccount: { select: { id: true } },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      companyId: row.companyId,
+      isActive: row.isActive,
+      ledgerGroupId: row.ledgerGroupId,
+      hasBankAccount: row.bankAccount !== null,
     }));
   },
 

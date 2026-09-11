@@ -98,6 +98,7 @@ model Company {
   purchaseOrders    PurchaseOrder[]
   goodsReceiptNotes GoodsReceiptNote[]
   purchaseInvoices  PurchaseInvoice[]
+  purchaseReturns   PurchaseReturn[]
   auditLogs         AuditLog[]
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
@@ -192,6 +193,7 @@ model FinancialYear {
   purchaseOrders    PurchaseOrder[]
   goodsReceiptNotes GoodsReceiptNote[]
   purchaseInvoices  PurchaseInvoice[]
+  purchaseReturns   PurchaseReturn[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -262,6 +264,7 @@ model User {
   goodsReceiptNotes            GoodsReceiptNote[]
   purchaseInvoices             PurchaseInvoice[]
   purchaseInvoiceItemOverrides PurchaseInvoiceItem[]
+  purchaseReturns              PurchaseReturn[]
 
   @@index([companyId])
   @@index([roleId])
@@ -384,6 +387,7 @@ model Ledger {
   salesInvoicePayments              SalesInvoicePayment[]
   purchaseInvoicePayments           PurchaseInvoicePayment[]
   salesReturnsAsRefundLedger        SalesReturn[]            @relation("SalesReturnRefundLedger")
+  purchaseReturnsAsRefundLedger     PurchaseReturn[]         @relation("PurchaseReturnRefundLedger")
   creditNotesAsRefundLedger         CreditNote[]             @relation("CreditNoteRefundLedger")
   companySettingsAsSalesLedger      CompanySettings[]        @relation("CompanySettingsSalesLedger")
   companySettingsAsOutputCgstLedger CompanySettings[]        @relation("CompanySettingsOutputCgst")
@@ -1104,6 +1108,7 @@ model Voucher {
   creditNote      CreditNote?
   debitNote       DebitNote?
   purchaseInvoice PurchaseInvoice?
+  purchaseReturn  PurchaseReturn?
 
   @@unique([companyId, financialYearId, voucherType, voucherNumber])
   @@index([companyId, voucherDate])
@@ -1512,6 +1517,7 @@ model PurchaseInvoice {
 
   items    PurchaseInvoiceItem[]
   payments PurchaseInvoicePayment[]
+  returns  PurchaseReturn[]
 
   @@unique([companyId, financialYearId, invoiceNumber])
   @@unique([companyId, supplierId, supplierInvoiceNumber])
@@ -1549,6 +1555,8 @@ model PurchaseInvoiceItem {
   overriddenByUserId String?
   overriddenBy       User?           @relation(fields: [overriddenByUserId], references: [id])
 
+  returnItems PurchaseReturnItem[]
+
   @@unique([purchaseInvoiceId, lineNumber])
   @@index([productId])
   @@index([warehouseId])
@@ -1570,6 +1578,79 @@ model PurchaseInvoicePayment {
 
   @@index([purchaseInvoiceId])
   @@index([ledgerId])
+}
+
+// 45-purchase-return.md — the physical, quantity-based reversal of a POSTED
+// PurchaseInvoice: goods go back out to the supplier, what the business owes
+// decreases. Identical shape to SalesReturn/SalesReturnItem with the ledger
+// and stock direction reversed; reuses SalesReturn's RefundMode enum rather
+// than declaring a new one. The sole purchase-side adjustment document in
+// this phase — there is no Purchase-side Credit Note/Debit Note pair.
+enum PurchaseReturnStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model PurchaseReturn {
+  id                String               @id @default(uuid())
+  companyId         String
+  company           Company              @relation(fields: [companyId], references: [id])
+  financialYearId   String
+  financialYear     FinancialYear        @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postPurchaseReturn — mirrors SalesReturn's
+  // identical nullable-until-posted convention. Postgres unique indexes
+  // treat NULL as distinct, so multiple DRAFT rows coexist safely under the
+  // @@unique below.
+  returnNumber      String?
+  returnDate        DateTime             @db.Date
+  purchaseInvoiceId String
+  purchaseInvoice   PurchaseInvoice      @relation(fields: [purchaseInvoiceId], references: [id])
+  refundMode        RefundMode           @default(LEDGER_ADJUSTMENT)
+  refundLedgerId    String?
+  refundLedger      Ledger?              @relation("PurchaseReturnRefundLedger", fields: [refundLedgerId], references: [id])
+  status            PurchaseReturnStatus @default(DRAFT)
+  reason            String?
+  taxableAmount     Decimal              @db.Decimal(14, 2)
+  totalCgst         Decimal              @db.Decimal(14, 2)
+  totalSgst         Decimal              @db.Decimal(14, 2)
+  totalIgst         Decimal              @db.Decimal(14, 2)
+  totalCess         Decimal              @db.Decimal(14, 2)
+  grandTotal        Decimal              @db.Decimal(14, 2)
+  voucherId         String?              @unique
+  voucher           Voucher?             @relation(fields: [voucherId], references: [id])
+  createdByUserId   String?
+  createdBy         User?                @relation(fields: [createdByUserId], references: [id])
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  items PurchaseReturnItem[]
+
+  @@unique([companyId, financialYearId, returnNumber])
+  @@index([companyId, purchaseInvoiceId])
+  @@index([companyId, status])
+}
+
+model PurchaseReturnItem {
+  id                    String              @id @default(uuid())
+  purchaseReturnId      String
+  purchaseReturn        PurchaseReturn      @relation(fields: [purchaseReturnId], references: [id])
+  lineNumber            Int
+  purchaseInvoiceItemId String
+  purchaseInvoiceItem   PurchaseInvoiceItem @relation(fields: [purchaseInvoiceItemId], references: [id])
+  quantity              Decimal             @db.Decimal(14, 4)
+  taxableAmount         Decimal             @db.Decimal(14, 2)
+  cgst                  Decimal             @db.Decimal(14, 2)
+  sgst                  Decimal             @db.Decimal(14, 2)
+  igst                  Decimal             @db.Decimal(14, 2)
+  cess                  Decimal             @db.Decimal(14, 2)
+  totalAmount           Decimal             @db.Decimal(14, 2)
+
+  // Prevents the same invoice line from being listed twice within one
+  // return — mirrors SalesReturnItem's identical constraint/reasoning.
+  @@unique([purchaseReturnId, lineNumber])
+  @@unique([purchaseReturnId, purchaseInvoiceItemId])
+  @@index([purchaseInvoiceItemId])
 }
 
 model SalesOrder {

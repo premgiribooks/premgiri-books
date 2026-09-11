@@ -81,7 +81,6 @@ vi.mock("@/modules/purchase-invoices/repositories/purchase-invoice-repository", 
     findInvoiceableProducts: findInvoiceableProductsMock,
     findSelectableWarehouses: findSelectableWarehousesMock,
     findCompanyStateCode: findCompanyStateCodeMock,
-    findLedgersForValidation: findLedgersForValidationMock,
     findActiveLedgersForPaymentPicker: findActiveLedgersForPaymentPickerMock,
   },
 }));
@@ -107,6 +106,14 @@ vi.mock("@/engines/inventory/inventory-engine", () => ({
 
 vi.mock("@/modules/ledger-groups/repositories/ledger-group-repository", () => ({
   ledgerGroupRepository: { findMany: ledgerGroupFindManyMock },
+}));
+// assertPurchaseLedgerMappingValid (moved to company/utils/purchase-ledger-mapping.ts
+// so Purchase Return can share it) reads ledgers via ledgerRepository, not
+// purchaseInvoiceRepository — reuses the same mock fn so every existing
+// findLedgersForValidationMock setup below continues to drive both the
+// ledger-mapping check and the payment-ledger check identically.
+vi.mock("@/modules/ledgers/repositories/ledger-repository", () => ({
+  ledgerRepository: { findLedgersForValidation: findLedgersForValidationMock },
 }));
 vi.mock("@/modules/goods-receipt-notes/services/goods-receipt-note-service", () => ({
   goodsReceiptNoteService: { getGoodsReceiptNote: getGoodsReceiptNoteMock, markInvoiced: markInvoicedMock },
