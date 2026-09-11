@@ -6,8 +6,10 @@ import { assertPermission } from "@/lib/permissions";
 import { companySettingsRepository } from "@/modules/company/repositories/company-settings-repository";
 import {
   companySettingsSchema,
+  gstFilingFrequencySchema,
   salesLedgerMappingSchema,
   type CompanySettingsInput,
+  type GstFilingFrequencyInput,
   type SalesLedgerMappingInput,
 } from "@/modules/company/validation/company-schema";
 
@@ -55,6 +57,24 @@ export const companySettingsService = {
 
     const data = salesLedgerMappingSchema.parse(input);
     const settings = await companySettingsRepository.updateSalesLedgerMapping(companyId, data);
+    if (!settings) {
+      throw new AppError("Company settings not found.");
+    }
+    return settings;
+  },
+
+  // GSTR-1/GSTR-3B period-selector granularity (58-gstr-1.md) — gated by
+  // "settings"/"edit" like updateSalesLedgerMapping above, matching every
+  // prior Company Settings extension's convention.
+  async updateGstFilingFrequency(companyId: string, input: GstFilingFrequencyInput): Promise<CompanySettings> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "settings", "edit");
+    if (user.companyId !== companyId) {
+      throw new AppError("Company settings not found.");
+    }
+
+    const data = gstFilingFrequencySchema.parse(input);
+    const settings = await companySettingsRepository.updateGstFilingFrequency(companyId, data);
     if (!settings) {
       throw new AppError("Company settings not found.");
     }

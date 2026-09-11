@@ -2,7 +2,11 @@ import type { CompanySettings } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { isRecordNotFoundError } from "@/modules/company/utils/prisma-errors";
-import type { CompanySettingsInput, SalesLedgerMappingInput } from "@/modules/company/validation/company-schema";
+import type {
+  CompanySettingsInput,
+  GstFilingFrequencyInput,
+  SalesLedgerMappingInput,
+} from "@/modules/company/validation/company-schema";
 
 export const companySettingsRepository = {
   findByCompanyId(companyId: string): Promise<CompanySettings | null> {
@@ -44,6 +48,23 @@ export const companySettingsRepository = {
           inputIgstLedgerId: data.inputIgstLedgerId ?? null,
           inputCessLedgerId: data.inputCessLedgerId ?? null,
         },
+      });
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  /** GSTR-1/GSTR-3B period-selector granularity (58-gstr-1.md) — its own
+   * single-field partial update, mirroring updateSalesLedgerMapping's
+   * separate-section-from-`update`-above shape. */
+  async updateGstFilingFrequency(companyId: string, data: GstFilingFrequencyInput): Promise<CompanySettings | null> {
+    try {
+      return await prisma.companySettings.update({
+        where: { companyId },
+        data: { gstFilingFrequency: data.gstFilingFrequency },
       });
     } catch (error) {
       if (isRecordNotFoundError(error)) {

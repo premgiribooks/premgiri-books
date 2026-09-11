@@ -118,3 +118,13 @@ export const salesLedgerMappingSchema = z.object({
 });
 
 export type SalesLedgerMappingInput = z.infer<typeof salesLedgerMappingSchema>;
+
+// GSTR-1/GSTR-3B period-selector granularity (58-gstr-1.md) — its own tiny
+// schema/section, gated by "settings"/"edit" like salesLedgerMappingSchema
+// above (matching every prior Company Settings extension's convention), not
+// bundled into companySettingsSchema's "company"/"edit" gate.
+export const gstFilingFrequencySchema = z.object({
+  gstFilingFrequency: z.enum(["MONTHLY", "QUARTERLY"]),
+});
+
+export type GstFilingFrequencyInput = z.infer<typeof gstFilingFrequencySchema>;

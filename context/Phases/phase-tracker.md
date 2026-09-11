@@ -449,7 +449,7 @@ Spec-file numbers are sequential and diverge from tracker numbers as usual:
 | #   | Feature       | Depends On | Status |
 | --- | ------------- | ---------- | ------ |
 | 55  | GST Registers | GST Engine | ✅     |
-| 56  | GSTR-1        | GST Engine | ⬜     |
+| 56  | GSTR-1        | GST Engine | ✅     |
 | 57  | GSTR-3B       | GST Engine | ⬜     |
 | 58  | HSN Summary   | GST Engine | ⬜     |
 
@@ -493,6 +493,30 @@ directly (gated on `gst`/`view`) rather than the `masters`-gated
 GST-consuming service's convention. Security review otherwise clean (explicit PASS on
 cross-tenant isolation, IDOR, authorization, information disclosure). Re-verified:
 1477/1477 tests, `tsc`/`eslint`/`build` all pass.
+
+**GSTR-1 (#56) implemented 2026-09-11** on branch `feature/gstr-1`, not yet merged.
+Classifies `getOutwardSupplyLines` into Table 4 (B2B), 5/7 (B2C Large/Small), 8
+(Nil-rated), and 9B/9C (Credit/Debit Notes registered/unregistered) — pure in-memory
+grouping, no new GST arithmetic. New `GstFilingRecord` model (shared, unmodified, by the
+future GSTR-3B) for an advisory-only mark-filed/reopen workflow gated on `gst`/`approve`;
+new `CompanySettings.gstFilingFrequency` drives the period selector, added to
+`/settings/sales-ledgers`. New `/gst/gstr-1` screen; wired the hub card. Two recorded
+deviations from the spec's literal prose, both reasonable and confirmed by review: Debit
+Notes report only under 9B/9C (never Table 4, matching the spec's own scope table and
+real GSTR-1 semantics); Sales Return lines are classified alongside Sales Invoice lines
+so their negative amounts net into the correct B2B/B2C/Nil-rated table (never merged into
+the exact same row as their source invoice — no `sourceDocumentId` exists to do that).
+
+**Post-implementation code review + security review found 1 HIGH, 1 MEDIUM (code) and 0
+CRITICAL/HIGH/MEDIUM plus 1 LOW (security) — both real findings fixed**: (1) an earlier
+version excluded Sales Return lines entirely instead of netting them, **overstating**
+Table 4/5/7/8's totals by the full value of every return in the period — fixed by
+classifying returns alongside invoices; (2) the ₹2,50,000 B2C Large threshold summed only
+an invoice's non-nil-rated lines, understating mixed-rate invoices — fixed to sum the
+invoice's full value for the threshold decision while still routing nil-rated lines to
+Table 8 only. The security LOW (a check-then-write race on `markPeriodFiled`) was
+accepted as-is — advisory-only, same-tenant, same-permission-level. Re-verified:
+1508/1508 tests, `tsc`/`eslint`/`build` all pass; `/gst/gstr-1` in the build route table.
 
 ---
 
@@ -657,12 +681,13 @@ mapping table and batch-level scope-decision summary.
 
 ➡ **`feature/receipt-voucher` (Receipt/Contra/Journal Voucher, closing Phase 7) was
 merged into `main` 2026-09-11** before Phase 8 began, per `ai-workflow-rules.md`'s
-one-branch-at-a-time rule — see the Phase 7 pointer above. **GST Registers (#55) is now
+one-branch-at-a-time rule — see the Phase 7 pointer above. **GST Registers (#55) is
 implemented, reviewed, and merged into `main`** (see the Phase 8 section above for the
 full record) — `feature/gst-registers` merged `--no-ff`, no conflicts, checks
-re-verified green (`ac10ffa`). **GSTR-1 (#56) is next** to implement, awaiting explicit
-instruction — GSTR-3B (#57) and HSN Summary (#58) remain after it. Phases 9–11 remain
-entirely undrafted-for-implementation (spec-drafted
+re-verified green (`ac10ffa`). **GSTR-1 (#56) is implemented and reviewed, on
+`feature/gstr-1`, not yet merged.** **GSTR-3B (#57) is next** to implement once that
+branch merges, awaiting explicit instruction — HSN Summary (#58) remains after it.
+Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
 
 Serial Number Tracking (`feature/serial-number-tracking`) — the second of the two
