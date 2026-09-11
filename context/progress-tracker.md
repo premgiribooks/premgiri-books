@@ -1708,8 +1708,30 @@ Mapping so far:
   both **APPROVE, zero CRITICAL/HIGH/MEDIUM findings** — a handful of LOW/
   informational notes, all matching pre-existing patterns already accepted
   elsewhere in the codebase, none requiring a fix. **This closes out GSTR-2 in
-  full.** ITC Register (#81/spec 83) is now the one remaining Phase 8 item —
-  awaiting explicit instruction to start it.
+  full.**
+
+  **ITC Register (#81/spec 83) is implemented**, per explicit user instruction
+  2026-09-11 ("start ITC Register") — see `context/Phases/phase-tracker.md`'s
+  Phase 8 section for the full implementation record: rate-wise/party-wise/
+  HSN-wise summaries computed in-memory over `getInwardSupplyLines` (spec 57,
+  no new schema), a permanently-visible eligibility disclaimer (every line
+  assumed fully eligible ITC — no Section 17(5) categorization exists
+  anywhere in this codebase), and a grand total cross-checked exactly against
+  `gstr3bService`'s Table 4(A)(5) via a dedicated reconciliation test. Three
+  new dedicated summary-table components were built rather than forcing reuse
+  of `Gstr1ConsolidatedTable`/`HsnSummaryTable` (both carry fields/dimensions
+  — place of supply, codeType/description/UQC/quantity — with no equivalent
+  meaning for this report) — recorded as a deliberate, documented deviation
+  from the spec's UI section's literal wording, not an oversight. Both
+  code-reviewer and security-reviewer ran **before** the merge (continuing
+  the GSTR-2 precedent): both **APPROVE, zero CRITICAL/HIGH/MEDIUM
+  findings** — code-reviewer's one LOW (missing an explicitly-titled
+  cross-company-isolation test) was fixed before merge rather than deferred,
+  since it was a one-test addition. **This closes out Phase 8 in full** — all
+  six items (#55–#58, #80–#81) are now implemented, reviewed, and merged.
+  Phase 9 onward remains entirely spec-drafted-but-not-implemented; per
+  `ai-workflow-rules.md`'s one-feature-at-a-time rule, the next feature
+  awaits explicit instruction.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
