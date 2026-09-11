@@ -279,7 +279,7 @@ acceptable given the deferred per-document retrofit cost it implies.
 | #   | Feature                | Depends On         | Status |
 | --- | ---------------------- | ------------------ | ------ |
 | 44  | Opening Stock          | Products           | ✅     |
-| 45  | Stock Adjustment       | Inventory Engine   | ⬜     |
+| 45  | Stock Adjustment       | Inventory Engine   | ✅     |
 | 46  | Stock Transfer         | Warehouse          | ⬜     |
 | 47  | Physical Verification  | Inventory Engine   | ⬜     |
 | 48  | Batch Tracking         | Product Management | ⬜     |
@@ -401,26 +401,49 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 5 — Inventory: Stock Adjustment (#45)**. Opening Stock (#44,
-`context/feature-specs/46-opening-stock.md`) was implemented 2026-09-11 on
-`feature/opening-stock` — the thin UI/service layer directly over the already-shipped
-Inventory Engine (feature-spec 32) the spec called for: no new Prisma model, no
-document header/numbering, `openingStockService.recordOpeningStock` enforces "at most
-one Opening Stock entry ever per (companyId, productId, warehouseId)" via a
+➡ **Phase 5 — Inventory: Stock Transfer (#46)**. Opening Stock (#44,
+`context/feature-specs/46-opening-stock.md`) and Stock Adjustment (#45,
+`context/feature-specs/47-stock-adjustment.md`) were both implemented 2026-09-11.
+
+Opening Stock (`feature/opening-stock`, merged into `main`) — the thin UI/service layer
+directly over the already-shipped Inventory Engine (feature-spec 32): no new Prisma
+model, no document header/numbering, `openingStockService.recordOpeningStock` enforces
+"at most one Opening Stock entry ever per (companyId, productId, warehouseId)" via a
 Serializable-transaction check-then-insert against `stockTransactionRepository`'s new
 `existingTransactionPairs` method (matches on ANY prior transactionType for the pair,
 not just OPENING_STOCK), then delegates the actual write to
-`inventoryEngine.recordMovements` unchanged. Established the `/inventory` hub (one card
-today; Stock Adjustment/Transfer/Physical Verification add their own as they land) and
-wired the previously-unlinked sidebar "Inventory" entry to it. `npx tsc --noEmit`,
-`npx eslint src prisma`, `npx vitest run` (1065 tests), and `next build` all pass;
-`/inventory` and `/inventory/opening-stock*` appear in the build route table.
+`inventoryEngine.recordMovements` unchanged. Established the `/inventory` hub and wired
+the previously-unlinked sidebar "Inventory" entry to it.
+
+Stock Adjustment (`feature/stock-adjustment`) — unlike Opening Stock, a real numbered
+document: new `StockAdjustment`/`StockAdjustmentItem` models + `StockAdjustmentStatus`
+enum (migration `20260911043158_stock_adjustment`), numbered via the Document Number
+Engine (`DocumentType.STOCK_ADJUSTMENT`, previously reserved with no consumer). Each
+line carries its own IN/OUT `direction` — a single document may mix found-stock (IN)
+and write-off (OUT) lines; posting hands every line to `inventoryEngine.recordMovements`
+unchanged (TRADING-only, active/company-scoped, precision, OUT-availability, and
+future-date rejection are all the engine's own re-validation, never duplicated here),
+under Serializable isolation with bounded P2034 retry since the batch may contain OUT
+lines; cancellation reverses each line with the OPPOSITE of ITS OWN original direction
+(not a single document-wide reversal), also Serializable+retry. No GST/Voucher Engine
+call anywhere (explicit scope decision). Added the second `/inventory` hub card.
+Security review caught one HIGH finding — `createDraft`/`updateDraft` persisted a
+client-submitted `productId`/`warehouseId` with only UUID-shape validation, no
+company-ownership check, so a cross-tenant id could be saved into a DRAFT and its
+name/code would then render on the detail/edit pages (a real multi-tenant data-leak
+vector, though never postable — the engine's own company check would reject it at Post
+time) — fixed in the same session by adding `assertLineReferencesBelongToCompany`
+(mirrors `purchase-invoice-service.ts`'s `loadProductsMap`/`loadWarehousesMap` pattern)
+plus two new company-scoped repository methods (`findProductsForLines`/
+`findWarehousesForLines`) and 3 new tests. `npx tsc --noEmit`, `npx eslint src prisma`,
+`npx vitest run` (1114 tests), and `next build` all pass; `/inventory/adjustments*`
+appears in the build route table.
 
 Phases 1–4 are fully complete: Phase 3 — Sales Management (#33–#39, all seven
 documents) and Phase 4 — Purchase Management (#40–#43, all four documents, the last
 being Purchase Return implemented 2026-09-11) — see each phase's own status paragraph
 above and `context/progress-tracker.md`'s Completed entries for the full record.
-Feature-specs for the rest of Phase 5 (tracker #45–#49) and Phase 6 (Accounting — the
+Feature-specs for the rest of Phase 5 (tracker #46–#49) and Phase 6 (Accounting — the
 four manual voucher screens, tracker #50–#53) were drafted 2026-09-11 per explicit user
 request, following the same batch-drafting-without-implementation precedent as the
 Phase 3/4 spec batches (drafted 2026-07-18/19, implemented much later, one at a time).

@@ -99,6 +99,7 @@ model Company {
   goodsReceiptNotes GoodsReceiptNote[]
   purchaseInvoices  PurchaseInvoice[]
   purchaseReturns   PurchaseReturn[]
+  stockAdjustments  StockAdjustment[]
   auditLogs         AuditLog[]
   documentSequences DocumentSequence[]
   vouchers          Voucher[]
@@ -194,6 +195,7 @@ model FinancialYear {
   goodsReceiptNotes GoodsReceiptNote[]
   purchaseInvoices  PurchaseInvoice[]
   purchaseReturns   PurchaseReturn[]
+  stockAdjustments  StockAdjustment[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -265,6 +267,7 @@ model User {
   purchaseInvoices             PurchaseInvoice[]
   purchaseInvoiceItemOverrides PurchaseInvoiceItem[]
   purchaseReturns              PurchaseReturn[]
+  stockAdjustments             StockAdjustment[]
 
   @@index([companyId])
   @@index([roleId])
@@ -631,6 +634,7 @@ model Warehouse {
   salesInvoiceItems     SalesInvoiceItem[]
   goodsReceiptNoteItems GoodsReceiptNoteItem[]
   purchaseInvoiceItems  PurchaseInvoiceItem[]
+  stockAdjustmentItems  StockAdjustmentItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, code])
@@ -712,6 +716,7 @@ model Product {
   purchaseOrderItems    PurchaseOrderItem[]
   goodsReceiptNoteItems GoodsReceiptNoteItem[]
   purchaseInvoiceItems  PurchaseInvoiceItem[]
+  stockAdjustmentItems  StockAdjustmentItem[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -1196,6 +1201,68 @@ model StockTransaction {
   @@index([companyId, transactionDate])
   @@index([referenceType, referenceId])
   @@index([transferGroupId])
+}
+
+enum StockAdjustmentStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+// Stock Adjustment (feature-spec 47) — the numbered document a business uses
+// to correct stock for a reason other than a sale, purchase, transfer, or
+// physical count: found extra stock, shrinkage, damage, expiry write-off, or
+// fixing a prior mis-entry (including Opening Stock's own, by design — see
+// 46-opening-stock.md's "no edit/re-entry path" note). Unlike Opening Stock,
+// this IS a real numbered document (DocumentType.STOCK_ADJUSTMENT, already
+// reserved by 34-document-number-engine.md with no consumer until now).
+// Deliberately has no financial dimension (no Voucher Engine call, no ledger
+// fields) — 47-stock-adjustment.md's Module Responsibilities records this as
+// a scope decision, not a structural impossibility.
+model StockAdjustment {
+  id               String                @id @default(uuid())
+  companyId        String
+  company          Company               @relation(fields: [companyId], references: [id])
+  financialYearId  String
+  financialYear    FinancialYear         @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postStockAdjustment — mirrors PurchaseReturn's
+  // identical nullable-until-posted convention. Postgres unique indexes treat
+  // NULL as distinct, so multiple DRAFT rows coexist safely under @@unique.
+  adjustmentNumber String?
+  adjustmentDate   DateTime              @db.Date
+  reason           String
+  status           StockAdjustmentStatus @default(DRAFT)
+  createdByUserId  String?
+  createdBy        User?                 @relation(fields: [createdByUserId], references: [id])
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  items StockAdjustmentItem[]
+
+  @@unique([companyId, financialYearId, adjustmentNumber])
+  @@index([companyId, status])
+}
+
+// `direction` is StockDirection reused from StockTransaction above (spec 32)
+// — a single adjustment document may mix found-stock (IN) and write-off
+// (OUT) lines within one header, exactly mirroring the engine's own "IN or
+// OUT freely per movement" rule for ADJUSTMENT.
+model StockAdjustmentItem {
+  id                String          @id @default(uuid())
+  stockAdjustmentId String
+  stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id])
+  lineNumber        Int
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  warehouseId       String
+  warehouse         Warehouse       @relation(fields: [warehouseId], references: [id])
+  direction         StockDirection
+  quantity          Decimal         @db.Decimal(14, 4)
+  narration         String?
+
+  @@unique([stockAdjustmentId, lineNumber])
+  @@index([productId])
+  @@index([warehouseId])
 }
 
 // Purchase Order (feature-spec 42) — the company's commitment to buy from a
