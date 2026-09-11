@@ -1,5 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gstr3bRowNote, gstr3bFinancialCellClass } from "@/modules/gst/components/gstr3b-row-note";
+import { Gstr3bRowNote } from "@/modules/gst/components/gstr3b-row-note";
+import { gstr3bFinancialCellClass } from "@/modules/gst/utils/gstr3b-cell-class";
 import type { Gstr3bExemptInwardSupplies } from "@/types/gstr3b";
 
 interface Gstr3bExemptInwardTableProps {
