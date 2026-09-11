@@ -116,6 +116,7 @@ model Company {
   creditNotes           CreditNote[]
   debitNotes            DebitNote[]
   gstFilingRecords      GstFilingRecord[]
+  employees             Employee[]
 
   @@index([companyName])
 }
@@ -228,11 +229,12 @@ model Branch {
 
   company    Company     @relation(fields: [companyId], references: [id])
   warehouses Warehouse[]
+  employees  Employee[]
 
-  // Referenced by Warehouse's composite tenant-safe FK (companyId, branchId)
-  // → (companyId, id); Postgres requires a unique constraint covering the
-  // referenced column pair. Redundant with id's PK for lookups, load-bearing
-  // for the FK.
+  // Referenced by Warehouse's (and now Employee's) composite tenant-safe FK
+  // (companyId, branchId) → (companyId, id); Postgres requires a unique
+  // constraint covering the referenced column pair. Redundant with id's PK
+  // for lookups, load-bearing for the FK.
   @@unique([companyId, id])
   @@unique([companyId, branchCode])
 }
@@ -284,7 +286,20 @@ model User {
   stockTransfers               StockTransfer[]
   physicalVerifications        PhysicalVerification[]
   gstFilingRecords             GstFilingRecord[]
+  // Nullable, unique — see Employee.userId's own comment (61-employee-master.md)
+  // for why User and Employee are kept as two separate, optionally-linked
+  // entities rather than merged.
+  employee                     Employee?
 
+  // Referenced by Employee's composite tenant-safe FK (companyId, userId) →
+  // (companyId, id) — security-review fix, 2026-09-11, mirroring Warehouse's
+  // identical (companyId, branchId) → Branch(companyId, id) precedent, so a
+  // cross-company user link is rejected by the DB itself as defense-in-depth
+  // behind employee-repository.ts's assertAssignableUser check. Purely
+  // additive — id is already globally unique (the PK), and companyId being
+  // nullable (PLATFORM users) is fine under Postgres's NULL-distinct unique
+  // semantics.
+  @@unique([companyId, id])
   @@index([companyId])
   @@index([roleId])
   @@index([userType])
@@ -657,6 +672,73 @@ model Warehouse {
 
   @@unique([companyId, name])
   @@unique([companyId, code])
+  @@index([companyId])
+  @@index([branchId])
+}
+
+// HR/business record for a company's staff (61-employee-master.md, Phase 9 —
+// Employee Management #59), the first genuinely new domain since Phase 5/6.
+// `User` (login/auth) and `Employee` (HR/payroll record) are kept as two
+// separate entities linked by an optional, nullable, unique `userId` here —
+// most employees never log in, and not every logged-in user is a payroll
+// employee (a Company Admin need not be one) — see the spec's own "User ↔
+// Employee Relationship" section for the full reasoning. No per-employee
+// `Ledger` — unlike Customer/Supplier, payroll liability is pooled company-
+// wide, posted as one aggregate voucher per run by Payroll
+// (63-payroll.md), not tracked per employee.
+model Employee {
+  id              String   @id @default(uuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id])
+  employeeCode    String
+  fullName        String
+  designation     String?
+  department      String?
+  joiningDate     DateTime @db.Date
+  mobileNumber    String?
+  alternateMobile String?
+  email           String?
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  state           String?
+  district        String?
+  country         String   @default("India")
+  pinCode         String?
+  // Composite tenant-safe FK, mirroring Warehouse's own (companyId, branchId)
+  // → Branch(companyId, id) — the DB itself rejects a cross-company branch
+  // link, as defense-in-depth behind the repository's assertAssignableBranch
+  // check, rather than the spec's literal plain-FK draft. Optional — not
+  // every company has branches, and an employee not tied to one is a normal,
+  // fully-supported state.
+  branchId        String?
+  branch          Branch?  @relation(fields: [companyId, branchId], references: [companyId, id])
+  // Optional and unique — see the User ↔ Employee note above. No FK the
+  // other direction (User.employeeId): Employee is the new module here, so
+  // it owns the reference to User's table rather than User reaching into it.
+  // Composite tenant-safe FK (companyId, userId) → User(companyId, id) —
+  // security-review fix, 2026-09-11, mirroring the branchId FK above, so a
+  // cross-company user link is rejected by the DB itself as defense-in-depth
+  // behind the repository's assertAssignableUser check, rather than relying
+  // solely on the application-layer re-validation.
+  userId          String?  @unique
+  user            User?    @relation(fields: [companyId, userId], references: [companyId, id])
+  // The single salary-structure figure Payroll (63-payroll.md) needs to
+  // compute a run — owned here (HR-identity-adjacent data), snapshotted by
+  // Payroll onto its own PayrollRunItem at run time rather than read live, so
+  // a later edit here never retroactively changes a posted run.
+  basicSalary     Decimal? @db.Decimal(14, 2)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, employeeCode])
+  // Required alongside the plain userId @unique above for Prisma to accept
+  // the composite (companyId, userId) FK as a valid one-to-one relation —
+  // in practice equivalent to it, since a User's companyId never changes
+  // independently of the user, so no two Employee rows sharing a userId can
+  // ever legitimately carry different companyId values.
+  @@unique([companyId, userId])
   @@index([companyId])
   @@index([branchId])
 }

@@ -106,6 +106,12 @@ const MASTERS_MODULES = [
     title: "Suppliers",
     description: "Manage the permanent supplier master referenced by purchase documents.",
   },
+  {
+    href: "/masters/employees",
+    icon: Users,
+    title: "Employees",
+    description: "Manage the company's staff master referenced by Attendance and Payroll.",
+  },
 ] as const;
 
 export default async function MastersPage() {
