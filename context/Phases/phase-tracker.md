@@ -380,7 +380,9 @@ immutable once posted), a new "Payment Vouchers" card on the `/accounting` hub, 
 `payment-vouchers` breadcrumb label. `npx tsc --noEmit`, `npx eslint src prisma`,
 `npx vitest run` (1367/1367), and `next build` all pass; browser-verified end-to-end
 (created, posted as `PMT-0001`, viewed, and cancelled a voucher — see
-`context/progress-tracker.md`'s Current Phase entry for the full walkthrough).
+`context/progress-tracker.md`'s Current Phase entry for the full walkthrough). **Code
+review: APPROVE, zero findings. Security review: zero CRITICAL/HIGH/MEDIUM findings.
+Merged into `main` and pushed 2026-09-11** (commit `923c137`).
 
 ---
 

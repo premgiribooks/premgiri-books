@@ -140,6 +140,10 @@ Mapping so far:
     pattern it was extracted from; `listLedgerOptions` is gated on `view` rather than
     `create`, mirroring `ledgerService.listSelectableLedgers`'s existing convention for
     read-only picker data).
+  - **Merged into `main` and pushed 2026-09-11** (`git merge --no-ff
+    feature/payment-voucher`, commit `923c137`; local feature branch deleted after
+    merge). `tsc`/`eslint`/`vitest`(1367/1367)/`next build` re-verified against the
+    merged result before pushing. Next up: Receipt Voucher (feature-spec 53).
 
 - **Feature-spec 51 — Serial Number Tracking implemented 2026-09-11** on branch
   `feature/serial-number-tracking`, branched off `main` immediately after merging
