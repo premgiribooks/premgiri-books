@@ -14,6 +14,7 @@ import { saveCompanyLogo } from "@/modules/company/services/company-logo-service
 import type {
   CompanyProfileInput,
   CompanySettingsInput,
+  GstFilingFrequencyInput,
   SalesLedgerMappingInput,
 } from "@/modules/company/validation/company-schema";
 import type { ActionResult } from "@/types/api";
@@ -57,6 +58,19 @@ export async function updateSalesLedgerMappingAction(
 ): Promise<ActionResult<CompanySettings>> {
   try {
     const settings = await companySettingsService.updateSalesLedgerMapping(companyId, input);
+    revalidatePath("/settings/sales-ledgers");
+    return { success: true, data: settings };
+  } catch (error) {
+    return { success: false, error: toActionErrorMessage(error) };
+  }
+}
+
+export async function updateGstFilingFrequencyAction(
+  companyId: string,
+  input: GstFilingFrequencyInput
+): Promise<ActionResult<CompanySettings>> {
+  try {
+    const settings = await companySettingsService.updateGstFilingFrequency(companyId, input);
     revalidatePath("/settings/sales-ledgers");
     return { success: true, data: settings };
   } catch (error) {

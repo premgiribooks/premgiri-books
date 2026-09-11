@@ -115,24 +115,25 @@ model Company {
   salesReturns          SalesReturn[]
   creditNotes           CreditNote[]
   debitNotes            DebitNote[]
+  gstFilingRecords      GstFilingRecord[]
 
   @@index([companyName])
 }
 
 model CompanySettings {
-  id                 String   @id @default(uuid())
-  companyId          String   @unique
-  defaultTheme       String   @default("dark")
-  dateFormat         String   @default("DD/MM/YYYY")
-  timeFormat         String   @default("24h")
-  numberFormat       String   @default("en-IN")
-  currencyFormat     String   @default("INR")
+  id                 String             @id @default(uuid())
+  companyId          String             @unique
+  defaultTheme       String             @default("dark")
+  dateFormat         String             @default("DD/MM/YYYY")
+  timeFormat         String             @default("24h")
+  numberFormat       String             @default("en-IN")
+  currencyFormat     String             @default("INR")
   // Inventory Engine's negative-stock gate (32-inventory-engine.md;
   // code-standards.md "Negative stock depends on company settings") — when
   // false (default), an OUT movement that would take current stock below
   // zero is rejected; when true, it is allowed and stock reads back
   // negative.
-  allowNegativeStock Boolean  @default(false)
+  allowNegativeStock Boolean            @default(false)
   // Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — six
   // optional nullable FKs rather than auto-detection ("explicit over
   // clever," this codebase's posture since the Document Number Engine's
@@ -140,17 +141,17 @@ model CompanySettings {
   // drafting/editing does not. outputIgstLedgerId/outputCessLedgerId stay
   // required even for an intra-state-only company for the same reason.
   salesLedgerId      String?
-  salesLedger        Ledger?  @relation("CompanySettingsSalesLedger", fields: [salesLedgerId], references: [id])
+  salesLedger        Ledger?            @relation("CompanySettingsSalesLedger", fields: [salesLedgerId], references: [id])
   outputCgstLedgerId String?
-  outputCgstLedger   Ledger?  @relation("CompanySettingsOutputCgst", fields: [outputCgstLedgerId], references: [id])
+  outputCgstLedger   Ledger?            @relation("CompanySettingsOutputCgst", fields: [outputCgstLedgerId], references: [id])
   outputSgstLedgerId String?
-  outputSgstLedger   Ledger?  @relation("CompanySettingsOutputSgst", fields: [outputSgstLedgerId], references: [id])
+  outputSgstLedger   Ledger?            @relation("CompanySettingsOutputSgst", fields: [outputSgstLedgerId], references: [id])
   outputIgstLedgerId String?
-  outputIgstLedger   Ledger?  @relation("CompanySettingsOutputIgst", fields: [outputIgstLedgerId], references: [id])
+  outputIgstLedger   Ledger?            @relation("CompanySettingsOutputIgst", fields: [outputIgstLedgerId], references: [id])
   outputCessLedgerId String?
-  outputCessLedger   Ledger?  @relation("CompanySettingsOutputCess", fields: [outputCessLedgerId], references: [id])
+  outputCessLedger   Ledger?            @relation("CompanySettingsOutputCess", fields: [outputCessLedgerId], references: [id])
   roundOffLedgerId   String?
-  roundOffLedger     Ledger?  @relation("CompanySettingsRoundOff", fields: [roundOffLedgerId], references: [id])
+  roundOffLedger     Ledger?            @relation("CompanySettingsRoundOff", fields: [roundOffLedgerId], references: [id])
   // Purchase Invoice's posting-time ledger mapping (44-purchase-invoice.md) —
   // five new fields alongside the Sales/Output-GST mapping above, reusing
   // roundOffLedgerId rather than adding a second Round Off account (one
@@ -158,17 +159,22 @@ model CompanySettings {
   // requires these five plus the shared roundOffLedgerId (six total) to be
   // configured — same missing-mapping rejection style as Sales Invoice.
   purchaseLedgerId   String?
-  purchaseLedger     Ledger?  @relation("CompanySettingsPurchaseLedger", fields: [purchaseLedgerId], references: [id])
+  purchaseLedger     Ledger?            @relation("CompanySettingsPurchaseLedger", fields: [purchaseLedgerId], references: [id])
   inputCgstLedgerId  String?
-  inputCgstLedger    Ledger?  @relation("CompanySettingsInputCgst", fields: [inputCgstLedgerId], references: [id])
+  inputCgstLedger    Ledger?            @relation("CompanySettingsInputCgst", fields: [inputCgstLedgerId], references: [id])
   inputSgstLedgerId  String?
-  inputSgstLedger    Ledger?  @relation("CompanySettingsInputSgst", fields: [inputSgstLedgerId], references: [id])
+  inputSgstLedger    Ledger?            @relation("CompanySettingsInputSgst", fields: [inputSgstLedgerId], references: [id])
   inputIgstLedgerId  String?
-  inputIgstLedger    Ledger?  @relation("CompanySettingsInputIgst", fields: [inputIgstLedgerId], references: [id])
+  inputIgstLedger    Ledger?            @relation("CompanySettingsInputIgst", fields: [inputIgstLedgerId], references: [id])
   inputCessLedgerId  String?
-  inputCessLedger    Ledger?  @relation("CompanySettingsInputCess", fields: [inputCessLedgerId], references: [id])
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  inputCessLedger    Ledger?            @relation("CompanySettingsInputCess", fields: [inputCessLedgerId], references: [id])
+  // GSTR-1/GSTR-3B period-selector granularity (58-gstr-1.md) — drives only
+  // the UI's month-vs-quarter picker and a GstFilingRecord's human-readable
+  // period label; getOutwardSupplyLines/getGstr1Return take a plain date
+  // range regardless, so no query-layer logic branches on this setting.
+  gstFilingFrequency GstFilingFrequency @default(MONTHLY)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   company Company @relation(fields: [companyId], references: [id])
 }
@@ -202,6 +208,7 @@ model FinancialYear {
   stockAdjustments      StockAdjustment[]
   stockTransfers        StockTransfer[]
   physicalVerifications PhysicalVerification[]
+  gstFilingRecords      GstFilingRecord[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -276,6 +283,7 @@ model User {
   stockAdjustments             StockAdjustment[]
   stockTransfers               StockTransfer[]
   physicalVerifications        PhysicalVerification[]
+  gstFilingRecords             GstFilingRecord[]
 
   @@index([companyId])
   @@index([roleId])
@@ -2458,4 +2466,47 @@ model DebitNoteItem {
   totalAmount   Decimal   @db.Decimal(14, 2)
 
   @@unique([debitNoteId, lineNumber])
+}
+
+// 58-gstr-1.md — a minimal, ADVISORY-ONLY "mark this period filed" workflow
+// record. Reused verbatim by 59-gstr-3b.md (returnType: GSTR3B) rather than
+// declaring a second near-identical table. Marking/reopening never touches,
+// locks, or validates against any Sales/Purchase/Return/Note row — this is
+// a fact about a period, not a report output or a business-data mutation
+// (the one deliberate exception to this batch's "no new Prisma models"
+// default — see 58-gstr-1.md's Data Model for the full reasoning).
+enum GstReturnType {
+  GSTR1
+  GSTR3B
+}
+
+enum GstFilingStatus {
+  OPEN
+  FILED
+}
+
+enum GstFilingFrequency {
+  MONTHLY
+  QUARTERLY
+}
+
+model GstFilingRecord {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id])
+  financialYearId String
+  financialYear   FinancialYear   @relation(fields: [financialYearId], references: [id])
+  returnType      GstReturnType
+  periodStart     DateTime        @db.Date
+  periodEnd       DateTime        @db.Date
+  status          GstFilingStatus @default(OPEN)
+  arn             String?
+  filedAt         DateTime?
+  filedByUserId   String?
+  filedBy         User?           @relation(fields: [filedByUserId], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([companyId, returnType, periodStart, periodEnd])
+  @@index([companyId, returnType])
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { GstFilingFrequencyForm } from "@/modules/company/components/gst-filing-frequency-form";
 import { SalesLedgerMappingForm } from "@/modules/company/components/sales-ledger-mapping-form";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { ledgerService } from "@/modules/ledgers/services/ledger-service";
@@ -51,6 +52,20 @@ export default async function SalesLedgersSettingsPage() {
             roundOffLedgerId: settings?.roundOffLedgerId ?? undefined,
           }}
         />
+
+        <div className="flex flex-col gap-3 border-t border-border pt-6">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">GST Filing Frequency</h2>
+            <p className="text-xs text-muted-foreground">
+              Drives the period picker on GSTR-1/GSTR-3B (month vs. quarter).
+            </p>
+          </div>
+          <GstFilingFrequencyForm
+            companyId={user.companyId}
+            defaultValue={settings?.gstFilingFrequency ?? "MONTHLY"}
+            disabled={!canEdit}
+          />
+        </div>
       </div>
     </AppShell>
   );

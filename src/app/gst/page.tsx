@@ -16,10 +16,11 @@ const GST_MODULES = [
     available: true,
   },
   {
+    href: "/gst/gstr-1",
     icon: FileText,
     title: "GSTR-1",
     description: "Statutory outward-supply return, derived from the GST Registers.",
-    available: false,
+    available: true,
   },
   {
     icon: FileSpreadsheet,
