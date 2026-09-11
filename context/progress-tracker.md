@@ -1735,6 +1735,54 @@ Mapping so far:
   implemented, reviewed, and merged. Phase 9 onward remains entirely
   spec-drafted-but-not-implemented; per `ai-workflow-rules.md`'s
   one-feature-at-a-time rule, the next feature awaits explicit instruction.
+- **Employee Master (Phase 9 — Employee Management #59, spec 61) implemented
+  2026-09-11** on branch `feature/employee-master`, per explicit user instruction
+  ("start phase 9") — the first item of Phase 9's three (Employee Master → Attendance
+  → Payroll, must be implemented in that order). See `context/Phases/phase-tracker.md`'s
+  Phase 9 section for the full implementation record. New `Employee` Prisma model — the
+  first genuinely new domain since Phase 5/6 — a company-scoped Create/Edit/Activate/
+  Deactivate master (no delete), with an optional branch link and an optional, nullable,
+  unique link to an existing `User` login (no `User` row is ever created by this module,
+  no cascading (de)activation either direction). Both `branchId` and `userId` use
+  composite tenant-safe FKs (`(companyId, branchId) -> Branch(companyId, id)` and
+  `(companyId, userId) -> User(companyId, id)`), a deliberate upgrade over the spec's
+  literal plain-FK draft, mirroring Warehouse's own `branchId` precedent. New
+  `src/modules/employees/` (repository/service/Zod schema/Server Actions/five form
+  sections, reusing `ProductOptionSelector` for both the branch and login-link pickers)
+  and `/masters/employees` (list with search + status filtering, create, edit); added the
+  Employees card to `/masters` and the `employees` breadcrumb label. Gated on the
+  pre-existing `employees` permission module. 42 new vitest cases — 1571/1571 total
+  suite passing; `tsc`/`eslint`/`next build` all clean. Browser-verified end-to-end
+  (Playwright-driven): login, Masters hub card, list, create, edit with correct prefill,
+  search/status filtering, deactivate/activate — zero console errors.
+
+  **Post-implementation code review + security review (run in parallel, before merge)
+  found 1 HIGH (code), 1 MEDIUM (security), and 2 LOW (code) — all fixed**, no CRITICAL:
+  (1) HIGH — the spec's explicit search/status filter requirement for the list page had
+  no UI (the repository/service filter plumbing was unreachable dead code); fixed with a
+  new `EmployeeFilterBar` mirroring `customer-filter-bar.tsx`, re-verified live. (2)
+  MEDIUM — `userId`'s FK had no DB-level tenant-scoping, unlike `branchId`'s already-
+  composite FK; fixed by adding `@@unique([companyId, id])` to `User` and repointing
+  `Employee.user` to the composite FK (new migration `20260911170359_employee_user_
+  composite_fk`, applied via `prisma migrate deploy` since `prisma migrate dev` refused
+  to run non-interactively this session). (3) LOW — a stray, unrelated, pre-existing
+  uncommitted `docker-compose.yml` change was deliberately excluded from the commit. (4)
+  LOW — a redundant `Date` re-wrap in `employee-form.tsx` was removed. Re-verified after
+  fixes: `tsc`/`eslint`/`vitest` (1571/1571)/`next build` all pass; filter bar
+  re-verified live via Playwright.
+
+  **Merged into `main` 2026-09-11** (`--no-ff`, no conflicts, `596d8fe` — `tsc`/`eslint`/
+  `vitest` (1571/1571)/`next build` all re-verified green against the merged result
+  before pushing `main`). `feature/employee-master` deleted locally now that `main` has
+  it. **Environment note, unrelated to the feature's own correctness:** the local dev
+  database's `_prisma_migrations` table had a pre-existing checksum drift against the
+  already-applied `batch_tracking` migration (a CRLF/LF artifact of this Windows
+  checkout's `core.autocrlf=true`, not a content change) — resolved with the user's
+  explicit confirmation via `npx prisma migrate reset --force` (which Prisma's own
+  AI-agent safety guard required the user to run directly, since it blocks a
+  non-interactive consent-flag bypass), then reseeded (`npx tsx prisma/seed.ts`) before
+  browser verification could log in. **Attendance (#60, spec 62) is next per Phase 9's
+  required order** — depends on the `Employee` row this feature creates.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
