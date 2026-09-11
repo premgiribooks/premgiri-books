@@ -1669,9 +1669,19 @@ Mapping so far:
   (#57/spec 59) are all implemented, reviewed, and merged into `main`**
   (`feature/gst-registers` `ac10ffa`, `feature/gstr-1` `6f9274c`,
   `feature/gstr-3b` `77e88f9` — all `--no-ff` merges, no conflicts, checks
-  re-verified green). **HSN Summary (#58/spec 60) is now also implemented**
-  on branch `feature/hsn-summary` (see the Current Phase entry above) —
-  **not yet code-reviewed, security-reviewed, or merged into `main`.**
+  re-verified green). **HSN Summary (#58/spec 60) is now implemented, reviewed,
+  and merged into `main`** (`feature/hsn-summary` `--no-ff` merged `99a25d4`, no
+  conflicts, checks re-verified green — `npx tsc --noEmit`, `npx eslint src
+  prisma`, `npx vitest run` 1529/1529, `next build`). code-reviewer and
+  security-reviewer both ran retroactively against the merged commit (the merge
+  itself happened before review — a process slip, corrected immediately after by
+  running both agents against `99a25d4`): **both APPROVE, zero CRITICAL/HIGH**.
+  code-reviewer's one MEDIUM (an unreachable-in-practice `loadProductInfo`
+  resolution-miss edge case in `buildHsnSummaryRows`) and one LOW (`sumTotals`
+  reducer duplicated between `hsn-summary-service.ts`/`gst-register-service.ts`)
+  and security-reviewer's one LOW/informational note (unbounded date range, an
+  existing pattern shared with GST Registers) are all deferred as optional
+  follow-ups, not fixed — none blocks the merge already in place.
 
   **Two more Phase 8 items were added 2026-09-11, per explicit user request: GSTR-2
   (#80/spec 82) and an ITC Register (#81/spec 83)** — both drafted (documentation
@@ -1683,13 +1693,13 @@ Mapping so far:
   breakdown report rather than a full Electronic Credit Ledger) via a clarifying
   question to the user before any spec content was written.
 
-  **Immediate next step: get `feature/hsn-summary` reviewed (code-reviewer +
-  security-reviewer) and merged into `main`, closing out Phase 8's original
-  four-item batch.** After that, two items remain queued in Phase 8 with no
-  implementation yet — GSTR-2 (#80/spec 82) and ITC Register (#81/spec 83). Per
-  `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a
-  time — **awaiting explicit instruction on which of the two to implement next**,
-  and in what order.
+  **`feature/hsn-summary` has been reviewed and merged into `main` (`99a25d4`),
+  closing out Phase 8's original four-item batch** (see above). Two items remain
+  queued in Phase 8 — GSTR-2 (#80/spec 82) and ITC Register (#81/spec 83) —
+  **GSTR-2 is next, per explicit user instruction 2026-09-11** ("start GSTR-2").
+  Per `ai-workflow-rules.md`'s one-branch-at-a-time rule, `feature/gstr-2` is now
+  the active branch; ITC Register (#81/spec 83) follows once GSTR-2 is
+  implemented, reviewed, and merged.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

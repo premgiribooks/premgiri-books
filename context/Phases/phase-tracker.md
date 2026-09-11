@@ -887,10 +887,23 @@ re-verified green (`ac10ffa`). **GSTR-1 (#56) is implemented, reviewed, and merg
 `main`** (`feature/gstr-1` merged `--no-ff`, no conflicts, checks re-verified green —
 `6f9274c`). **GSTR-3B (#57) is implemented, reviewed, and merged into `main`**
 (`77e88f9`, plus a post-merge client-boundary bugfix `7699db4` — see the Phase 8 section
-above). **HSN Summary (#58) is implemented** on branch `feature/hsn-summary`, closing
-Phase 8's original four-item batch, not yet reviewed or merged — see the Phase 8 section
-above for the full record. GSTR-2 (#80) and ITC Register (#81) remain the two
-outstanding Phase 8 items.
+above). **HSN Summary (#58) is implemented, reviewed, and merged into `main`**
+(`feature/hsn-summary` `--no-ff` merged `99a25d4`, no conflicts, checks re-verified
+green — `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` 1529/1529, `next
+build`), closing Phase 8's original four-item batch. Both code-reviewer and
+security-reviewer ran retroactively against the merged commit (review was skipped before
+the merge itself — a process slip, corrected by running both immediately after): **APPROVE**,
+zero CRITICAL/HIGH findings from either. code-reviewer raised one MEDIUM (an unreachable-
+in-practice edge case in `buildHsnSummaryRows` where a `productId` that fails to resolve
+via `loadProductInfo` contributes no `unitLabels` entry — financially inert, flagged as a
+follow-up test-coverage gap, not fixed) and one LOW (the `sumTotals` reducer is duplicated
+verbatim between `hsn-summary-service.ts` and `gst-register-service.ts` — a follow-up
+extraction candidate, not fixed). security-reviewer confirmed company-scoping,
+authorization, input validation, and error handling are all sound, with one LOW/
+informational note (unbounded/unpaginated date range, an existing pattern shared with GST
+Registers, not introduced here). Neither MEDIUM/LOW blocks anything — both deferred as
+optional follow-ups. GSTR-2 (#80) and ITC Register (#81) remain the two
+outstanding Phase 8 items; **GSTR-2 is next, per explicit user instruction.**
 Phases 9–11 remain entirely undrafted-for-implementation (spec-drafted
 only); every status cell there remains ⬜.
 
