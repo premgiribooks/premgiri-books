@@ -38,6 +38,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   gst: "GST",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
+  "gstr-3b": "GSTR-3B",
   "payment-vouchers": "Payment Vouchers",
   "receipt-vouchers": "Receipt Vouchers",
   "contra-vouchers": "Contra Vouchers",

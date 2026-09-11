@@ -73,7 +73,7 @@ Mapping so far:
 | 56           | Product Detail Page (`56-product-detail-page.md`)                               | `context/Phases/phase-tracker.md` **Phase 6 — Product Detail Page (#50)** — **implemented 2026-09-11** (git branch `feature/product-detail-page`); new phase inserted ahead of the (renumbered) Phase 7 — Accounting, and ahead of Phase 5's own remaining item (#49 Serial Number Tracking), because both Batch Tracking (spec 50) and Serial Number Tracking (spec 51) need a Product detail view; UI-only, no new Prisma model, composes the existing `productService`/`productBatchService` stack |
 | 57           | GST Registers (`57-gst-registers.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#55) — **spec drafted 2026-09-11, not implemented**; establishes the shared `getOutwardSupplyLines`/`getInwardSupplyLines` GST aggregation primitive in `src/engines/gst/` that specs 58–60 and Phase 10's GST Reports (#72/spec 74) all reuse |
 | 58           | GSTR-1 (`58-gstr-1.md`)                                                          | `context/Phases/phase-tracker.md` Phase 8 — GST (#56) — **spec drafted 2026-09-11, not implemented**; introduces the shared `GstFilingRecord` model (advisory "mark period filed," no hard lock), reused by spec 59 |
-| 59           | GSTR-3B (`59-gstr-3b.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#57) — **spec drafted 2026-09-11, not implemented**; renders every statutorily-required but uncomputable row as an explicit "not tracked" placeholder rather than guessing |
+| 59           | GSTR-3B (`59-gstr-3b.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#57) — **implemented 2026-09-11 on `feature/gstr-3b`, not yet merged**; renders every statutorily-required but uncomputable row as an explicit "not tracked" placeholder rather than guessing |
 | 60           | HSN Summary (`60-hsn-summary.md`)                                                | `context/Phases/phase-tracker.md` Phase 8 — GST (#58) — **spec drafted 2026-09-11, not implemented**; last of the four GST-phase specs, closing Phase 8's drafting; pure grouping over spec 57's outward lines, no new schema |
 | 61           | Employee Master (`61-employee-master.md`)                                       | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#59) — **spec drafted 2026-09-11, not implemented**; first genuinely new domain since Phase 5/6 — `Employee` linked to `User` via an optional nullable unique `userId`, no per-employee `Ledger` |
 | 62           | Attendance (`62-attendance.md`)                                                  | `context/Phases/phase-tracker.md` Phase 9 — Employee Management (#60) — **spec drafted 2026-09-11, not implemented**; one row per (employee, date), exposing `getAttendanceSummary` as the sole aggregation Payroll consumes |
@@ -100,6 +100,70 @@ Mapping so far:
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Feature-spec 59 — GSTR-3B implemented 2026-09-11** on branch `feature/gstr-3b`,
+  branched from the updated `main` (not yet merged — pending code/security review).
+  Third item of Phase 8 — GST (#57). Computes the statutory Tables 3.1 (Outward
+  Supplies), 3.2 (Inter-State to Unregistered/Composition/UIN), 4 (Eligible ITC), 5
+  (Exempt/Nil-Rated/Non-GST Inward), and 5.1 (Interest/Late Fee) from the same
+  `getOutwardSupplyLines`/`getInwardSupplyLines` primitives (spec 57) — pure in-memory
+  computation, no new GST arithmetic. Reuses spec 58's `GstFilingRecord` model verbatim
+  with `returnType: GSTR3B` — the third spec in this batch to ship no schema of its own.
+  Per the spec's own "be explicit about what's computed" mandate, every statutory row
+  this codebase's data cannot support (3.1(b)/(d)/(e) — zero-rated/reverse-charge/
+  non-GST outward; 3.2's composition-taxpayer/UIN-holder sub-rows; 4(A)(1)–(4) —
+  import-of-goods/services, ISD credit, inward reverse-charge ITC; 4(B) ITC reversed;
+  4(D) ineligible ITC; 5's non-GST inward row; 5.1 in full) is present in
+  `gstr3bService.getGstr3BReturn`'s returned shape with an explicit `computed: false`
+  and a non-empty `reason` string — never omitted — and rendered by every table
+  component as a visually distinct (muted row background + "Not tracked" tooltip badge)
+  entry, never indistinguishable from a genuine ₹0. 4(C) Net ITC Available is computed
+  (equals 4(A)(5) exactly, since 4(B) is always untracked-zero) but still carries a
+  "Note" badge explaining that equality is a consequence of untracked (B), not a claim
+  that no reversal was ever actually required.
+
+  One row needed a real decision beyond summing already-signed lines: Table 5's
+  nil-rated-inward intra-state/inter-state split. Every line in that bucket carries
+  zero tax by construction (`ratePercent = 0`), so the split can't be read off the tax
+  columns the way every other computed row in this service is — it reuses
+  `gstEngine.determineSupplyType(companyStateCode, placeOfSupplyStateCode)`, the exact
+  same comparison `purchase-invoice-service.ts` already uses once at posting time to
+  decide the (now-zero) cgst/sgst/igst split, fetching `Company.stateCode` directly
+  (mirroring `gst-register-service.ts`'s own precedent of querying a sibling module
+  directly rather than through its gated service). Falls back to a visible, named
+  not-computed row on both sides if `Company.stateCode` is unset — a real, reachable
+  edge case for a company that hasn't finished its GST profile.
+
+  **One shared-component refactor, not a spec deviation**: `58-gstr-1.md`'s own
+  `Gstr1FilingStatusBanner` previously called `markGstr1PeriodFiledAction`/
+  `reopenGstr1PeriodAction` directly, hardcoding it to GSTR-1 — not actually reusable
+  "parameterized by returnType" as this spec's own UI section calls for. Generalized it
+  to accept `onMarkFiled`/`onReopen` callback props instead; both `/gst/gstr-1` and the
+  new `/gst/gstr-3b` now pass their own `returnType`-scoped Server Actions in.
+  `/gst/gstr-1/page.tsx`'s behavior is unchanged — it now just passes
+  `markGstr1PeriodFiledAction`/`reopenGstr1PeriodAction` explicitly instead of the
+  component importing them itself. `Gstr1PeriodSelector` needed no change — it was
+  already return-type-agnostic (an `options` list + URL params only).
+
+  New files: `src/types/gstr3b.ts`; `src/modules/gst/services/gstr3b-service.ts` (+ 13
+  vitest cases); `src/modules/gst/actions/gstr3b-actions.ts`; five presentational
+  components (`gstr3b-outward-supplies-table`, `gstr3b-inter-state-supplies-table`,
+  `gstr3b-eligible-itc-table`, `gstr3b-exempt-inward-table`,
+  `gstr3b-interest-late-fee-note`) plus a shared `gstr3b-row-note` badge/tooltip; and
+  `/gst/gstr-3b` (same period selector + filing-status-banner pattern as `/gst/gstr-1`,
+  gated identically on `gst`/`view`/`approve`). Wired the `/gst` hub's GSTR-3B card (now
+  linked, no longer "Coming soon") and added the `gstr-3b` breadcrumb label.
+
+  Full suite 1521/1521 passing (13 new — ratePercent = 0 boundary for 3.1(a)/(c);
+  netting across all four outward document types (Sales Invoice/Return, Credit/Debit
+  Note); 3.2's unregistered inter-state state-consolidation cross-checked against
+  spec 58's own Table 5/7 scope — Sales Invoice/Return only, `igst !== 0` not `> 0`,
+  same convention; 4(A)(5)/(C) net ITC math against a Purchase Invoice + Purchase
+  Return fixture; Table 5's state-code-missing fallback; filing round-trip
+  independence from GSTR-1's own `GstFilingRecord` row for the same period). `npx tsc
+  --noEmit`, `npx eslint src prisma` (0 errors, same 2 pre-existing unrelated
+  warnings), `npx vitest run`, and `next build` all pass; `/gst/gstr-3b` appears in the
+  build route table. **Not yet code-reviewed, security-reviewed, or merged to `main`.**
 
 - **Feature-spec 58 — GSTR-1 implemented 2026-09-11** on branch `feature/gstr-1`,
   branched from the updated `main`, later merged back (`--no-ff`, no conflicts,
@@ -1431,10 +1495,13 @@ Mapping so far:
   is under way: GST Registers (#55/spec 57) and GSTR-1 (#56/spec 58) are both
   implemented, reviewed, and merged into `main`** (`feature/gst-registers`
   `ac10ffa`, `feature/gstr-1` `6f9274c` — both `--no-ff` merges, no
-  conflicts, checks re-verified green). Per `phase-tracker.md`, **GSTR-3B
-  (#57/spec 59) is next**; HSN Summary (#58/spec 60) remains after that. Per
+  conflicts, checks re-verified green). **GSTR-3B (#57/spec 59) is now
+  implemented on `feature/gstr-3b`** (see the Current Phase entry above) —
+  awaiting code review, security review, and merge into `main`. Per
+  `phase-tracker.md`, **HSN Summary (#58/spec 60) remains after that** — per
   `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a
-  time — awaiting explicit instruction before starting GSTR-3B.
+  time, and `feature/gstr-3b` should be reviewed and merged before HSN
+  Summary begins.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
