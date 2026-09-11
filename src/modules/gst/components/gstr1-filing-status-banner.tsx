@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { markGstr1PeriodFiledAction, reopenGstr1PeriodAction } from "@/modules/gst/actions/gstr1-actions";
+import type { ActionResult } from "@/types/api";
 import type { GstFilingRecord } from "@/types/gstr1";
 
 interface Gstr1FilingStatusBannerProps {
@@ -17,12 +17,25 @@ interface Gstr1FilingStatusBannerProps {
   periodEnd: string;
   filingRecord: GstFilingRecord | null;
   canApprove: boolean;
+  /** Shared by every GstFilingRecord-backed return (58-gstr-1.md's own,
+   * reused unmodified by 59-gstr-3b.md) — the caller supplies its own
+   * returnType-scoped Server Actions so this component stays independent of
+   * any one return's action module. */
+  onMarkFiled: (input: { periodStart: string; periodEnd: string; arn?: string }) => Promise<ActionResult<GstFilingRecord>>;
+  onReopen: (id: string) => Promise<ActionResult<GstFilingRecord>>;
 }
 
 /** Open/Filed status + Mark as Filed (with optional ARN) / Reopen Period —
  * advisory only (58-gstr-1.md Business Rules): never blocks a new posting
  * into this period, it only records the fact that it was filed. */
-export function Gstr1FilingStatusBanner({ periodStart, periodEnd, filingRecord, canApprove }: Gstr1FilingStatusBannerProps) {
+export function Gstr1FilingStatusBanner({
+  periodStart,
+  periodEnd,
+  filingRecord,
+  canApprove,
+  onMarkFiled,
+  onReopen,
+}: Gstr1FilingStatusBannerProps) {
   const router = useRouter();
   const [isMarkDialogOpen, setIsMarkDialogOpen] = React.useState(false);
   const [arn, setArn] = React.useState("");
@@ -32,7 +45,7 @@ export function Gstr1FilingStatusBanner({ periodStart, periodEnd, filingRecord, 
 
   async function handleMarkFiled() {
     setIsSubmitting(true);
-    const result = await markGstr1PeriodFiledAction({ periodStart, periodEnd, arn: arn || undefined });
+    const result = await onMarkFiled({ periodStart, periodEnd, arn: arn || undefined });
     setIsSubmitting(false);
 
     if (!result.success) {
@@ -50,7 +63,7 @@ export function Gstr1FilingStatusBanner({ periodStart, periodEnd, filingRecord, 
       return;
     }
     setIsSubmitting(true);
-    const result = await reopenGstr1PeriodAction(filingRecord.id);
+    const result = await onReopen(filingRecord.id);
     setIsSubmitting(false);
 
     if (!result.success) {

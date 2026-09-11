@@ -23,10 +23,11 @@ const GST_MODULES = [
     available: true,
   },
   {
+    href: "/gst/gstr-3b",
     icon: FileSpreadsheet,
     title: "GSTR-3B",
     description: "Summary liability and input tax credit return.",
-    available: false,
+    available: true,
   },
   {
     icon: ListChecks,

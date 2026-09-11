@@ -6,19 +6,21 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { GstReportExportButton } from "@/modules/gst/components/gst-report-export-button";
-import { Gstr1B2bTable } from "@/modules/gst/components/gstr1-b2b-table";
-import { Gstr1B2cTable } from "@/modules/gst/components/gstr1-b2c-table";
-import { Gstr1CreditDebitNoteTable } from "@/modules/gst/components/gstr1-credit-debit-note-table";
-import { markGstr1PeriodFiledAction, reopenGstr1PeriodAction } from "@/modules/gst/actions/gstr1-actions";
+import { markGstr3BPeriodFiledAction, reopenGstr3BPeriodAction } from "@/modules/gst/actions/gstr3b-actions";
 import { Gstr1FilingStatusBanner } from "@/modules/gst/components/gstr1-filing-status-banner";
-import { Gstr1NilRatedTable } from "@/modules/gst/components/gstr1-nil-rated-table";
 import { Gstr1PeriodSelector } from "@/modules/gst/components/gstr1-period-selector";
-import { gstr1Service } from "@/modules/gst/services/gstr1-service";
-import { isValidCalendarDate, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
+import { Gstr3bEligibleItcTable } from "@/modules/gst/components/gstr3b-eligible-itc-table";
+import { Gstr3bExemptInwardTable } from "@/modules/gst/components/gstr3b-exempt-inward-table";
+import { Gstr3bInterestLateFeeNote } from "@/modules/gst/components/gstr3b-interest-late-fee-note";
+import { Gstr3bInterStateSuppliesTable } from "@/modules/gst/components/gstr3b-inter-state-supplies-table";
+import { Gstr3bOutwardSuppliesTable } from "@/modules/gst/components/gstr3b-outward-supplies-table";
+import { gstr3bService } from "@/modules/gst/services/gstr3b-service";
 import { getMonthlyPeriodOptions, getQuarterlyPeriodOptions } from "@/modules/gst/utils/gst-filing-periods";
-import type { GstFilingRecord, Gstr1Return } from "@/types/gstr1";
+import { isValidCalendarDate, toUtcDate } from "@/modules/gst/validation/gst-report-filters-schema";
+import type { GstFilingRecord } from "@/types/gstr1";
+import type { Gstr3bReturn } from "@/types/gstr3b";
 
-interface Gstr1PageProps {
+interface Gstr3bPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
@@ -26,7 +28,7 @@ function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
+export default async function Gstr3bPage({ searchParams }: Gstr3bPageProps) {
   const user = await getCurrentCompanyUser();
   const canView = await hasPermission(user, "gst", "view");
   if (!canView) {
@@ -45,9 +47,9 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
     return (
       <AppShell isAdmin={isAdmin}>
         <div className="flex flex-col gap-6 p-6">
-          <h1 className="text-xl font-semibold text-foreground">GSTR-1</h1>
+          <h1 className="text-xl font-semibold text-foreground">GSTR-3B</h1>
           <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
-            <p className="text-sm text-muted-foreground">Select a financial year to view GSTR-1.</p>
+            <p className="text-sm text-muted-foreground">Select a financial year to view GSTR-3B.</p>
           </div>
         </div>
       </AppShell>
@@ -65,15 +67,15 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
   const hasValidPeriod = fromParam && toParam && isValidCalendarDate(fromParam) && isValidCalendarDate(toParam);
   const selectedPeriod = hasValidPeriod ? { from: fromParam, to: toParam } : periodOptions[0];
 
-  let gstr1Return: Gstr1Return | null = null;
+  let gstr3bReturn: Gstr3bReturn | null = null;
   let filingRecord: GstFilingRecord | null = null;
 
   if (selectedPeriod) {
     const periodStart = toUtcDate(selectedPeriod.from);
     const periodEnd = toUtcDate(selectedPeriod.to);
-    [gstr1Return, filingRecord] = await Promise.all([
-      gstr1Service.getGstr1Return({ from: periodStart, to: periodEnd }),
-      gstr1Service.getFilingRecord(periodStart, periodEnd),
+    [gstr3bReturn, filingRecord] = await Promise.all([
+      gstr3bService.getGstr3BReturn({ from: periodStart, to: periodEnd }),
+      gstr3bService.getFilingRecord(periodStart, periodEnd),
     ]);
   }
 
@@ -82,8 +84,10 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
       <div className="flex flex-col gap-6 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-foreground">GSTR-1</h1>
-            <p className="text-sm text-muted-foreground">Statutory outward-supply return, classified from the GST Registers.</p>
+            <h1 className="text-xl font-semibold text-foreground">GSTR-3B</h1>
+            <p className="text-sm text-muted-foreground">
+              Summary outward tax liability and Input Tax Credit, derived from the GST Registers.
+            </p>
           </div>
           <GstReportExportButton />
         </div>
@@ -99,33 +103,17 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
               periodEnd={selectedPeriod.to}
               filingRecord={filingRecord}
               canApprove={canApprove}
-              onMarkFiled={markGstr1PeriodFiledAction}
-              onReopen={reopenGstr1PeriodAction}
+              onMarkFiled={markGstr3BPeriodFiledAction}
+              onReopen={reopenGstr3BPeriodAction}
             />
 
-            {gstr1Return ? (
+            {gstr3bReturn ? (
               <div className="flex flex-col gap-8">
-                <Gstr1B2bTable groups={gstr1Return.b2b} />
-                <Gstr1B2cTable variant="large" groups={gstr1Return.b2cLarge} />
-                <Gstr1B2cTable variant="small" groups={gstr1Return.b2cSmall} />
-                <Gstr1NilRatedTable groups={gstr1Return.nilRated} />
-                <Gstr1CreditDebitNoteTable
-                  registered={gstr1Return.creditDebitNotesRegistered}
-                  unregistered={gstr1Return.creditDebitNotesUnregistered}
-                />
-
-                {/* Table 12 (HSN Summary) delegates entirely to 60-hsn-summary.md's
-                    own output — that spec is not yet implemented (Phase 8 item #58,
-                    after GSTR-3B), so this section is a forward-noted placeholder,
-                    never a second, independently-derived HSN aggregation. */}
-                <div className="flex flex-col gap-3">
-                  <h3 className="text-sm font-semibold text-foreground">Table 12 — HSN Summary</h3>
-                  <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
-                    <p className="text-sm text-muted-foreground">
-                      HSN Summary is not yet available — it will appear here once implemented.
-                    </p>
-                  </div>
-                </div>
+                <Gstr3bOutwardSuppliesTable outwardSupplies={gstr3bReturn.outwardSupplies} />
+                <Gstr3bInterStateSuppliesTable interStateSupplies={gstr3bReturn.interStateSupplies} />
+                <Gstr3bEligibleItcTable eligibleItc={gstr3bReturn.eligibleItc} />
+                <Gstr3bExemptInwardTable exemptInwardSupplies={gstr3bReturn.exemptInwardSupplies} />
+                <Gstr3bInterestLateFeeNote interestLateFee={gstr3bReturn.interestLateFee} />
               </div>
             ) : null}
           </>

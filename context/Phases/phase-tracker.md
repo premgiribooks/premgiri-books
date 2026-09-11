@@ -450,7 +450,7 @@ Spec-file numbers are sequential and diverge from tracker numbers as usual:
 | --- | ------------- | ---------- | ------ |
 | 55  | GST Registers | GST Engine | ✅     |
 | 56  | GSTR-1        | GST Engine | ✅     |
-| 57  | GSTR-3B       | GST Engine | ⬜     |
+| 57  | GSTR-3B       | GST Engine | ✅     |
 | 58  | HSN Summary   | GST Engine | ⬜     |
 
 **GST Registers (#55) implemented 2026-09-11** on branch `feature/gst-registers`. Added
@@ -518,6 +518,78 @@ invoice's full value for the threshold decision while still routing nil-rated li
 Table 8 only. The security LOW (a check-then-write race on `markPeriodFiled`) was
 accepted as-is — advisory-only, same-tenant, same-permission-level. Re-verified:
 1508/1508 tests, `tsc`/`eslint`/`build` all pass; `/gst/gstr-1` in the build route table.
+
+**GSTR-3B (#57) implemented 2026-09-11** on branch `feature/gstr-3b` (not yet merged).
+Computes the statutory Tables 3.1/3.2/4/5/5.1 from the same
+`getOutwardSupplyLines`/`getInwardSupplyLines` primitives (spec 57), reusing spec 58's
+`GstFilingRecord` model verbatim with `returnType: GSTR3B` — no new Prisma model or
+migration, the third spec in this batch to ship no schema of its own. Every row this
+codebase's data cannot support (3.1(b)/(d)/(e), 3.2's composition/UIN sub-rows, 4(A)(1)–(4)/
+(B)/(D), 5's non-GST row, 5.1 in full) is still present in `gstr3bService.getGstr3BReturn`'s
+returned shape with an explicit `computed: false` and a non-empty `reason` string — never
+omitted — and rendered by the UI as a visually distinct (muted background + "Not tracked"
+tooltip badge) row, never indistinguishable from a genuine ₹0. Table 5's nil-rated inward
+intra/inter-state split (the one row needing a decision beyond summing already-signed
+lines) reuses `gstEngine.determineSupplyType(companyStateCode, placeOfSupplyStateCode)` —
+the same comparison `purchase-invoice-service.ts` used once already to decide the (now-zero,
+since these lines are nil-rated) cgst/sgst/igst split at posting time — falling back to a
+visible not-computed row on both sides if `Company.stateCode` is unset. New
+`src/types/gstr3b.ts`, `gstr3b-service.ts` (+ 12 vitest cases), `gstr3b-actions.ts`, five new
+presentational components under `src/modules/gst/components/` (`gstr3b-outward-supplies-table`,
+`gstr3b-inter-state-supplies-table`, `gstr3b-eligible-itc-table`, `gstr3b-exempt-inward-table`,
+`gstr3b-interest-late-fee-note`, plus a shared `gstr3b-row-note` badge/tooltip), and
+`/gst/gstr-3b` (same period selector + filing-status-banner pattern as `/gst/gstr-1`, gated
+identically on `gst`/`view`/`approve`). Wired the hub card (now linked, no longer "Coming
+soon") and the `gstr-3b` breadcrumb label. New `gstr3b-service.ts` carries 13 vitest cases
+(ratePercent boundary, netting across all four outward doc types, 3.2's state consolidation
+cross-checked against gstr1's own Table 5/7 scope, 4(A)(5)/(C) net ITC math, Table 5's
+state-code-missing fallback, filing round-trip independence from GSTR-1's own record).
+
+**One shared-component refactor, not a spec deviation:** `58-gstr-1.md`'s own
+`Gstr1FilingStatusBanner` previously called `markGstr1PeriodFiledAction`/
+`reopenGstr1PeriodAction` directly, hardcoding it to GSTR-1 — not actually reusable
+"parameterized by returnType" as spec 59 itself calls for. Generalized it to accept
+`onMarkFiled`/`onReopen` callback props instead (both pages now pass their own
+`returnType`-scoped Server Actions in); `/gst/gstr-1/page.tsx` updated to pass its own
+actions explicitly, preserving its exact prior behavior. `Gstr1PeriodSelector` needed no
+change — it was already return-type-agnostic (just an `options` list + URL params).
+
+1521/1521 total suite passing (13 new). `npx tsc --noEmit`, `npx eslint src prisma` (0
+errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and `next build` all
+pass; `/gst/gstr-3b` appears in the build route table.
+
+**Post-implementation code review + security review** (agents run in parallel) found 0
+CRITICAL/HIGH in either pass. Code review: 2 MEDIUM, 2 LOW — **both MEDIUM fixed, one LOW
+fixed, one LOW accepted as-is**:
+- **MEDIUM, fixed**: `determineSupplyType` (Table 5's intra/inter split) would throw an
+  uncaught `AppError` for the whole `getGstr3BReturn` call if a single nil-rated inward
+  line carried a stale/legacy GST state code — the one path in this service that didn't
+  degrade gracefully to a not-computed row like every other "can't compute" case. Fixed
+  by validating both the company's and every line's state code via `isValidGstStateCode`
+  before calling `determineSupplyType`, falling back to a visible not-computed Table 5
+  row (with a named reason) instead of failing the entire return.
+- **MEDIUM, fixed**: the spec's own Code Standards section explicitly required an
+  "explicit cross-check test against spec 58's own classification, not just an
+  independently-asserted number" for Table 3.2 — the original test suite only asserted
+  hand-computed totals. Added a test that runs the same fixture through both
+  `gstr3bService` and `gstr1Service` and asserts their state-level totals agree.
+- **LOW, fixed**: repeated `row.computed ? "..." : "..."` cell-class ternary (10
+  occurrences across two table components) extracted into a shared
+  `gstr3bFinancialCellClass` helper in `gstr3b-row-note.tsx`.
+- **LOW, accepted as-is**: Table 5's "Non-GST supply" row renders the same (always-₹0)
+  amount in both Inter-State/Intra-State columns since `Gstr3bAmountRow` models a single
+  `amount` — harmless today since the row is always not-computed; flagged for whichever
+  future spec first populates a real non-GST inward figure.
+- **Security review: 0 CRITICAL/HIGH/MEDIUM, 1 LOW, accepted as-is** —
+  `reopenGstr3BPeriodAction`'s bare un-validated `id` param is pre-existing precedent
+  duplicated verbatim from `gstr1-actions.ts`, not a regression; `reopenPeriod` already
+  checks company ownership before any mutation and both "not found"/"other company"
+  paths return the identical generic message (no cross-tenant existence oracle).
+- Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx
+  vitest run` (1523/1523, 2 new regression tests — the state-code-invalid fallback and
+  the Table 3.2 cross-check), and `next build` all pass.
+
+Still not yet merged to `main` — see progress-tracker.md's Open Questions/Next Up.
 
 ---
 
