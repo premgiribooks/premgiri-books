@@ -70,15 +70,76 @@ Mapping so far:
 | 53           | Receipt Voucher (`53-receipt-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#52) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#51, see spec 52's note |
 | 54           | Contra Voucher (`54-contra-voucher.md`)                                         | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#53) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#52, see spec 52's note |
 | 55           | Journal Voucher (`55-journal-voucher.md`)                                       | `context/Phases/phase-tracker.md` Phase 7 — Accounting (#54) — **spec drafted 2026-09-11, not implemented**; renumbered from Phase 6/#53, see spec 52's note; last item in Phase 7, closing the Accounting phase |
-| 56           | Product Detail Page (`56-product-detail-page.md`)                               | `context/Phases/phase-tracker.md` **Phase 6 — Product Detail Page (#50)** — **spec drafted 2026-09-11, not implemented**; new phase inserted ahead of the (renumbered) Phase 7 — Accounting, and ahead of Phase 5's own remaining item (#49 Serial Number Tracking), because both Batch Tracking (spec 50) and Serial Number Tracking (spec 51) need a Product detail view that does not exist yet; UI-only, no new Prisma model, composes the existing `productService`/`productBatchService` stack |
+| 56           | Product Detail Page (`56-product-detail-page.md`)                               | `context/Phases/phase-tracker.md` **Phase 6 — Product Detail Page (#50)** — **implemented 2026-09-11** (git branch `feature/product-detail-page`); new phase inserted ahead of the (renumbered) Phase 7 — Accounting, and ahead of Phase 5's own remaining item (#49 Serial Number Tracking), because both Batch Tracking (spec 50) and Serial Number Tracking (spec 51) need a Product detail view; UI-only, no new Prisma model, composes the existing `productService`/`productBatchService` stack |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
 
-- **Phase 6 — Product Detail Page inserted 2026-09-11 (planning only, nothing implemented
-  yet)**, per explicit user direction, before resuming Phase 5's own remaining item (#49
-  Serial Number Tracking). Product Management (feature-spec 25) shipped 2026-07-18 with
+- **Feature-spec 56 — Product Detail Page implemented 2026-09-11** on branch
+  `feature/product-detail-page`, branched off `main` immediately after merging
+  `feature/batch-tracking` into it. Closes Phase 6 (see the "planning only" entry directly
+  below for how/why the phase was inserted — this entry records what was actually built).
+  New `/masters/products/[id]` (Overview tab, default) and `/masters/products/[id]/batches`
+  (Batches tab, gated on `product.isBatchTracked`, redirects to Overview otherwise) routes —
+  pure UI composition, no new Prisma model, no change to `productService`/
+  `productBatchService`. `getProductDetailTabs(productId, isBatchTracked)` is the single
+  pure, unit-tested function deciding which tabs exist (`product-detail-tabs.test.ts`) —
+  the seam feature-spec 51 extends with its own `isSerialTracked` gate. The Batches tab
+  composes spec 50's unmodified `ProductBatchTable`/`ProductBatchForm` via a new client
+  component, `ProductBatchesPanel` (dialog open/create/edit state), placed under
+  `src/modules/products/components/` rather than `product-batches/` since that module's
+  spec reserves no new components of its own. Added a "View" row action to the Product
+  Table (`Eye` icon, alongside the existing Edit) and a dynamic-breadcrumb mechanism
+  (`src/hooks/use-breadcrumb-label.ts`) so the trail shows the product's actual name
+  instead of dropping its id segment, without `BreadcrumbBar` fetching anything itself —
+  every other route's breadcrumb behavior is unchanged.
+  - **Real bug found and fixed during browser verification, not just automated tests**:
+    the breadcrumb label store's first version mutated one shared `Map` in place and
+    returned that same reference from `getSnapshot`, so `useSyncExternalStore` — which
+    bails out via `Object.is` reference equality — never re-rendered `BreadcrumbBar` after
+    a label was registered, even though its listener fired. Automated checks (`tsc`,
+    `eslint`, `vitest`, `next build`) cannot catch this class of bug since it's a runtime
+    reactivity defect, not a type or logic error — it only surfaced once the page was
+    actually clicked through in a browser. Fixed by replacing the map with a new instance
+    on every write; re-verified live afterward (breadcrumb correctly read "Masters ›
+    Products › `<product name>`"). **Recorded as a pattern for future work**: any
+    module-level external store consumed via `useSyncExternalStore` must return a new
+    top-level reference from `getSnapshot` on every change — mutating a shared
+    `Map`/`Object`/`Array` in place and keeping the same reference silently breaks
+    change detection.
+  - **Browser-verified end-to-end with Playwright** against the dev server (no project
+    run-skill existed for this repo; driven directly per the `run` skill's fallback
+    pattern, reusing this machine's already-cached Playwright Chromium build rather than
+    downloading a new one) — login as `admin`/`Admin@12345` → product list → the new View
+    action → Overview tab renders every field/related-master-name grouped exactly like
+    `ProductForm`'s own sections → breadcrumb shows the product's name → Edit button links
+    to the existing edit page → a bogus id renders the standard Next.js not-found page;
+    separately, created a fresh batch-tracked product → its Batches tab appears → New
+    Batch dialog opens `ProductBatchForm` → a created batch appears in the table with a
+    success toast → toggling batch tracking back off makes `/batches` redirect to
+    Overview. Test artifacts (script + screenshots) were scratch files, not committed; the
+    two products created for this walkthrough were deactivated afterward (this codebase
+    has no hard-delete for masters, matching every other module's convention).
+  - **Known deviation, recorded per `ai-workflow-rules.md`**: feature-spec 56's Code
+    Standards section calls for Vitest coverage of two page-level behaviors (the Batches
+    route's redirect, and not-found for a bad id) that this codebase has no
+    infrastructure to unit test — zero `.test.tsx` files exist anywhere, and
+    `vitest.config.ts` runs `environment: "node"` with `include: ["src/**/*.test.ts"]`
+    only; no prior feature's page-level routing behavior has ever been unit tested here,
+    only its underlying service/repository logic (which is unchanged by this spec).
+    Both behaviors were exercised directly against a live browser instead (see above).
+  - `npx tsc --noEmit`, `npx eslint src prisma` (clean except the same two pre-existing
+    unrelated warnings every recent entry has noted), `npx vitest run` (1256/1256
+    passing, up from 1253), and `npx next build` all pass;
+    `/masters/products/[id]` and `/masters/products/[id]/batches` appear in the build
+    route table.
+
+- ~~Phase 6 — Product Detail Page inserted 2026-09-11 (planning only, nothing implemented
+  yet)~~ — **implemented, see the entry directly above**. Original insertion rationale
+  preserved below for context: inserted per explicit user direction, before resuming
+  Phase 5's own remaining item (#49 Serial Number Tracking). Product Management
+  (feature-spec 25) shipped 2026-07-18 with
   list/new/edit only — no detail view — and two Phase 5 specs both need one: Batch
   Tracking (feature-spec 50, tracker #48, implemented 2026-09-11) already deferred its
   Batches tab for this exact reason (see the #49-and-earlier entry below, known deviation
@@ -207,7 +268,8 @@ Mapping so far:
 
 ## Current Goal
 
-- **Feature-spec 50 — Batch Tracking implemented 2026-09-11 on branch `feature/batch-tracking`** (see Completed above) — Phase 5's fifth of six items. Not yet merged into `main`. Per `ai-workflow-rules.md`'s one-feature-at-a-time rule, Serial Number Tracking (feature-spec 51, tracker #49) — the last item of Phase 5 — is the next candidate and awaits explicit instruction once this branch is merged; it should read this spec's Retrofit Decision and the three recorded deviations above before starting, since both specs share the same retrofit posture and the deferred CHECK constraint is now spec 51's responsibility to add.
+- **Feature-spec 56 — Product Detail Page implemented 2026-09-11 on branch `feature/product-detail-page`, since merged into `main`** (see Completed above and `phase-tracker.md`'s Current Phase entry for the full record). Closes Phase 6. Per `ai-workflow-rules.md`'s one-feature-at-a-time rule, Serial Number Tracking (feature-spec 51, tracker #49) — the last item of Phase 5 — is next and awaits explicit instruction; it should reuse `getProductDetailTabs`'s gate pattern for its own `isSerialTracked` tab and this spec's `ProductBatchesPanel` composition approach for its own Serial Numbers tab content.
+- **Feature-spec 50 — Batch Tracking implemented 2026-09-11 on branch `feature/batch-tracking`, since merged into `main`** (see Completed above) — Phase 5's fifth of six items. Per `ai-workflow-rules.md`'s one-feature-at-a-time rule, Serial Number Tracking (feature-spec 51, tracker #49) — the last item of Phase 5 — is the next candidate and awaits explicit instruction; it should read this spec's Retrofit Decision and the three recorded deviations above before starting, since both specs share the same retrofit posture and the deferred CHECK constraint is now spec 51's responsibility to add.
 - **Feature-spec 44 — Purchase Invoice implemented 2026-09-10 on branch `feature/purchase-invoice`** (see Completed above) — Phase 4's third of four documents. Not yet merged into `main`. Per `ai-workflow-rules.md`'s one-feature-at-a-time rule, Purchase Return (feature-spec 45, tracker #43) is the next candidate and awaits explicit instruction once this branch is merged.
 - **Feature-spec 43 — Goods Receipt Note implemented 2026-09-10 on branch `feature/goods-receipt-note`, since merged into `main`** (see Completed above) — Phase 4's second of four documents.
 - **Merge reconciliation (2026-09-10): `36-sales-orders` (all seven Phase 3 documents) and `42-purchase-orders` (Purchase Orders, Phase 4's first document) merged into `main` back-to-back.** They were developed independently and in parallel — `42-purchase-orders` branched directly off `main` rather than off the still-unmerged `36-sales-orders`, so it ported in its own copies of two small shared prerequisites `36-sales-orders` had already added (`Company.stateCode` + the Company Profile "GST State" field, and the `numericFieldWidth`/`FormSection` `columns` prop UI fixes). Reconciled at merge time: kept `36-sales-orders`'s `Company.stateCode` migration/schema/service code (deleted `42-purchase-orders`'s duplicate `20260910155900_add_company_state_code` migration entirely — the column already exists from `36-sales-orders`'s earlier `20260910071040_add_quotations_and_company_state_code`); merged the `FormSection`/sidebar/breadcrumb/company-profile-form comment differences (functionally equivalent on both sides, kept the more detailed wording); a duplicate top-level `STATE_CODE_SCHEMA` declaration in `company-schema.ts` that git's line-based merge had silently left in as two copies (not flagged as a conflict, since the two additions landed in non-overlapping line ranges) was caught and collapsed to one — twice, once per branch merge, since both `36-sales-orders`→`main` and `42-purchase-orders`→`main` independently re-added `Company.stateCode` support. Full `tsc`/`eslint`/`vitest`/`next build` re-run clean after each merge. Per `ai-workflow-rules.md`'s one-feature-at-a-time rule, Goods Receipt Note (feature-spec 43, tracker #41) is next and awaits explicit instruction.
@@ -221,7 +283,9 @@ Mapping so far:
 
 ## Completed
 
-- **Feature-spec 50 — Batch Tracking (`context/feature-specs/50-batch-tracking.md`, `context/Phases/phase-tracker.md` Phase 5 #48) — implemented 2026-09-11** on branch `feature/batch-tracking`. See `phase-tracker.md`'s Current Feature section for the full technical record (schema, engine amendment, new `product-batches` module). **Fifth of Phase 5's six items — only Serial Number Tracking (#49) remains.** Three deliberate deviations from the spec's literal text, all recorded in `phase-tracker.md`: (1) the batch/serial mutual-exclusion DB `CHECK` constraint is deferred to spec 51's own migration (`isSerialTracked` doesn't exist yet); (2) the Batches tab/page route is on hold pending a Product detail page (explicit user decision) — the backend module and reusable components (`ProductBatchTable`, `ProductBatchForm`, `<BatchSelector>`) all exist but nothing wires them into a route yet; (3) batch activate/deactivate use the `edit` permission action rather than this codebase's usual `LIFECYCLE_ACTION="delete"` convention, per the spec's own literal Security section. **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM findings.** **Security review: zero CRITICAL/HIGH findings in the feature code itself** (both reviews independently verified the batch-scoped oversell check runs inside the same Serializable+retry transaction as the existing product/warehouse check, so no stale-read window; every `product-batches` service/repository method company/product-scopes correctly and never leaks cross-tenant existence; the batch-required/forbidden rule is enforced server-side against the DB-loaded product's own flag, never the client's claim; permission checks present on every service method; Decimal→number normalization complete). One LOW finding from both reviews — an unused, unscoped `productBatchRepository.findById(id)` — was fixed (removed) in the same session. Both reviews also flagged an untracked root `Dockerfile` present in the working tree as out-of-scope for this feature (security review rated it CRITICAL — `COPY .` with no `.dockerignore` would bake the repo's real `.env` into the image — but it predates this session, was never touched by it, and is unrelated to Batch Tracking; awaiting user direction on whether to fix it here or separately). `npx tsc --noEmit`, `npx eslint src prisma` (clean except two pre-existing unrelated warnings), `npx vitest run` (1253/1253 passing), and `npx next build` all pass.
+- **Feature-spec 56 — Product Detail Page (`context/feature-specs/56-product-detail-page.md`, `context/Phases/phase-tracker.md` Phase 6 #50) — implemented 2026-09-11** on branch `feature/product-detail-page`, since merged into `main`. See `phase-tracker.md`'s Current Feature section for the full technical record (the two new routes, `getProductDetailTabs`, `ProductOverviewPanel`, `ProductBatchesPanel`, the dynamic-breadcrumb mechanism, and the `useSyncExternalStore` reference-equality bug found and fixed during browser verification). **Closes Phase 6** — Phase 5 resumes at Serial Number Tracking (#49) next. No code-reviewer/security-reviewer pass was run for this feature (UI-composition-only, no new business logic, schema, or write path — every mutation goes through spec 50's already-reviewed `productBatchService`); browser verification against a real running instance was used instead, catching a real reactivity bug automated checks could not have (see above). `npx tsc --noEmit`, `npx eslint src prisma` (clean except the same two pre-existing unrelated warnings), `npx vitest run` (1256/1256 passing), and `npx next build` all pass.
+
+- **Feature-spec 50 — Batch Tracking (`context/feature-specs/50-batch-tracking.md`, `context/Phases/phase-tracker.md` Phase 5 #48) — implemented 2026-09-11** on branch `feature/batch-tracking`, since merged into `main`. See `phase-tracker.md`'s Current Feature section for the full technical record (schema, engine amendment, new `product-batches` module). **Fifth of Phase 5's six items — only Serial Number Tracking (#49) remains.** Three deliberate deviations from the spec's literal text, all recorded in `phase-tracker.md`: (1) the batch/serial mutual-exclusion DB `CHECK` constraint is deferred to spec 51's own migration (`isSerialTracked` doesn't exist yet); (2) ~~the Batches tab/page route is on hold pending a Product detail page~~ — **resolved 2026-09-11** by feature-spec 56 (see the entry directly above); (3) batch activate/deactivate use the `edit` permission action rather than this codebase's usual `LIFECYCLE_ACTION="delete"` convention, per the spec's own literal Security section. **Code review: APPROVE, zero CRITICAL/HIGH/MEDIUM findings.** **Security review: zero CRITICAL/HIGH findings in the feature code itself** (both reviews independently verified the batch-scoped oversell check runs inside the same Serializable+retry transaction as the existing product/warehouse check, so no stale-read window; every `product-batches` service/repository method company/product-scopes correctly and never leaks cross-tenant existence; the batch-required/forbidden rule is enforced server-side against the DB-loaded product's own flag, never the client's claim; permission checks present on every service method; Decimal→number normalization complete). One LOW finding from both reviews — an unused, unscoped `productBatchRepository.findById(id)` — was fixed (removed) in the same session. Both reviews also flagged an untracked root `Dockerfile` present in the working tree as out-of-scope for this feature (security review rated it CRITICAL — `COPY .` with no `.dockerignore` would bake the repo's real `.env` into the image — but it predates this session, was never touched by it, and is unrelated to Batch Tracking; awaiting user direction on whether to fix it here or separately). `npx tsc --noEmit`, `npx eslint src prisma` (clean except two pre-existing unrelated warnings), `npx vitest run` (1253/1253 passing), and `npx next build` all pass.
 
 - **Feature-spec 47 — Stock Adjustment (`context/feature-specs/47-stock-adjustment.md`, `context/Phases/phase-tracker.md` Phase 5 #45) — implemented 2026-09-11** on branch `feature/stock-adjustment`. See the Current Phase entry above for the full record — the per-line IN/OUT direction, the Serializable+retry posting/cancellation, the nullable-until-posted `adjustmentNumber`, and the HIGH-severity cross-tenant fix (`assertLineReferencesBelongToCompany`). **Second item of Phase 5 — Inventory (tracker #45 of #44–#49).** Code-reviewer returned zero findings; security-reviewer's one HIGH finding was fixed in the same session before this entry was recorded.
 

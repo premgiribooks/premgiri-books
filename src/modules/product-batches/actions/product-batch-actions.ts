@@ -15,12 +15,10 @@ import type {
 } from "@/types/product-batch";
 import type { ActionResult } from "@/types/api";
 
-// No page route consumes these yet (the Batches tab is on hold pending a
-// Product detail page — context/progress-tracker.md) — revalidatePaths is
-// intentionally the product's own edit page only, the one screen that
-// already reads a product's isBatchTracked/movement state.
+// The Batches tab (56-product-detail-page.md) now consumes these, alongside
+// the product's edit page (which also reads isBatchTracked/movement state).
 function productPaths(productId: string): string[] {
-  return [`/masters/products/${productId}/edit`];
+  return [`/masters/products/${productId}/edit`, `/masters/products/${productId}/batches`];
 }
 
 export async function createProductBatchAction(

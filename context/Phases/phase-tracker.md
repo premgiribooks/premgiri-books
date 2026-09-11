@@ -312,11 +312,12 @@ never reused — diverges from the tracker number as usual):
 
 | #   | Feature            | Depends On          | Status |
 | --- | ------------------ | -------------------- | ------ |
-| 50  | Product Detail Page | Product Management  | ⬜     |
+| 50  | Product Detail Page | Product Management  | ✅     |
 
 Phase Status
 
-⬜ Not Started — next feature to implement (ahead of Phase 5's #49; see the note above).
+✅ Complete — see `context/progress-tracker.md`'s Current Feature entry for the
+implementation record. Phase 5 resumes at #49 (Serial Number Tracking) next.
 
 ---
 
@@ -437,14 +438,14 @@ These are intentionally outside the first production release.
 
 **Next Feature to Implement**
 
-➡ **Phase 6 — Product Detail Page (#50)**. Inserted 2026-09-11 ahead of Phase 5's own
-remaining item, per explicit user direction: build the Product detail view now, before
-resuming Serial Number Tracking (#49), so #49's Serial Numbers tab (and the Batches tab
-already deferred by Batch Tracking, #48 — see known deviation #2 below) have a page to
-land in instead of deferring a second time. Opening Stock (#44), Stock Adjustment (#45),
-Stock Transfer (#46), Physical Verification (#47), and Batch Tracking (#48) are all
-implemented; only Serial Number Tracking (#49), the last item of Phase 5, remains —
-**after this Phase 6 feature is complete, work resumes on #49**, then normal phase order
+➡ **Phase 5 — Serial Number Tracking (#49)**. Phase 6 — Product Detail Page (#50) is now
+complete (`feature/product-detail-page`, implemented 2026-09-11) — see
+`context/progress-tracker.md`'s Current Feature entry for the full record. Opening Stock
+(#44), Stock Adjustment (#45), Stock Transfer (#46), Physical Verification (#47), Batch
+Tracking (#48), and Product Detail Page (#50) are all implemented; only Serial Number
+Tracking (#49), the last item of Phase 5, remains. Its own spec
+(`51-serial-number-tracking.md`) can now wire its Serial Numbers tab into the Product
+detail view this phase built, exactly as intended. After #49, normal phase order
 continues at Phase 7 (Accounting, #51–#54).
 
 Batch Tracking (`feature/batch-tracking`) — the first of the two genuinely new
@@ -477,14 +478,12 @@ prisma`, `npx vitest run` (1253 tests), and `next build` all pass.
    a comment block at the end of `prisma/migrations/20260911060923_batch_tracking/migration.sql`;
    spec 51 must add it. The two spec-mandated test cases for this ("mutual exclusion,
    either order") are correspondingly not yet written — add them alongside spec 51.
-2. **The Batches tab / page route is on hold**, per explicit user decision during this
-   implementation, until a Product detail page exists (Product Management today only has
-   list/new/edit, no detail view). Everything else shipped: the `isBatchTracked` toggle on
-   the existing Product form, the full `product-batches` module (repository, service,
-   validation, actions), and the reusable UI components (`ProductBatchTable`,
-   `ProductBatchForm`, `<BatchSelector>`) — none are yet wired into a page. When a Product
-   detail page is built (this task or spec 51's own), reuse the same pattern for its
-   Serial Numbers tab.
+2. ~~The Batches tab / page route is on hold~~ — **resolved 2026-09-11** by Phase 6 —
+   Product Detail Page (#50, `feature/product-detail-page`): `/masters/products/[id]/
+   batches` now renders `ProductBatchTable`/`ProductBatchForm` unmodified, gated behind
+   `product.isBatchTracked`. See that phase's own paragraph below for the implementation
+   record; spec 51's Serial Numbers tab reuses the identical pattern (a new
+   `isSerialTracked` gate in `getProductDetailTabs`, a sibling route).
 3. **Batch activate/deactivate use the `edit` permission action**, not this codebase's
    usual `LIFECYCLE_ACTION = "delete"` convention every other master's toggle follows —
    a deliberate deviation because the spec's own Security section enumerates only
@@ -496,6 +495,52 @@ prisma`, `npx vitest run` (1253 tests), and `next build` all pass.
    The moment a product is flipped to `isBatchTracked`, every one of those documents will
    reject a movement against it (missing batchId) until its own line editor is retrofitted
    — each is its own follow-up task, not automatic.
+
+Product Detail Page (`feature/product-detail-page`) — a routing/composition-only feature
+(feature-spec 56), no new Prisma model or service logic. New `/masters/products/[id]`
+(Overview tab, default) and `/masters/products/[id]/batches` (Batches tab, shown only when
+`product.isBatchTracked`; redirects to Overview otherwise) routes, reading through the
+unchanged `productService.getProduct`/`productBatchService.listBatches`. `ProductDetailTabs`
+is a route-based tab shell (plain `Link`s highlighted by the active route, not the stateful
+shadcn `Tabs` primitive, since Overview/Batches are separate pages) built on a pure,
+unit-tested `getProductDetailTabs(productId, isBatchTracked)` — the one function spec 51
+extends with a third `isSerialTracked`-gated tab, not a restructure. `ProductOverviewPanel`
+is a read-only display grouped like `ProductForm`'s own sections (Identity, Classification,
+Tax, Pricing, Stock). The Batches tab composes spec 50's unmodified `ProductBatchTable`/
+`ProductBatchForm` via a new `ProductBatchesPanel` client component (dialog state neither of
+those components owns itself) — deliberately placed under `products/`, not
+`product-batches/`, since that module's own spec reserves no new components. Added a
+dynamic-breadcrumb mechanism (`useBreadcrumbLabel`/`useBreadcrumbLabels`,
+`src/hooks/use-breadcrumb-label.ts`, a module-level external store consumed via
+`useSyncExternalStore`) so a page can register its own id segment's label (the product's
+name) without `BreadcrumbBar` fetching anything itself — every other route keeps the
+existing "drop the id segment" behavior unchanged. Also added a "View" row action to the
+Product Table (alongside the existing Edit) and widened `product-batch-actions.ts`'s
+`revalidatePaths` to include the new Batches route. Browser-verified end-to-end with
+Playwright against the dev server (login → product list → View → Overview render →
+breadcrumb shows the product's name → Edit link → not-found for a bogus id; a fresh
+batch-tracked product → Batches tab → New Batch dialog → create → row appears → toggling
+batch tracking back off → `/batches` redirects to Overview) — this caught and fixed one real
+bug pre-merge: the breadcrumb store originally mutated one shared `Map` in place, which
+`useSyncExternalStore` treats as no change (`Object.is` on the same reference), so the bar
+never re-rendered; fixed by replacing the map with a new instance on every write. `npx tsc
+--noEmit`, `npx eslint src prisma`, `npx vitest run` (1256 tests), and `next build` all
+pass; `/masters/products/[id]` and `/masters/products/[id]/batches` appear in the build
+route table.
+
+**Known deviation, recorded per `ai-workflow-rules.md`:** the Code Standards section of
+feature-spec 56 calls for Vitest coverage of two page-level behaviors — the Batches route's
+redirect-to-Overview for a non-batch-tracked product, and not-found for a cross-company/
+non-existent id. This codebase has no Next.js page/component-rendering test infrastructure
+at all (zero `.test.tsx` files anywhere; `vitest.config.ts` runs `environment: "node"` and
+only collects `*.test.ts`) — no prior feature's page-level behavior has ever been unit
+tested, only its underlying service/repository logic. Consistent with that precedent: the
+redirect condition (`!product.isBatchTracked`) is a one-line read of an already-tested
+`Product` field, and the not-found path is `productService.getProduct`'s existing,
+unmodified cross-company-returns-null behavior (feature-spec 25) — neither is new logic this
+spec introduces. What *is* new (the tab-list construction, including the batch-tracked-gate
+rule) is unit tested in `product-detail-tabs.test.ts`. Both page behaviors were additionally
+exercised directly against a live browser (see above) rather than left unverified.
 
 Opening Stock (`feature/opening-stock`, merged into `main`) — the thin UI/service layer
 directly over the already-shipped Inventory Engine (feature-spec 32): no new Prisma
