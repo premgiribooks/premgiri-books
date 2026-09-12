@@ -26,10 +26,13 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // (68-sales-reports.md, tracker #66) is the fifth, and the first of the
 // phase's operational reports. Purchase Reports (69-purchase-reports.md,
 // tracker #67) is the sixth — a direct mirror of Sales Reports from the
-// purchase side. The remaining five Reporting-phase screens (tracker
-// #68-72, spec files 70-74) still reserve their own card here as an
-// unavailable placeholder, matching 57-gst-registers.md's own "hub exists
-// before every sibling screen does" precedent.
+// purchase side. Inventory Reports (70-inventory-reports.md, tracker #68) is
+// the seventh, composing the Inventory Engine's already-reserved
+// getCurrentStock/getStockLedger/getStockValuation primitives. The remaining
+// four Reporting-phase screens (tracker #69-72, spec files 71-74) still
+// reserve their own card here as an unavailable placeholder, matching
+// 57-gst-registers.md's own "hub exists before every sibling screen does"
+// precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -78,7 +81,7 @@ const REPORT_MODULES = [
     icon: Package,
     title: "Inventory Reports",
     description: "Current stock, stock ledger, and stock valuation.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/customers",

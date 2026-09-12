@@ -25,7 +25,7 @@ import {
   type StockMovementLineInput,
   type TransferStockInput,
 } from "@/engines/inventory/inventory-validation";
-import { getBatchStock, getCurrentStock } from "@/engines/inventory/inventory-queries";
+import { getBatchStock, getCurrentStock, getStockLedger, getStockValuation } from "@/engines/inventory/inventory-queries";
 import type { RecordedStockTransaction, TransferStockResult } from "@/engines/inventory/types";
 import {
   stockTransactionRepository,
@@ -486,4 +486,9 @@ export const inventoryEngine = {
   transferStock,
   getCurrentStock,
   getBatchStock,
+  // 70-inventory-reports.md wires these two onto the public engine facade —
+  // both already existed in inventory-queries.ts (reserved by spec 32 for
+  // exactly this consumer), so this is exposure only, not a new query.
+  getStockLedger,
+  getStockValuation,
 };

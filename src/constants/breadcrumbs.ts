@@ -67,6 +67,16 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   "purchase/register": "Purchase Register",
   "purchase/item-wise": "Item-wise Purchases",
   "purchase/party-wise": "Party-wise Purchases",
+  // 70-inventory-reports.md: "reports/inventory" disambiguates against the
+  // bare "inventory" key (/inventory's own hub, spec 32's Phase 5 screens).
+  // "current-stock"/"ledger"/"valuation"/"low-stock" have no existing
+  // bare-key collision anywhere else in this table, so they're added
+  // unqualified rather than as composite keys.
+  "reports/inventory": "Inventory Reports",
+  "current-stock": "Current Stock",
+  ledger: "Stock Ledger",
+  valuation: "Stock Valuation",
+  "low-stock": "Low Stock",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",
