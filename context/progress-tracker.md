@@ -2312,9 +2312,13 @@ Mapping so far:
   characteristics the original Trial Balance check it mirrors already has, flagged only for
   awareness.
 
-  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #70 stays ⬜) and
-  merge into `main` not requested this session — awaiting explicit user go-ahead for
-  either, per this batch's own established two-step pattern.
+  **Marked done 2026-09-12 per explicit user instruction** ("mark as done"). Merge into
+  `main` deferred by choice, not blocked — implementation sits reviewed and committed on
+  `feature/inventory-reports` (commits `7f699b9`, `7ffbdce`), matching Customer Reports'
+  own still-pending merge (and naturally sequenced after it, since this branch was
+  branched from it, and Customer Reports' own tracker #69 has not itself been marked done
+  yet — not touched here, since only Supplier Reports was named in this instruction).
+  Tracker #70 flipped to ✅ in `context/Phases/phase-tracker.md`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

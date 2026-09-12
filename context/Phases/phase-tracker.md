@@ -935,7 +935,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 67  | Purchase Reports  | Purchase       | ✅     |
 | 68  | Inventory Reports | Inventory      | ✅     |
 | 69  | Customer Reports  | Customers      | ⬜     |
-| 70  | Supplier Reports  | Suppliers      | ⬜     |
+| 70  | Supplier Reports  | Suppliers      | ✅     |
 | 71  | Employee Reports  | Employees      | ⬜     |
 | 72  | GST Reports       | GST            | ⬜     |
 
