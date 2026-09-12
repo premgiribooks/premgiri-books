@@ -84,7 +84,7 @@ Mapping so far:
 | 67           | Cash Flow (`67-cash-flow.md`)                                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#65) — **implemented 2026-09-12**; uses the direct method (not indirect), justified against this codebase's already-transaction-level ledger data; adds one new read-only `getCashAndBankLedgerIds` helper and one new `ledgerRepository.findAllForValidation` helper |
 | 68           | Sales Reports (`68-sales-reports.md`)                                          | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#66) — **spec drafted 2026-09-11, not implemented**; MVP scoped to Sales Register/Item-wise/Party-wise/Return Summary over Sales Invoice/Return only |
 | 69           | Purchase Reports (`69-purchase-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#67) — **spec drafted 2026-09-11, not implemented**; direct mirror of spec 68 from the purchase side |
-| 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **spec drafted 2026-09-11, not implemented**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
+| 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **implemented 2026-09-12**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
 | 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **spec drafted 2026-09-11, not implemented**; Outstanding Report calls `voucherEngine.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
 | 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **spec drafted 2026-09-11, not implemented**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
 | 73           | Employee Reports (`73-employee-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#71) — **spec drafted 2026-09-11, not implemented**; reads Payroll's exact posted snapshot shape, adds one new bulk `getAttendanceSummaryBulk` method |
@@ -2098,6 +2098,64 @@ Mapping so far:
   ("Merge Without Review"). Implementation sits reviewed and committed on
   `feature/purchase-reports` (commit `6b8d22e`), awaiting explicit user go-ahead to
   merge.
+- **Inventory Reports (#68, spec 70) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (branched from `feature/purchase-reports`, itself not yet
+  merged), per explicit user instruction ("start Inventory Reports"), immediately
+  following Purchase Reports (#67) in the same session — the third of Phase 10's seven
+  operational reports. **No new Prisma model, enum, field, or migration, and no
+  amendment to any existing module's repository** — this is the one spec in the batch
+  whose engine already exposed every query primitive it needed
+  (`inventoryEngine.getCurrentStock`/`getStockLedger`/`getStockValuation`, reserved by
+  spec 32); the only engine-facade change was wiring the already-implemented
+  `getStockLedger`/`getStockValuation` from `inventory-queries.ts` onto the public
+  `inventoryEngine` object (2-line addition). Four views (Current Stock, Stock Ledger,
+  Stock Valuation, Low Stock/Reorder); a new pure `src/engines/reporting/
+  inventory-reports.ts`; a new `src/modules/reports/inventory/` module; new
+  `/reports/inventory*` pages.
+
+  **Deliberate deviation from the spec's own literal wording**: the spec says the Low
+  Stock Report's composition calls `productService.listSelectableProducts()` — this
+  would 403 the seeded Accountant role (`reports:view` but not `masters:view`), the same
+  permission-mismatch precedent Purchase/Sales Reports' own `listProductOptions`/
+  `listWarehouseOptions` already established, so `inventory-report-service.ts` queries
+  `prisma.product`/`prisma.warehouse` directly instead (read-only display/join data,
+  gated only by `reports:view`), consistent with — not a departure from — this batch's
+  actual precedent.
+
+  **Two structural gaps in the spec's literal "filter getCurrentStock's own rows" design
+  were closed rather than silently reproduced**: `getCurrentStock` only groups over rows
+  with an existing `StockTransaction`, so (a) a never-moved product's zero stock has no
+  row to show it as zero on Current Stock, and (b) — more importantly — a product with
+  `minStockLevel` configured but zero movement anywhere (the single most urgent Low Stock
+  case) would never appear at all. Both reports add one synthetic zero-quantity row per
+  such product (Current Stock only when its own "show zero-stock products too" toggle is
+  on; Low Stock unconditionally, since a configured threshold with nothing in stock is
+  never *not* worth surfacing) — recorded explicitly in code comments and covered by
+  dedicated tests rather than left as an undocumented judgment call.
+
+  **Stock Ledger's reference-label resolution** goes one step past the spec's minimum
+  ("known referenceType -> friendly label") by resolving a real document number for six
+  known types (Sales/Purchase Invoice, Sales/Purchase Return, Credit/Debit Note) via one
+  batched Prisma lookup per distinct referenceType actually present in a given ledger
+  call (never one query per line) — e.g. "Sales Invoice #INV-0001" — falling back to the
+  bare friendly name if the document's number is still null (DRAFT), the raw
+  `referenceType` string for a real-but-non-document-header type (Stock Adjustment,
+  Physical Verification), and the humanized `transactionType` for a null `referenceType`
+  (Opening Stock, Transfer).
+
+  22 new vitest cases (15 Reporting Engine + 7 service-layer) — 1814/1814 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+  `next build` all pass; `/reports/inventory*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as Purchase Reports' own note:
+  no browser-automation tooling available; not independently re-verified via `curl`
+  either this time, since the routing-layer behavior (auth-redirect on every new page)
+  is already established by that prior spec's identical check and this session's own
+  `next build` route-table confirmation. Business-logic correctness is carried entirely
+  by the new Reporting Engine/service vitest fixtures.
+
+  **Not yet code-reviewed/security-reviewed or merged** — sits committed on
+  `feature/inventory-reports`, awaiting explicit user go-ahead for either.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
