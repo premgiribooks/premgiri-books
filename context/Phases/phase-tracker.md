@@ -929,7 +929,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | --- | ----------------- | -------------- | ------ |
 | 62  | Trial Balance     | Voucher Engine | ✅     |
 | 63  | Profit & Loss     | Accounting     | ✅     |
-| 64  | Balance Sheet     | Accounting     | ⬜     |
+| 64  | Balance Sheet     | Accounting     | ✅     |
 | 65  | Cash Flow         | Accounting     | ⬜     |
 | 66  | Sales Reports     | Sales          | ⬜     |
 | 67  | Purchase Reports  | Purchase       | ⬜     |
@@ -1103,6 +1103,100 @@ route) rather than crashing. This is a recorded gap, not a silent skip — a fol
 Playwright-driven click-through (financial year + date range changes, expand/collapse
 sections, negative Net Profit color, out-of-range date validation) is still owed before this
 can be considered as fully verified as Trial Balance was.
+
+**Balance Sheet (#64, spec 66) implemented 2026-09-12** on branch `feature/balance-sheet`,
+per explicit user instruction ("start Balance Sheet"), immediately following Profit & Loss
+(#63) in the same session. The third tenant of the Reporting Engine and the `/reports` hub,
+reusing both exactly as spec 66 calls for. **No new Prisma model, enum, field, or migration**
+— the spec's own research brief resolved the classification gap it raised: `LedgerGroup.
+natureType` already provides the statutory Balance-Sheet head classification this report
+needs (Capital Account/Reserves & Surplus/Loans/Current Liabilities already seed
+`natureType = LIABILITY`; Fixed Assets/Investments/Current Assets/Misc. Expenses already seed
+`natureType = ASSET`), so no `groupNature`/`headType` field was added.
+
+New `src/engines/reporting/balance-sheet.ts` (`buildBalanceSheetReport`, pure), reusing
+`ledger-classification.ts`'s `buildLedgerGroupIndex` exactly as `trial-balance.ts` and
+`profit-and-loss.ts` do. A single `voucherEngine.getTrialBalance(companyId, financialYearId,
+asOfDate)` call (a point-in-time snapshot, unlike Profit & Loss's two-call diff) supplies
+every figure: Assets side = every `ASSET`-nature ledger's `closingBalance` used directly;
+Liabilities side (raw) = every `LIABILITY`-nature ledger's `closingBalance`, sign-flipped
+(`-closingBalance`). The Current-Period Profit & Loss plug is **never independently
+recomputed** — it is `profitAndLossService.getProfitAndLoss`'s own `netProfit` figure (called
+FY-to-date, `financialYear.startDate` through this report's own `asOfDate`), appended to the
+Liabilities side as a synthetic "Profit & Loss Account (Current Period)" section (a loss
+renders as a negative figure, never hidden). `isBalanced = totalAssets === totalLiabilities`
+(both rounded to 2 decimals, `totalLiabilities` inclusive of the plug) is a genuine computed
+check, not a hardcoded `true` — a dedicated test supplies a deliberately mismatched plug and
+asserts it flags `false`.
+
+`src/modules/reports/services/balance-sheet-service.ts` (`balanceSheetService.
+getBalanceSheet`) is the only I/O: resolves the caller's company from session, gates on
+`reports`/`view` (no permission-catalog change needed), re-verifies the requested Financial
+Year belongs to the caller's own company, validates the as-of date against that FY's own
+`[startDate, endDate]` range, then calls `voucherQueries.getTrialBalance`,
+`ledgerGroupRepository.findMany`, and `profitAndLossService.getProfitAndLoss` (FY-to-date, in
+parallel) before handing the results to `buildBalanceSheetReport`. Reuses
+`trialBalanceFiltersSchema` (the as-of-date shape) verbatim — no new schema file, exactly as
+spec 64 anticipated when it wrote that schema for Balance Sheet's own future reuse.
+
+New `/reports/balance-sheet` (Financial Year + As-Of-Date filter bar — the same
+`financial-year-as-of-date-filter-bar.tsx` Trial Balance already built, reused unmodified; a
+two-column Liabilities-left/Assets-right layout per Indian/Tally convention, each grouped by
+Ledger Group with subtotals, a visible balanced/unbalanced indicator, and a grand-total row
+per side) and a new `balance-sheet-statement.tsx` component — a dedicated per-report renderer
+(single signed "value" column) matching `profit-and-loss-statement.tsx`'s own established
+precedent over genericizing `trial-balance-group-tree.tsx`. Wired the `/reports` hub's
+"Balance Sheet" card (added, unlinked, by spec 64) to `/reports/balance-sheet` and added the
+`balance-sheet` breadcrumb label. A forward-noted, currently-unused
+`getBalanceSheetReportAction` Server Action exists alongside the service, mirroring Trial
+Balance/Profit & Loss's own precedent.
+
+**Known Limitation carried forward from the spec, not fixed here (out of scope):** a Balance
+Sheet run for any Financial Year after the company's first will not include prior years'
+postings unless `Ledger.openingBalance` was manually re-entered for that later year — no
+year-end-closing/opening-balance-carry-forward mechanism exists yet
+(`09-financial-year.md`'s own deferred scope). Flagged here again as a follow-up for whichever
+future spec finally builds Financial-Year closing.
+
+17 new vitest cases (engine: Assets/Liabilities balanced against both a profitable and a
+loss-making Net Profit plug, `LIABILITY`-nature sign-flip, `ASSET`-nature direct value,
+synthetic P&L plug section appended under Liabilities, `isBalanced` correctly `false` against
+a deliberately mismatched fixture proving the check is real, nested-LIABILITY-group subtotal
+rollup, INCOME/EXPENSE-nature discard from both sides; service: `reports:view` permission
+gate, cross-company Financial Year rejection, missing-FY rejection, both as-of-date range
+boundaries accepted/rejected, `profitAndLossService.getProfitAndLoss` called with the FY's own
+`startDate` through `asOfDate` — asserted on the call arguments, not just the resulting
+numbers, per the spec's own requirement — company-scoped fetch calls, netProfit passthrough)
+— 1671/1671 total suite passing. `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the
+same 2 pre-existing unrelated warnings), `npx vitest run`, and `next build` all pass;
+`/reports/balance-sheet` appears in the build route table.
+
+**Code review + security review (run in parallel) both APPROVE, zero CRITICAL/HIGH/MEDIUM/LOW
+findings from either.** Code review confirmed all six requested areas directly against the
+diff: no independent Net Profit recomputation (asserted via the mocked P&L service's call
+arguments, not just matching numbers), correct sign-flip/balancing-identity math, a genuine
+computed `isBalanced` (proven by the mismatched-fixture test), cross-company isolation/
+permission gating matching the sibling services line-for-line, no `any`/duplicated logic,
+and full Code-Standards test coverage per the spec. Security review gave an explicit PASS on
+all six requested areas (permission enforcement at both page and service boundary, IDOR/
+cross-tenant isolation on `financialYearId` re-verified independently by both this service and
+the nested Profit & Loss call, input validation of every `searchParams`/raw-filter value via
+the reused Zod schema, no information disclosure via thrown errors, no raw-SQL/eval/XSS
+surface, no hardcoded secrets) — empty findings list, explicitly stated as passing.
+
+**Merged into `main` 2026-09-12** — `feature/balance-sheet` merged `--no-ff` (`ef189b0`, on
+top of feature commit `efe5ade`), no conflicts, checks re-verified green against the merged
+result (`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` 1671/1671, `next build`),
+then pushed to `origin/main`. Feature branch deleted post-merge per the one-branch-at-a-time
+rule.
+
+Manual/browser UI verification was **not** performed this session (no browser-automation tool
+was available, same recorded gap as Profit & Loss) — confirmed instead via `curl` that
+`/reports/balance-sheet` resolves through the app's auth middleware correctly (307 redirect to
+`/login` for an unauthenticated request) rather than crashing. A follow-up Playwright-driven
+click-through (financial year + as-of-date changes, expand/collapse sections, the balanced/
+unbalanced indicator, out-of-range date validation) is still owed for both this and Profit &
+Loss before either can be considered as fully verified as Trial Balance was.
 
 ---
 

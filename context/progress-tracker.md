@@ -1911,6 +1911,51 @@ Mapping so far:
   Balance's own) is still owed. Payroll (#61, Phase 9) and Balance Sheet (#64, Phase 10)
   remain the two outstanding items — still awaiting explicit instruction on which to
   resume next.
+- **Balance Sheet (Phase 10 — Reporting #64, spec 66) implemented 2026-09-12** on branch
+  `feature/balance-sheet`, per explicit user instruction ("start Balance Sheet") — the
+  third tenant of the Reporting Engine and the `/reports` hub. See
+  `context/Phases/phase-tracker.md`'s Phase 10 section for the full implementation
+  record: **no new Prisma model/field/migration** — the spec's own research brief
+  resolved its classification-gap question by confirming `LedgerGroup.natureType`
+  already suffices. `buildBalanceSheetReport` (pure, no I/O) computes Assets directly
+  from every `ASSET`-nature ledger's `closingBalance` and Liabilities (raw) from every
+  `LIABILITY`-nature ledger's sign-flipped `closingBalance`, both from one
+  `voucherEngine.getTrialBalance` call (a point-in-time snapshot, unlike Profit & Loss's
+  two-call diff). The Current-Period Net Profit/Loss plug is never independently
+  recomputed — it is `profitAndLossService.getProfitAndLoss`'s own `netProfit` (FY-to-
+  date through the report's `asOfDate`), appended to the Liabilities side as a synthetic
+  "Profit & Loss Account (Current Period)" line. `isBalanced` is a genuine computed
+  `totalAssets === totalLiabilities` check, verified by a test that deliberately
+  mismatches the plug and asserts `false`. New `/reports/balance-sheet` (Financial Year
+  + As-Of-Date filter bar reused unmodified from Trial Balance; a two-column
+  Liabilities-left/Assets-right layout per Indian/Tally convention with a balanced/
+  unbalanced indicator) and the `/reports` hub's "Balance Sheet" card wired live. 17 new
+  vitest cases — 1671/1671 total suite passing; `npx tsc --noEmit`, `npx eslint src
+  prisma`, and `next build` all pass; `/reports/balance-sheet` appears in the build
+  route table.
+
+  **Code review + security review (run in parallel) both APPROVE, zero CRITICAL/HIGH/
+  MEDIUM/LOW findings from either.** Code review confirmed no independent Net Profit
+  recomputation (asserted via the mocked P&L service's call arguments), correct sign-
+  flip/balancing math, a genuine `isBalanced` check, and cross-company isolation/
+  permission gating matching the sibling services exactly. Security review gave an
+  explicit PASS on permission enforcement, IDOR/cross-tenant isolation (re-verified
+  independently by both this service and the nested Profit & Loss call), input
+  validation, no information disclosure, and no other OWASP-relevant gap — empty
+  findings list.
+
+  **Merged into `main` 2026-09-12** (`--no-ff`, no conflicts, `ef189b0` on top of feature
+  commit `efe5ade` — `tsc`/`eslint`/`vitest` (1671/1671)/`next build` all re-verified
+  green against the merged result, then pushed to `origin/main`); `feature/balance-sheet`
+  deleted locally afterward.
+  **No browser/Playwright click-through was performed this session** (no browser-
+  automation tool was available, same recorded gap as Profit & Loss) — confirmed only
+  via `curl` that the route resolves through the auth middleware (307 to `/login`)
+  rather than crashing; a follow-up Playwright-driven verification (matching Trial
+  Balance's own) is still owed for both this and Profit & Loss. Payroll (#61, Phase 9)
+  and Cash Flow (#65, Phase 10) are now the two outstanding items closest to this
+  project's documented order — still awaiting explicit instruction on which to resume
+  next.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
