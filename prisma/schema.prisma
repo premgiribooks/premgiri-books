@@ -117,6 +117,7 @@ model Company {
   debitNotes            DebitNote[]
   gstFilingRecords      GstFilingRecord[]
   employees             Employee[]
+  attendanceRecords     Attendance[]
 
   @@index([companyName])
 }
@@ -227,9 +228,10 @@ model Branch {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  company    Company     @relation(fields: [companyId], references: [id])
-  warehouses Warehouse[]
-  employees  Employee[]
+  company           Company      @relation(fields: [companyId], references: [id])
+  warehouses        Warehouse[]
+  employees         Employee[]
+  attendanceRecords Attendance[]
 
   // Referenced by Warehouse's (and now Employee's) composite tenant-safe FK
   // (companyId, branchId) → (companyId, id); Postgres requires a unique
@@ -732,6 +734,8 @@ model Employee {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  attendanceRecords Attendance[]
+
   @@unique([companyId, employeeCode])
   // Required alongside the plain userId @unique above for Prisma to accept
   // the composite (companyId, userId) FK as a valid one-to-one relation —
@@ -739,8 +743,59 @@ model Employee {
   // independently of the user, so no two Employee rows sharing a userId can
   // ever legitimately carry different companyId values.
   @@unique([companyId, userId])
+  // Referenced by Attendance's composite tenant-safe FK (companyId,
+  // employeeId) -> Employee(companyId, id) — mirrors Branch's own
+  // (companyId, id) unique constraint, added by 62-attendance.md's security
+  // review for the same reason: the DB itself must reject a cross-company
+  // employee link, not just the repository's assertActiveEmployee check.
+  @@unique([companyId, id])
   @@index([companyId])
   @@index([branchId])
+}
+
+// 62-attendance.md's Data Model — one row per (employee, date), the atomic
+// fact Payroll's getAttendanceSummary (63-payroll.md) aggregates from. No
+// sub-typed leave taxonomy: ON_LEAVE is a single undifferentiated status.
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+model Attendance {
+  id         String           @id @default(uuid())
+  companyId  String
+  company    Company          @relation(fields: [companyId], references: [id])
+  // Composite tenant-safe FK (companyId, employeeId) -> Employee(companyId,
+  // id) — security-review fix mirroring branchId below and
+  // 61-employee-master.md's own userId/branchId precedent: the DB itself
+  // rejects a cross-company employee link as defense-in-depth behind
+  // attendance-repository.ts's assertActiveEmployee check.
+  employeeId String
+  employee   Employee         @relation(fields: [companyId, employeeId], references: [companyId, id])
+  // Denormalized from the employee's own branchId at entry time (not a live
+  // join) — mirrors PurchaseInvoiceItem.warehouseId, so a later change to the
+  // employee's branch assignment never retroactively reclassifies historical
+  // attendance. Optional: a company with no branches, or an employee with no
+  // branch assignment, still records attendance normally. Composite
+  // tenant-safe FK (companyId, branchId) -> Branch(companyId, id), mirroring
+  // Employee.branchId — the DB itself rejects a cross-company branch as
+  // defense-in-depth, the same posture 61-employee-master.md's security
+  // review established for this codebase's optional branch links.
+  branchId   String?
+  branch     Branch?          @relation(fields: [companyId, branchId], references: [companyId, id])
+  date       DateTime         @db.Date
+  status     AttendanceStatus
+  remarks    String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  // At most one status per employee per calendar day — markAttendance is an
+  // upsert against this constraint, never a second row for a corrected day.
+  @@unique([companyId, employeeId, date])
+  @@index([companyId, date])
+  @@index([employeeId, date])
 }
 
 // Trading Product / Service / Expense Item per architecture-context.md's
