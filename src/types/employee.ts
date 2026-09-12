@@ -38,6 +38,12 @@ export type EmployeeStatusFilter = "all" | "active" | "inactive";
 export interface EmployeeListFilters {
   search?: string;
   status?: EmployeeStatusFilter;
+  /** 73-employee-reports.md's Employee Directory view — contains-match, since
+   * neither field is an enum (61-employee-master.md's own deliberate
+   * decision). */
+  department?: string;
+  designation?: string;
+  branchId?: string;
 }
 
 export type ActivateEmployeeResult =

@@ -29,6 +29,10 @@ export const INDIRECT_INCOMES_GROUP_NAME = "Indirect Incomes";
 // group already seeds SUNDRY_CREDITORS_GROUP_NAME under.
 export const PURCHASE_ACCOUNTS_GROUP_NAME = "Purchase Accounts";
 export const DUTIES_AND_TAXES_GROUP_NAME = "Duties & Taxes";
+// Payroll's ledger-mapping group requirement (63-payroll.md's Ledger Mapping
+// Validation): salaryPayableLedgerId must be under "Current Liabilities" (or
+// a descendant, e.g. a company's own "Provisions"/"Salary Payable" sub-group).
+export const CURRENT_LIABILITIES_GROUP_NAME = "Current Liabilities";
 
 // The three ledger groups a Ledger may only be created under through its
 // owning module's paired transaction (Bank Management, Customer Management,
@@ -54,10 +58,10 @@ export const DEFAULT_LEDGER_GROUPS: readonly DefaultLedgerGroupSeed[] = [
   { name: "Loans (Liability)", parent: null, nature: "LIABILITY", affectsGrossProfit: false },
   { name: "Secured Loans", parent: "Loans (Liability)", nature: "LIABILITY", affectsGrossProfit: false },
   { name: "Unsecured Loans", parent: "Loans (Liability)", nature: "LIABILITY", affectsGrossProfit: false },
-  { name: "Current Liabilities", parent: null, nature: "LIABILITY", affectsGrossProfit: false },
-  { name: SUNDRY_CREDITORS_GROUP_NAME, parent: "Current Liabilities", nature: "LIABILITY", affectsGrossProfit: false },
-  { name: "Duties & Taxes", parent: "Current Liabilities", nature: "LIABILITY", affectsGrossProfit: false },
-  { name: "Provisions", parent: "Current Liabilities", nature: "LIABILITY", affectsGrossProfit: false },
+  { name: CURRENT_LIABILITIES_GROUP_NAME, parent: null, nature: "LIABILITY", affectsGrossProfit: false },
+  { name: SUNDRY_CREDITORS_GROUP_NAME, parent: CURRENT_LIABILITIES_GROUP_NAME, nature: "LIABILITY", affectsGrossProfit: false },
+  { name: "Duties & Taxes", parent: CURRENT_LIABILITIES_GROUP_NAME, nature: "LIABILITY", affectsGrossProfit: false },
+  { name: "Provisions", parent: CURRENT_LIABILITIES_GROUP_NAME, nature: "LIABILITY", affectsGrossProfit: false },
   { name: "Fixed Assets", parent: null, nature: "ASSET", affectsGrossProfit: false },
   { name: "Investments", parent: null, nature: "ASSET", affectsGrossProfit: false },
   { name: "Current Assets", parent: null, nature: "ASSET", affectsGrossProfit: false },

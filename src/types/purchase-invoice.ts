@@ -232,3 +232,61 @@ export interface GoodsReceiptNotePrefill {
   purchaseOrderId: string | null;
   lines: GoodsReceiptNoteInvoiceLineOption[];
 }
+
+// --- Purchase Reports (69-purchase-reports.md) — Item-wise and Party-wise
+// aggregate queries, amended onto this module per that spec's own Service /
+// Repository section. Mirrors src/types/sales-invoice.ts's identical
+// addition for 68-sales-reports.md. Both are always POSTED-only (no status
+// override, unlike the Purchase Register) and always scoped to the caller's
+// own company + the active financial year.
+
+export interface ItemWisePurchaseFilters {
+  fromDate: Date;
+  toDate: Date;
+  productId?: string;
+  warehouseId?: string;
+  supplierId?: string;
+}
+
+/** One product's summed figures across every matching POSTED invoice line —
+ * `cgst`/`sgst`/`igst`/`cess` are kept separate here (already-stored,
+ * already-summed values); combining them into a single "Total Tax" display
+ * figure is the Reporting Engine's job (src/engines/reporting/
+ * purchase-reports.ts), never this repository's. */
+export interface ItemWisePurchaseAggregateRow {
+  productId: string;
+  productName: string;
+  productCode: string;
+  quantity: number;
+  taxableAmount: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  totalAmount: number;
+  /** Count of DISTINCT invoices this product appeared on within the filter —
+   * never a raw line-row count, which would over-count a product billed
+   * twice on the same invoice. */
+  invoiceCount: number;
+}
+
+export interface PartyWisePurchaseFilters {
+  fromDate: Date;
+  toDate: Date;
+}
+
+/** One supplier's summed figures across every matching POSTED invoice. Unlike
+ * `PartyWiseSalesAggregateRow`, `supplierId` is never null — every Purchase
+ * Invoice has a required `supplierId` (no Quick/Walk-in equivalent, spec 44),
+ * so no synthetic-bucket handling is needed here. */
+export interface PartyWisePurchaseAggregateRow {
+  supplierId: string;
+  supplierName: string;
+  invoiceCount: number;
+  taxableAmount: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  grandTotal: number;
+}

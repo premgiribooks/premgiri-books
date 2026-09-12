@@ -84,9 +84,9 @@ Mapping so far:
 | 67           | Cash Flow (`67-cash-flow.md`)                                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#65) — **implemented 2026-09-12**; uses the direct method (not indirect), justified against this codebase's already-transaction-level ledger data; adds one new read-only `getCashAndBankLedgerIds` helper and one new `ledgerRepository.findAllForValidation` helper |
 | 68           | Sales Reports (`68-sales-reports.md`)                                          | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#66) — **spec drafted 2026-09-11, not implemented**; MVP scoped to Sales Register/Item-wise/Party-wise/Return Summary over Sales Invoice/Return only |
 | 69           | Purchase Reports (`69-purchase-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#67) — **spec drafted 2026-09-11, not implemented**; direct mirror of spec 68 from the purchase side |
-| 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **spec drafted 2026-09-11, not implemented**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
-| 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **spec drafted 2026-09-11, not implemented**; Outstanding Report calls `voucherEngine.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
-| 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **spec drafted 2026-09-11, not implemented**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
+| 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **implemented 2026-09-12**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
+| 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **implemented 2026-09-12**; Outstanding Report calls `voucherQueries.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
+| 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **implemented 2026-09-12**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
 | 73           | Employee Reports (`73-employee-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#71) — **spec drafted 2026-09-11, not implemented**; reads Payroll's exact posted snapshot shape, adds one new bulk `getAttendanceSummaryBulk` method |
 | 74           | GST Reports (`74-gst-reports.md`)                                               | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#72) — **spec drafted 2026-09-11, not implemented**; last item in Phase 10, closing it; an analytical dashboard over specs 57/60's data, explicitly distinct from Phase 8's statutory filing screens, gated by both `reports:view` and `gst:view` |
 | 75           | Global Search (`75-global-search.md`)                                          | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#73) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers/Ledgers, wired into the shell's existing Top Navbar search placeholder as a `Ctrl+K` overlay |
@@ -2049,6 +2049,453 @@ Mapping so far:
   `c3fa1be` — no conflicts, `tsc`/`eslint`/`vitest` (1744/1744)/`next build` all
   re-verified green against the merged result). `feature/sales-reports` deleted locally
   per the one-branch-at-a-time rule. Not yet pushed to `origin/main` this session.
+- **Purchase Reports (#67, spec 69) implemented 2026-09-12** on branch
+  `feature/purchase-reports`, per explicit user instruction ("start Purchase Reports"),
+  immediately following Sales Reports (#66) in the same session — the purchase-side
+  mirror of spec 68, the second of Phase 10's seven operational reports (#66–72). **No
+  new Prisma model, enum, field, or migration** — every figure is read directly from an
+  already-posted `PurchaseInvoice`/`PurchaseInvoiceItem`/`PurchaseReturn` row or a plain
+  sum/group of those stored columns. Four views (Purchase Register, Item-wise Purchases,
+  Party-wise Purchase Summary, Purchase Return Summary); two new aggregate repository
+  methods on `purchase-invoice-repository.ts`; new report-scoped service methods on both
+  sibling services (`purchase-invoice-service.ts`, `purchase-return-service.ts`) gated on
+  `reports`/`view` instead of `purchase`/`view`; a new pure `src/engines/reporting/
+  purchase-reports.ts`; a new `src/modules/reports/purchase/` module; new
+  `/reports/purchase*` pages. **Party-wise Purchase Summary needs no synthetic-bucket
+  grouping** — every Purchase Invoice has a required `supplierId` (no Walk-in/Quick
+  equivalent, per spec 44), a genuine simplification over Sales Reports' own
+  Walk-in/unconverted-Quick bucketing, recorded explicitly in the types/engine/tests
+  rather than silently assumed symmetric. 48 new vitest cases — 1792/1792 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and `next build`
+  all pass; `/reports/purchase*` appears in the build route table.
+
+  **Code review + security review (run in parallel, before merge) both APPROVE/PASS,
+  zero CRITICAL/HIGH/MEDIUM findings from either.** Security review gave an explicit PASS
+  on cross-tenant isolation/IDOR, authorization (`reports:view` vs `purchase:view`),
+  input validation, and information disclosure — three LOW/informational notes (the
+  in-memory `supplierId` post-filter on Purchase Return Summary fetches more rows than
+  strictly necessary before filtering, matching Sales Reports' identical accepted
+  pattern; the same cosmetic breadcrumb-label collision on `/reports/purchase/returns`
+  spec 68's own comment already documents for its sales counterpart; `productId`/
+  `warehouseId` aren't independently re-verified against the caller's company before
+  entering the `groupBy` where clause, safe today only because Prisma's implicit
+  AND-combination with the sibling `purchaseInvoice: { companyId }` condition means a
+  foreign id naturally yields zero rows) accepted as-is, no fix needed.
+
+  **Not browser-verified this session** — unlike Sales Reports' own Playwright-driven
+  check, no browser-automation tooling (`chromium-cli`, Playwright) was available in
+  this environment, and the login form is a Next.js Server Action (not curl-testable
+  without reverse-engineering the action id). Verified instead via an unauthenticated
+  `curl` smoke test against a locally started `next dev` server: all five new
+  `/reports/purchase*` routes returned the expected `307` auth-redirect (not a `500`),
+  confirming the routes resolve and render at the Next.js routing layer without
+  crashing. Full authenticated click-through (filter bar rendering, empty-state message,
+  zero console errors) was not performed — flagged here explicitly rather than claimed.
+  Business-logic correctness is carried entirely by the new repository/engine vitest
+  fixtures, mirroring Sales Reports' own dev-database-has-no-seeded-data situation.
+
+  **Merge into `main` deferred** — blocked by this session's auto-mode classifier
+  ("Merge Without Review"). Implementation sits reviewed and committed on
+  `feature/purchase-reports` (commit `6b8d22e`), awaiting explicit user go-ahead to
+  merge.
+- **Inventory Reports (#68, spec 70) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (branched from `feature/purchase-reports`, itself not yet
+  merged), per explicit user instruction ("start Inventory Reports"), immediately
+  following Purchase Reports (#67) in the same session — the third of Phase 10's seven
+  operational reports. **No new Prisma model, enum, field, or migration, and no
+  amendment to any existing module's repository** — this is the one spec in the batch
+  whose engine already exposed every query primitive it needed
+  (`inventoryEngine.getCurrentStock`/`getStockLedger`/`getStockValuation`, reserved by
+  spec 32); the only engine-facade change was wiring the already-implemented
+  `getStockLedger`/`getStockValuation` from `inventory-queries.ts` onto the public
+  `inventoryEngine` object (2-line addition). Four views (Current Stock, Stock Ledger,
+  Stock Valuation, Low Stock/Reorder); a new pure `src/engines/reporting/
+  inventory-reports.ts`; a new `src/modules/reports/inventory/` module; new
+  `/reports/inventory*` pages.
+
+  **Deliberate deviation from the spec's own literal wording**: the spec says the Low
+  Stock Report's composition calls `productService.listSelectableProducts()` — this
+  would 403 the seeded Accountant role (`reports:view` but not `masters:view`), the same
+  permission-mismatch precedent Purchase/Sales Reports' own `listProductOptions`/
+  `listWarehouseOptions` already established, so `inventory-report-service.ts` queries
+  `prisma.product`/`prisma.warehouse` directly instead (read-only display/join data,
+  gated only by `reports:view`), consistent with — not a departure from — this batch's
+  actual precedent.
+
+  **Two structural gaps in the spec's literal "filter getCurrentStock's own rows" design
+  were closed rather than silently reproduced**: `getCurrentStock` only groups over rows
+  with an existing `StockTransaction`, so (a) a never-moved product's zero stock has no
+  row to show it as zero on Current Stock, and (b) — more importantly — a product with
+  `minStockLevel` configured but zero movement anywhere (the single most urgent Low Stock
+  case) would never appear at all. Both reports add one synthetic zero-quantity row per
+  such product (Current Stock only when its own "show zero-stock products too" toggle is
+  on; Low Stock unconditionally, since a configured threshold with nothing in stock is
+  never *not* worth surfacing) — recorded explicitly in code comments and covered by
+  dedicated tests rather than left as an undocumented judgment call.
+
+  **Stock Ledger's reference-label resolution** goes one step past the spec's minimum
+  ("known referenceType -> friendly label") by resolving a real document number for six
+  known types (Sales/Purchase Invoice, Sales/Purchase Return, Credit/Debit Note) via one
+  batched Prisma lookup per distinct referenceType actually present in a given ledger
+  call (never one query per line) — e.g. "Sales Invoice #INV-0001" — falling back to the
+  bare friendly name if the document's number is still null (DRAFT), the raw
+  `referenceType` string for a real-but-non-document-header type (Stock Adjustment,
+  Physical Verification), and the humanized `transactionType` for a null `referenceType`
+  (Opening Stock, Transfer).
+
+  22 new vitest cases (15 Reporting Engine + 7 service-layer) — 1814/1814 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+  `next build` all pass; `/reports/inventory*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as Purchase Reports' own note:
+  no browser-automation tooling available; not independently re-verified via `curl`
+  either this time, since the routing-layer behavior (auth-redirect on every new page)
+  is already established by that prior spec's identical check and this session's own
+  `next build` route-table confirmation. Business-logic correctness is carried entirely
+  by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after the feature commit) both
+  APPROVE/PASS, zero CRITICAL/HIGH findings from either.** Code review found zero
+  MEDIUM findings and one LOW note (a product with `minStockLevel` configured as exactly
+  `0` can never appear on the Low Stock Report — a defensible "0 means never reorder"
+  edge case, not a bug, but under-documented/untested). Security review gave an explicit
+  PASS on cross-tenant isolation/IDOR (traced `referenceId` provenance end-to-end through
+  `getStockLedger`'s own `assertProductBelongsToCompany` guard — no path exists for a
+  crafted `productId` to pull another company's referenceIds into the six
+  `DOCUMENT_NUMBER_LOOKUPS` queries), authorization (`reports:view` gated on every public
+  service method, independently re-checked on every page), input validation, and
+  information disclosure — one LOW/informational note (an unmatched `warehouseId` filter
+  value is echoed back verbatim into a synthetic zero-stock row rather than re-validated
+  against the resolved warehouse list; harmless — it doesn't distinguish a nonexistent id
+  from a foreign-company one — but a cosmetic cleanup worth doing later) accepted as-is,
+  no fix needed.
+
+  **Marked done 2026-09-12 per explicit user instruction** ("mark as done"). Merge into
+  `main` deferred by choice, not blocked — implementation sits reviewed and committed on
+  `feature/inventory-reports` (commits `e24324d`, `a249a4d`, `0fedd73`), matching Purchase
+  Reports' own still-pending merge (and naturally sequenced after it, since this branch
+  was branched from it). Tracker #68 flipped to ✅ in `context/Phases/phase-tracker.md`.
+- **Customer Reports (#69, spec 71) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged — not a new branch this session; the branch
+  itself is not yet merged into `main`), per explicit user instruction ("start Customer
+  Reports"), immediately following Inventory Reports (#68) in the same session — the
+  fourth of Phase 10's seven operational reports. **No new Prisma model, enum, field, or
+  migration, and no amendment to any existing module's repository or service** — every
+  primitive this spec needed (`voucherQueries.getTrialBalance`/`getLedgerStatement`,
+  `salesInvoiceService.getPartyWiseSalesReport`) was already public and unmodified. Four
+  views (Outstanding, Statement, Sales Summary, Directory); a new pure
+  `src/engines/reporting/customer-reports.ts`; a new `src/modules/reports/customers/`
+  module; new `/reports/customers*` pages.
+
+  **Deliberate deviations from the spec's own literal wording, all following this batch's
+  own established precedent**: (1) every view queries `prisma.customer` directly
+  (`customer-report-service.ts`'s own `listReportCustomers`/`listCustomerOptions`, and an
+  inline lookup in `getCustomerStatement`) rather than through
+  `customerService.listCustomers`/`getCustomer` (the spec's own literal suggestion) —
+  those are gated on `masters`/`view`, which would 403 the seeded Accountant role
+  (`reports`/`view` only), the exact `listReportProducts`/`listSupplierOptions` precedent
+  Inventory/Purchase/Sales Reports already established. (2) Customer Sales Summary has no
+  `financialYearId` filter, unlike the spec's own filter list — `getPartyWiseSalesReport`
+  scopes to `getCurrentFinancialYear()` internally and has no caller-selectable financial
+  year anywhere else, matching Sales/Purchase Reports' own Party-wise filter shape
+  exactly. (3) the Customer Statement's "reference label resolution" turned out to need no
+  document-number lookup at all (unlike the spec's own comparison to Stock Ledger's
+  DOCUMENT_NUMBER_LOOKUPS map) — `getLedgerStatement`'s own `LedgerStatementLine` already
+  carries `voucherNumber`/`voucherType` directly, so the Statement table just humanizes
+  `voucherType` and splits the single signed `entryType`/`amount` into separate
+  Debit/Credit columns, a simpler composition than the spec anticipated.
+
+  **The Outstanding Report's "customer not in `getTrialBalance`'s result" fallback**
+  (Business Rules #1) is implemented as specified — `buildCustomerOutstandingReport` falls
+  back to the customer's own signed opening balance when no matching ledger row is found —
+  but is expected to be structurally unreachable in practice, since `getTrialBalance`
+  already lists every ledger in the company per its own documented contract; kept as a
+  defensive, tested fallback rather than an assumed-dead branch.
+
+  22 new vitest cases (13 Reporting Engine + 9 service-layer) — 1830/1830 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+  `next build` all pass; `/reports/customers*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as Purchase/Inventory Reports'
+  own note: no browser-automation tooling available. Business-logic correctness is
+  carried entirely by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after the feature implementation)**:
+  code review returned one MEDIUM finding — the Outstanding Report table's column header
+  read "Status" but rendered the Over Limit flag, not the customer's active/inactive
+  state (a naming collision against the Directory report's own, genuinely
+  active/inactive, "Status" column) — fixed immediately (header renamed to "Over Limit").
+  No other CRITICAL/HIGH/MEDIUM findings from either review. Security review gave an
+  explicit PASS on cross-tenant isolation/IDOR (traced both `customerId` in
+  `getCustomerStatement` and `financialYearId` in `getCustomerOutstandingReport` — each
+  rejected before any second query, with an identically-worded "not found" `AppError`
+  regardless of nonexistent-vs-cross-company, so no differential existence signal),
+  authorization (`reports:view` gated first-statement on every public method,
+  independently re-checked on every page), and input validation (every query-string value
+  narrowed before reaching the service layer, then re-validated by its Zod schema before
+  reaching a Prisma `where`) — two INFO-level defense-in-depth notes accepted as-is, no
+  fix needed (`getCustomerStatement`'s cross-company check happens via a post-fetch
+  comparison rather than folding `companyId` into the initial `where`, matching an
+  existing precedent elsewhere in the codebase; `getTrialBalance`/`getLedgerStatement`'s
+  own independent company re-validation is intentional, not redundant-by-accident,
+  defense-in-depth).
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #69 stays ⬜) and
+  merge into `main` not requested this session — awaiting explicit user go-ahead for
+  either, per this batch's own established two-step pattern (implement now, "mark as
+  done"/merge only on separate explicit instruction).
+- **Supplier Reports (#70, spec 72) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged — not a new branch this session; the branch
+  itself is not yet merged into `main`). The user was asked to start Customer Reports but
+  it turned out already implemented/committed earlier the same day; offered a choice
+  between re-reviewing that work or moving to the next unimplemented Reporting item, and
+  the user chose to move on — so this is Supplier Reports (#70), immediately following
+  Customer Reports (#69) — the fifth of Phase 10's seven operational reports (#66–72), and
+  the direct supplier/payables-side mirror of Customer Reports (spec 71) per spec 72's own
+  framing. **No new Prisma model, enum, field, or migration, and no amendment to any
+  existing module's repository or service** — every primitive this spec needed
+  (`voucherQueries.getTrialBalance`/`getLedgerStatement`,
+  `purchaseInvoiceService.getPartyWisePurchaseReport`) was already public and unmodified.
+  Four views (Outstanding, Statement, Purchase Summary, Directory); a new pure
+  `src/engines/reporting/supplier-reports.ts`; a new `src/modules/reports/suppliers/`
+  module; new `/reports/suppliers*` pages.
+
+  **One structural asymmetry from Customer Reports, deliberate and spec-mandated**: the
+  Supplier Outstanding Report has no "Over Limit" flag and `SupplierOutstandingRow` has no
+  `creditLimit` field at all — `Supplier` has no `creditLimit` column in the schema
+  (27-supplier-management.md's own deliberate omission: a credit limit is a cap the
+  business imposes on a debtor, not something meaningful on the payables side). `creditDays`
+  is carried through as informational-only, never a comparison column. Both the Reporting
+  Engine tests and the service tests assert this directly
+  (`expect(...).not.toHaveProperty("isOverLimit"/"creditLimit")`), not just by omission.
+
+  **Deliberate deviations from the spec's own literal wording, the same precedent Customer
+  Reports already established**: (1) every view queries `prisma.supplier` directly
+  (`supplier-report-service.ts`'s own `listReportSuppliers`/`listSupplierOptions`, and an
+  inline lookup in `getSupplierStatement`) rather than through
+  `supplierService.listSuppliers`/`getSupplier` (the spec's own literal suggestion) — those
+  are gated on `masters`/`view`, which would 403 the seeded Accountant role (`reports`/
+  `view` only). (2) Supplier Purchase Summary reuses `purchase-reports.ts`'s own
+  `buildPartyWisePurchaseReport` unmodified via a thin `buildSupplierPurchaseSummary`
+  delegate — no synthetic-bucket filtering needed here (unlike Customer Sales Summary),
+  since every Purchase Invoice has a required, non-null `supplierId` (spec 44's own
+  Decisions) and `getPartyWisePurchaseReport`'s own output already contains no Walk-in/
+  Quick-equivalent rows to exclude.
+
+  **The Outstanding Report's "supplier not in `getTrialBalance`'s result" fallback**
+  (Business Rules #1) is implemented as specified — `buildSupplierOutstandingReport` falls
+  back to the supplier's own signed opening balance when no matching ledger row is found —
+  identically structurally unreachable in practice to Customer Reports' own equivalent
+  fallback, kept as a defensive, tested branch rather than an assumed-dead one.
+
+  16 new vitest cases (8 Reporting Engine + 8 service-layer) — 1846/1846 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+  `next build` all pass; `/reports/suppliers*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as every other report in this
+  batch: no browser-automation tooling available. Business-logic correctness is carried
+  entirely by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after the feature implementation)**:
+  both APPROVE, **zero CRITICAL/HIGH/MEDIUM findings from either review** — the first
+  report in this batch with a fully clean pass on both, no fix-and-reverify cycle needed.
+  Code review confirmed spec adherence (no `creditLimit`/Over Limit concept anywhere, no
+  new Prisma model, no second independent balance/purchase query, no ageing analysis),
+  permission gating, company scoping, and structural consistency with Customer Reports.
+  Security review confirmed permission gating on every public service method, cross-company
+  isolation on `getSupplierStatement`'s `supplierId` and `getSupplierOutstandingReport`'s
+  `financialYearId` (both resolving identically to "not found" for nonexistent vs.
+  cross-company, no differential existence signal), no raw SQL/injection surface, no error
+  detail leakage (`toActionErrorMessage` genericizes non-`AppError` throws), and the
+  read-only invariant (no write path anywhere in the module) — one LOW/informational note,
+  not a defect: the `asOfDate` bounds check shares whatever timezone-boundary
+  characteristics the original Trial Balance check it mirrors already has, flagged only for
+  awareness.
+
+  **Marked done 2026-09-12 per explicit user instruction** ("mark as done"). Merge into
+  `main` deferred by choice, not blocked — implementation sits reviewed and committed on
+  `feature/inventory-reports` (commits `7f699b9`, `7ffbdce`), matching Customer Reports'
+  own still-pending merge (and naturally sequenced after it, since this branch was
+  branched from it, and Customer Reports' own tracker #69 has not itself been marked done
+  yet — not touched here, since only Supplier Reports was named in this instruction).
+  Tracker #70 flipped to ✅ in `context/Phases/phase-tracker.md`.
+- **Payroll (#61, Phase 9, spec 63) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged — every Phase 10 report this session has used
+  the same branch; still not merged into `main`). The user asked to "start Employee
+  Reports" (#71, Phase 10); reading spec 73 in full surfaced that two of its four views
+  (Payroll Register, Salary Register) hard-depend on Payroll's (#61, Phase 9) posted
+  `PayrollRun`/`PayrollRunItem` data, and Payroll itself was still unimplemented —
+  deliberately deferred earlier the same day when the user chose to skip ahead to Trial
+  Balance rather than finish Phase 9 in order (see that entry above). Presented the user
+  three options (implement Payroll first; implement Employee Reports partially, deferring
+  the two Payroll-dependent views; stop and record the blocker) — the user chose to
+  implement Payroll first, restoring normal in-order sequencing (Employee Master →
+  Attendance → Payroll) before Phase 10 continues.
+
+  **Schema**: one migration (`20260912143436_add_payroll`) adding `PayrollRunStatus`
+  enum; `PayrollRun`/`PayrollRunItem` models (spec 63's Data Model, implemented exactly as
+  drafted — `payrollNumber` nullable until posting, mirroring `PurchaseInvoice.
+  invoiceNumber`'s two-step contract; `PayrollRunItem.basicSalary` a snapshot, never a
+  live `Employee.basicSalary` join; `workedDays` `Decimal(5,2)` since `HALF_DAY`
+  contributes `0.5`); `VoucherType.SALARY` and `DocumentType.PAYROLL`/`SALARY_VOUCHER`
+  appended (never reordering the existing ten/twenty-two values); two new nullable
+  `CompanySettings` columns (`salaryExpenseLedgerId`/`salaryPayableLedgerId`). Back-
+  relations added on `Company`, `FinancialYear`, `Employee`, `Voucher`, `User`, `Ledger`.
+
+  **New `src/modules/payroll/` module** (repository/service/validation/actions/
+  components) plus a new `src/modules/payroll/utils/payroll-calculations.ts` (pure
+  worked-day/net-salary arithmetic, paise-safe rounding, mirroring
+  `purchase-invoice-calculations.ts`'s own convention). `createDraft`/`refreshDraft`
+  select every active employee, split into candidates (non-null `basicSalary`) and
+  excluded (shown to the preparer, never blocking draft creation), call
+  `attendanceService.getAttendanceSummary` once per candidate (never re-implementing that
+  per-status counting — the spec's own explicit instruction, distinct from the batched
+  variant Employee Reports needed for its own Attendance Summary view, added separately
+  below), and compute `workedDays = presentDays + 0.5 x halfDays` /
+  `netSalary = round(basicSalary x workedDays / totalDaysInPeriod, 2)` half-up to paise.
+  `postPayrollRun` re-validates every business rule against CURRENT state inside one
+  Serializable transaction (non-overlapping-period check re-run against everything except
+  itself, ledger-mapping completeness/group/active/company-ownership re-checked), recomputes
+  every line fresh from current Attendance/salary data, generates `payrollNumber`, and
+  posts one aggregate `VoucherType.SALARY` voucher — Debit `salaryExpenseLedgerId`, Credit
+  `salaryPayableLedgerId`, both equal to `totalNetSalary`, no round-off/payment lines (the
+  two amounts are identical by construction) — mirroring `purchase-invoice-service.ts`'s
+  `postPurchaseInvoice` orchestration shape exactly, minus the GST/stock/payment steps
+  that don't apply here. `cancelPayrollRun` reverses only the voucher (via
+  `voucherEngine.cancelVoucher`) — attendance is never un-marked, per spec. Post/Cancel
+  gated on `employees`/`approve` (committing/reversing a real company-wide financial
+  liability); Create/Refresh on `employees`/`create`.
+
+  **New Company Settings extension**: `src/modules/company/utils/payroll-ledger-mapping.ts`
+  (`assertPayrollLedgerMappingValid`/`isPayrollLedgerMappingComplete`, mirroring
+  `purchase-ledger-mapping.ts`'s identical shape — two fields instead of six, no
+  round-off concept) and `payroll-ledger-mapping-form.tsx`, added as a new "Payroll
+  Ledgers" section on the existing `/settings/sales-ledgers` page (per the spec's own
+  instruction to extend that page rather than create a new one) — `salaryExpenseLedgerId`
+  must sit under "Indirect Expenses" (or a descendant), `salaryPayableLedgerId` under
+  "Current Liabilities" (or a descendant); added a new exported
+  `CURRENT_LIABILITIES_GROUP_NAME` constant to `default-groups.ts` for the second check
+  (mirroring the existing `INDIRECT_EXPENSES_GROUP_NAME`/`PURCHASE_ACCOUNTS_GROUP_NAME`
+  pattern).
+
+  New `/employees/payroll` (list, search + status filter), `/employees/payroll/new`
+  (period picker → live, never-persisted preview → "Create Draft"), and
+  `/employees/payroll/[id]` (detail, Refresh/Post/Cancel actions) pages; a "Payroll" card
+  added to the `/employees` hub alongside Attendance; `employees/payroll` breadcrumb key
+  added.
+
+  39 new vitest cases (calculations, schema, repository, service — including a full
+  posting-orchestration test asserting the exact two-entry balanced voucher shape, a test
+  confirming `postPayrollRun` rejects a run with nothing to pay rather than building a
+  zero-amount voucher entry, and a test confirming `listPayrollRunsForReport` rejects a
+  malformed `financialYearId` before it reaches the repository — the latter two added
+  during the code/security review fix pass below) — 1909/1909 total suite passing;
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2 pre-existing unrelated
+  warnings), `npx vitest run`, and `next build` all pass; `/employees/payroll*` appears in
+  the build route table.
+
+  **Not browser-verified this session** — no browser-automation tooling available,
+  same reasoning as every report in this batch. Business-logic correctness is carried
+  entirely by the new repository/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after both Payroll and Employee
+  Reports were implemented) found the identical issue independently — 1 HIGH (code), 1
+  MEDIUM (security, same root cause), 1 LOW (security) — all three fixed; no other
+  CRITICAL/HIGH/MEDIUM findings from either review.** (1) **HIGH/MEDIUM, fixed** —
+  `attendanceService.getAttendanceSummaryBulk` (added for Employee Reports' own
+  Attendance Summary view, see that entry below) was gated on `employees`/`view` instead
+  of `reports`/`view`, which would have 403'd the exact seeded Accountant role this whole
+  batch of Payroll re-gating (`listPayrollRunsForReport`/`getEmployeeSalaryHistory`) was
+  done to support — the Attendance Summary Report, the first of Employee Reports' four
+  views, would have failed for that role while the other three worked. Fixed by re-gating
+  to `reports`/`view`, matching `listPayrollRunsForReport`'s own convention; the test that
+  had locked in the wrong gate (`expect(assertPermissionMock).toHaveBeenCalledWith(...,
+  "employees", "view")`) was updated to assert the correct one. (2) **LOW, fixed** —
+  `listPayrollRunsForReport`'s `financialYearId` bypassed schema validation (accepted
+  directly off the raw input object rather than through a Zod schema) before reaching
+  `payrollRunRepository.findMany`'s `where` clause — not currently exploitable (its sole
+  caller, `employee-report-service.ts`, already validates it via `payrollRegisterFiltersSchema`'s
+  `z.uuid()` first), but a defense-in-depth gap for any future caller. Fixed by adding a
+  new `payrollRunReportFiltersSchema` (the operational `payrollRunListFiltersSchema` plus
+  `financialYearId: z.uuid().optional()`, since the operational list only ever resolves
+  its own financial year from the active-FY cookie, never a raw client value) and
+  validating through it. Both fixes re-verified: `npx tsc --noEmit`, `npx eslint src
+  prisma` (0 errors), `npx vitest run` (1909/1909, +2 new regression tests — one for each
+  fix), and `next build` all pass.
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #61 stays ⬜) and
+  merge into `main` not requested this session — the same two-step pattern this batch has
+  followed throughout (implement now, "mark as done"/merge only on separate explicit
+  instruction).
+- **Employee Reports (#71, spec 73) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged), immediately after Payroll (#61) was implemented
+  to unblock it — the sixth of Phase 10's seven operational reports. Four views
+  (Attendance Summary, Payroll Register, Salary Register, Employee Directory); a new pure
+  `src/engines/reporting/employee-reports.ts`; a new `src/modules/reports/employees/`
+  module; new `/reports/employees*` pages; `/reports` hub card flipped from disabled
+  "Coming soon" to linked.
+
+  **Amendments this spec required, in the Attendance and Payroll modules it consumes —
+  never a second, divergent implementation of either module's own logic**:
+  1. `attendanceRepository.aggregateSummaryForEmployees`/`attendanceService.
+     getAttendanceSummaryBulk` — the identical per-status `groupBy` `getSummary` already
+     performs for one employee, parameterized across many via a single
+     `groupBy(["employeeId", "status"])`, reshaped into a per-employee result map. A
+     dedicated parity test confirms the batched result exactly matches calling
+     `getSummary` once per employee individually, against a seeded multi-employee,
+     multi-status fixture.
+  2. `payrollRunService.listPayrollRunsForReport` (new) and `getEmployeeSalaryHistory`
+     (pre-existing from the Payroll entry above, re-gated) both moved to `reports`/`view`
+     instead of `employees`/`view` — the seeded Accountant role has `reports`/`view` but
+     no `employees` module access at all, the exact `listPurchaseInvoicesForReport`/
+     `getPartyWisePurchaseReport` precedent Customer/Supplier/Purchase Reports already
+     established for their own masters-gated services, applied here to the
+     `employees`-gated Payroll module instead.
+  3. `EmployeeListFilters`/`employeeRepository.findMany` gained `department`/
+     `designation`/`branchId` filters (contains-match for the first two, since neither is
+     an enum per spec 61's own decision) — the Employee Directory view's own filters,
+     which spec 73's own text assumed already existed on `employeeService.listEmployees`
+     but didn't; added as a small, backward-compatible (all-optional) extension rather
+     than inventing a second query.
+
+  **Deliberate deviation from the spec's own literal wording, the identical precedent
+  every report in this batch has already established**: every view queries
+  `prisma.employee`/`prisma.branch` directly in `employee-report-service.ts` (its own
+  `listReportEmployees`/`listEmployeeOptions`/`listBranchOptions`) rather than through
+  `employeeService.listEmployees`/`listSelectableEmployees` (the spec's own literal
+  suggestion) — that service gates on `employees`/`view`, which would 403 the seeded
+  Accountant role this module exists to serve. Also: no separate `actions/` file was
+  created despite the spec listing one — every sibling Reports module (Customer,
+  Supplier, Purchase, Inventory) calls its service directly from the Server Component
+  page instead, since every view here is a plain filtered GET-style page with no
+  client-side mutation to wrap in a Server Action; matched that actual, established
+  convention over the spec's literal file list.
+
+  **Unmarked Days** (Attendance Summary's own column) is computed as a plain calendar-day
+  subtraction (`(periodEnd − periodStart + 1) − totalMarkedDays`) inside the Reporting
+  Engine composition layer, never attendance arithmetic — per Business Rules #1's
+  explicit instruction not to assume an unmarked day means present or absent, something
+  spec 62 itself declined to define.
+
+  24 new vitest cases (10 Reporting Engine + 4 attendance-repository/service bulk-parity +
+  10 employee-report-service) — final total 1909/1909 (see the Payroll entry above for
+  the +2 review-fix regression tests added on top); `npx tsc --noEmit`,
+  `npx eslint src prisma` (0 errors, same 2 pre-existing warnings), `npx vitest run`, and
+  `next build` all pass; `/reports/employees*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as every other report in this
+  batch: no browser-automation tooling available. Business-logic correctness is carried
+  entirely by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review: see the Payroll entry above** — both reviews covered
+  this feature's own `getAttendanceSummaryBulk` permission gate (this feature's sole
+  contribution to the one HIGH/MEDIUM finding both reviews independently caught, since
+  Employee Reports is that method's only caller) in the same pass; no other
+  CRITICAL/HIGH/MEDIUM/LOW finding specific to this feature's own code.
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #71 stays ⬜) and
+  merge into `main` not requested this session — same two-step pattern as every report in
+  this batch.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

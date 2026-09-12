@@ -5,6 +5,7 @@ import { isRecordNotFoundError } from "@/modules/company/utils/prisma-errors";
 import type {
   CompanySettingsInput,
   GstFilingFrequencyInput,
+  PayrollLedgerMappingInput,
   SalesLedgerMappingInput,
 } from "@/modules/company/validation/company-schema";
 
@@ -65,6 +66,25 @@ export const companySettingsRepository = {
       return await prisma.companySettings.update({
         where: { companyId },
         data: { gstFilingFrequency: data.gstFilingFrequency },
+      });
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  /** Payroll's (63-payroll.md) two-field ledger mapping — its own partial
+   * update, mirroring updateSalesLedgerMapping's shape. */
+  async updatePayrollLedgerMapping(companyId: string, data: PayrollLedgerMappingInput): Promise<CompanySettings | null> {
+    try {
+      return await prisma.companySettings.update({
+        where: { companyId },
+        data: {
+          salaryExpenseLedgerId: data.salaryExpenseLedgerId ?? null,
+          salaryPayableLedgerId: data.salaryPayableLedgerId ?? null,
+        },
       });
     } catch (error) {
       if (isRecordNotFoundError(error)) {

@@ -24,10 +24,24 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // (66-balance-sheet.md) is the third; Cash Flow (67-cash-flow.md) is the
 // fourth of the phase's four financial reports. Sales Reports
 // (68-sales-reports.md, tracker #66) is the fifth, and the first of the
-// phase's operational reports. The remaining six Reporting-phase screens
-// (tracker #67-72, spec files 69-74) still reserve their own card here as
-// an unavailable placeholder, matching 57-gst-registers.md's own "hub
-// exists before every sibling screen does" precedent.
+// phase's operational reports. Purchase Reports (69-purchase-reports.md,
+// tracker #67) is the sixth — a direct mirror of Sales Reports from the
+// purchase side. Inventory Reports (70-inventory-reports.md, tracker #68) is
+// the seventh, composing the Inventory Engine's already-reserved
+// getCurrentStock/getStockLedger/getStockValuation primitives. Customer
+// Reports (71-customer-reports.md, tracker #69) is the eighth, composing
+// Customer master data, the Voucher Engine's getTrialBalance/
+// getLedgerStatement, and Sales Reports' getPartyWiseSalesReport. Supplier
+// Reports (72-supplier-reports.md, tracker #70) is the ninth, the
+// supplier/payables-side mirror of Customer Reports — no "Over Limit" flag,
+// since `Supplier` has no `creditLimit` field. Employee Reports
+// (73-employee-reports.md, tracker #71) is the tenth — Attendance Summary,
+// Payroll Register, Salary Register, and Employee Directory, depending on
+// Payroll (63-payroll.md, Phase 9) which was implemented first to unblock
+// this spec. The remaining Reporting-phase screen (tracker #72, spec file
+// 74) still reserves its own card here as an unavailable placeholder,
+// matching 57-gst-registers.md's own "hub exists before every sibling
+// screen does" precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -69,35 +83,35 @@ const REPORT_MODULES = [
     icon: Truck,
     title: "Purchase Reports",
     description: "Purchase register, item-wise, party-wise, and return summary.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/inventory",
     icon: Package,
     title: "Inventory Reports",
     description: "Current stock, stock ledger, and stock valuation.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/customers",
     icon: Users,
     title: "Customer Reports",
     description: "Outstanding and transaction summaries by customer.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/suppliers",
     icon: Building2,
     title: "Supplier Reports",
     description: "Outstanding and transaction summaries by supplier.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/employees",
     icon: UserSquare2,
     title: "Employee Reports",
     description: "Attendance and payroll summaries by employee.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/gst",

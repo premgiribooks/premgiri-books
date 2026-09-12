@@ -50,6 +50,10 @@ import {
 } from "@/modules/purchase-invoices/validation/purchase-invoice-schema";
 import type {
   GoodsReceiptNotePrefill,
+  ItemWisePurchaseAggregateRow,
+  ItemWisePurchaseFilters,
+  PartyWisePurchaseAggregateRow,
+  PartyWisePurchaseFilters,
   PurchaseInvoiceDetail,
   PurchaseInvoiceFormOptions,
   PurchaseInvoiceLineComputation,
@@ -616,6 +620,60 @@ export const purchaseInvoiceService = {
       return [];
     }
     return purchaseInvoiceRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /**
+   * The same read as `listPurchaseInvoices`, gated on `reports`/`view`
+   * instead of `purchase`/`view` — 69-purchase-reports.md's Purchase
+   * Register calls this one, not `listPurchaseInvoices`, mirroring
+   * sales-invoice-service.ts's own `listSalesInvoicesForReport` precedent so
+   * the seeded Accountant role can view it without also needing Purchase
+   * module access. Still goes through this service (Invariant 5) — no new
+   * repository method.
+   */
+  async listPurchaseInvoicesForReport(filters: PurchaseInvoiceListFilters = {}): Promise<PurchaseInvoiceListRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return purchaseInvoiceRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /**
+   * 69-purchase-reports.md's Item-wise Purchase Report — the entry point
+   * Purchase Reports calls; cross-module reads go through this service
+   * method, never `purchase-invoice-repository.ts` directly (Invariant 5).
+   * Gated on `reports`/`view`, not `purchase`/`view` — mirrors
+   * sales-invoice-service.ts's `getItemWiseSalesReport`. Scoped to the
+   * active financial year only, matching every other method in this module.
+   */
+  async getItemWisePurchaseReport(filters: ItemWisePurchaseFilters): Promise<ItemWisePurchaseAggregateRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return purchaseInvoiceRepository.aggregateItemWisePurchases(user.companyId, financialYear.id, filters);
+  },
+
+  /** 69-purchase-reports.md's Party-wise Purchase Summary — mirrors
+   * getItemWisePurchaseReport's own permission/financial-year posture
+   * exactly. Also the method Supplier Reports (`72-supplier-reports.md`)
+   * calls for its own Supplier Purchase Summary view. */
+  async getPartyWisePurchaseReport(filters: PartyWisePurchaseFilters): Promise<PartyWisePurchaseAggregateRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return purchaseInvoiceRepository.aggregatePartyWisePurchases(user.companyId, financialYear.id, filters);
   },
 
   async getPurchaseInvoice(id: string): Promise<PurchaseInvoiceDetail | null> {

@@ -52,6 +52,64 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   register: "Sales Register",
   "item-wise": "Item-wise Sales",
   "party-wise": "Party-wise Sales",
+  // 69-purchase-reports.md: "reports/purchase" disambiguates against the
+  // bare "purchase" key (/purchase's own hub). "purchase/register",
+  // "purchase/item-wise", and "purchase/party-wise" disambiguate against
+  // the bare "register"/"item-wise"/"party-wise" keys above (Sales Reports'
+  // own screens) — the previous path segment before each of those three is
+  // "purchase" for every /reports/purchase/* route. "returns" has the same
+  // known, accepted limitation 68-sales-reports.md's own comment records:
+  // /reports/purchase/returns' "returns" segment falls back to the existing
+  // "purchase/returns" composite key ("Purchase Returns", the actual
+  // Purchase Returns document list) rather than a more specific "Purchase
+  // Return Summary" — a cosmetic-only mismatch, not worth a workaround.
+  "reports/purchase": "Purchase Reports",
+  "purchase/register": "Purchase Register",
+  "purchase/item-wise": "Item-wise Purchases",
+  "purchase/party-wise": "Party-wise Purchases",
+  // 70-inventory-reports.md: "reports/inventory" disambiguates against the
+  // bare "inventory" key (/inventory's own hub, spec 32's Phase 5 screens).
+  // "current-stock"/"ledger"/"valuation"/"low-stock" have no existing
+  // bare-key collision anywhere else in this table, so they're added
+  // unqualified rather than as composite keys.
+  "reports/inventory": "Inventory Reports",
+  "current-stock": "Current Stock",
+  ledger: "Stock Ledger",
+  valuation: "Stock Valuation",
+  "low-stock": "Low Stock",
+  // 71-customer-reports.md: "reports/customers" disambiguates against the
+  // bare "customers" key (/masters/customers' own list page). "outstanding",
+  // "statement", "sales-summary", and "directory" have no existing bare-key
+  // collision anywhere else in this table, so they're added unqualified
+  // rather than as composite keys.
+  "reports/customers": "Customer Reports",
+  outstanding: "Outstanding",
+  statement: "Statement",
+  "sales-summary": "Sales Summary",
+  directory: "Directory",
+  // 72-supplier-reports.md: "reports/suppliers" disambiguates against the
+  // bare "suppliers" key (/masters/suppliers' own list page). "outstanding"
+  // and "statement" reuse the identical bare keys Customer Reports already
+  // claims above (both sections' own screens share the same generic label,
+  // an accepted cosmetic-only overlap, same posture as 69-purchase-
+  // reports.md's own "register"/"item-wise"/"party-wise" note). "directory"
+  // is likewise shared. "purchase-summary" has no existing bare-key
+  // collision, so it's added unqualified.
+  "reports/suppliers": "Supplier Reports",
+  "purchase-summary": "Purchase Summary",
+  // 73-employee-reports.md: "reports/employees" disambiguates against both
+  // the bare "employees" key (/employees' own operational hub) and the
+  // composite "employees/payroll" key claimed by Payroll's own segment —
+  // this key only ever matches when the previous path segment is literally
+  // "reports". "attendance-summary"/"payroll-register"/"salary-register"
+  // have no existing bare-key collision, so they're added unqualified;
+  // "directory" reuses the identical bare key Customer/Supplier Reports
+  // already claim above (an accepted cosmetic-only overlap, same posture as
+  // those specs' own shared-key notes).
+  "reports/employees": "Employee Reports",
+  "attendance-summary": "Attendance Summary",
+  "payroll-register": "Payroll Register",
+  "salary-register": "Salary Register",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",
@@ -82,6 +140,10 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   employees: "Employees",
   "employees/attendance": "Attendance",
   "attendance/history": "History",
+  // 63-payroll.md: "employees/payroll" disambiguates against a future bare
+  // "payroll" key collision the same way "employees/attendance" already
+  // does for Attendance.
+  "employees/payroll": "Payroll",
   settings: "Settings",
   "document-numbering": "Document Numbering",
   users: "User Management",

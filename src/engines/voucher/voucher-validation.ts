@@ -78,6 +78,7 @@ const VOUCHER_TYPE_VALUES = [
   "DEBIT_NOTE",
   "SALES_RETURN",
   "PURCHASE_RETURN",
+  "SALARY",
 ] as const;
 
 export const voucherEntryLineSchema = z.object({

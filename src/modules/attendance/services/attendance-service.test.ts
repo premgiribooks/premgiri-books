@@ -4,15 +4,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // module-boundary repository and the shared session/permission boundaries so
 // the service's own logic (permission gating, date-range validation) is
 // exercised in isolation from Prisma/the database.
-const { findManyMock, upsertOneMock, upsertManyMock, getSummaryMock, getCurrentCompanyUserMock, assertPermissionMock } =
-  vi.hoisted(() => ({
-    findManyMock: vi.fn(),
-    upsertOneMock: vi.fn(),
-    upsertManyMock: vi.fn(),
-    getSummaryMock: vi.fn(),
-    getCurrentCompanyUserMock: vi.fn(),
-    assertPermissionMock: vi.fn(),
-  }));
+const {
+  findManyMock,
+  upsertOneMock,
+  upsertManyMock,
+  getSummaryMock,
+  aggregateSummaryForEmployeesMock,
+  getCurrentCompanyUserMock,
+  assertPermissionMock,
+} = vi.hoisted(() => ({
+  findManyMock: vi.fn(),
+  upsertOneMock: vi.fn(),
+  upsertManyMock: vi.fn(),
+  getSummaryMock: vi.fn(),
+  aggregateSummaryForEmployeesMock: vi.fn(),
+  getCurrentCompanyUserMock: vi.fn(),
+  assertPermissionMock: vi.fn(),
+}));
 
 vi.mock("@/modules/attendance/repositories/attendance-repository", () => ({
   attendanceRepository: {
@@ -20,6 +28,7 @@ vi.mock("@/modules/attendance/repositories/attendance-repository", () => ({
     upsertOne: upsertOneMock,
     upsertMany: upsertManyMock,
     getSummary: getSummaryMock,
+    aggregateSummaryForEmployees: aggregateSummaryForEmployeesMock,
   },
 }));
 
@@ -160,5 +169,37 @@ describe("getAttendanceSummary", () => {
     await expect(
       attendanceService.getAttendanceSummary(EMPLOYEE_ID, daysFromToday(-5), daysFromToday(5))
     ).resolves.toBeDefined();
+  });
+});
+
+describe("getAttendanceSummaryBulk", () => {
+  it("gates on reports/view (not employees/view) and forwards the employee ids and parsed range", async () => {
+    const map = new Map([[EMPLOYEE_ID, { presentDays: 20, halfDays: 2, absentDays: 3, onLeaveDays: 1, totalMarkedDays: 26 }]]);
+    aggregateSummaryForEmployeesMock.mockResolvedValue(map);
+
+    const result = await attendanceService.getAttendanceSummaryBulk([EMPLOYEE_ID], "2026-01-01", "2026-01-31");
+
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "reports", "view");
+    expect(aggregateSummaryForEmployeesMock).toHaveBeenCalledWith(
+      COMPANY_ID,
+      [EMPLOYEE_ID],
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Date("2026-01-31T00:00:00.000Z")
+    );
+    expect(result).toBe(map);
+  });
+
+  it("rejects an invalid date shape before it ever reaches the repository", async () => {
+    await expect(
+      attendanceService.getAttendanceSummaryBulk([EMPLOYEE_ID], "15-01-2026", "2026-01-31")
+    ).rejects.toThrow("Enter a valid date range.");
+    expect(aggregateSummaryForEmployeesMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a period whose start is after its end", async () => {
+    await expect(
+      attendanceService.getAttendanceSummaryBulk([EMPLOYEE_ID], "2026-01-31", "2026-01-01")
+    ).rejects.toThrow("start date must not be after its end date");
+    expect(aggregateSummaryForEmployeesMock).not.toHaveBeenCalled();
   });
 });

@@ -233,3 +233,72 @@ describe("getSummary", () => {
     });
   });
 });
+
+describe("aggregateSummaryForEmployees", () => {
+  const PERIOD_START = new Date("2026-01-01T00:00:00.000Z");
+  const PERIOD_END = new Date("2026-01-31T00:00:00.000Z");
+
+  it("de-duplicates repeated employee ids into a single groupBy call", async () => {
+    attendanceMock.groupBy.mockResolvedValue([]);
+
+    await attendanceRepository.aggregateSummaryForEmployees(
+      COMPANY_ID,
+      [EMPLOYEE_ID, EMPLOYEE_ID, OTHER_EMPLOYEE_ID],
+      PERIOD_START,
+      PERIOD_END
+    );
+
+    expect(attendanceMock.groupBy).toHaveBeenCalledTimes(1);
+    expect(attendanceMock.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["employeeId", "status"],
+        where: expect.objectContaining({ employeeId: { in: [EMPLOYEE_ID, OTHER_EMPLOYEE_ID] } }),
+      })
+    );
+  });
+
+  it("gives an employee with no rows in the range an all-zero summary", async () => {
+    attendanceMock.groupBy.mockResolvedValue([]);
+
+    const result = await attendanceRepository.aggregateSummaryForEmployees(COMPANY_ID, [EMPLOYEE_ID], PERIOD_START, PERIOD_END);
+
+    expect(result.get(EMPLOYEE_ID)).toEqual({
+      presentDays: 0,
+      halfDays: 0,
+      absentDays: 0,
+      onLeaveDays: 0,
+      totalMarkedDays: 0,
+    });
+  });
+
+  it("matches calling getSummary once per employee individually (parity, not a divergent implementation)", async () => {
+    attendanceMock.groupBy.mockResolvedValueOnce([
+      { employeeId: EMPLOYEE_ID, status: "PRESENT", _count: { _all: 20 } },
+      { employeeId: EMPLOYEE_ID, status: "HALF_DAY", _count: { _all: 2 } },
+      { employeeId: OTHER_EMPLOYEE_ID, status: "ABSENT", _count: { _all: 5 } },
+      { employeeId: OTHER_EMPLOYEE_ID, status: "ON_LEAVE", _count: { _all: 1 } },
+    ]);
+
+    const bulk = await attendanceRepository.aggregateSummaryForEmployees(
+      COMPANY_ID,
+      [EMPLOYEE_ID, OTHER_EMPLOYEE_ID],
+      PERIOD_START,
+      PERIOD_END
+    );
+
+    attendanceMock.groupBy.mockResolvedValueOnce([
+      { status: "PRESENT", _count: { _all: 20 } },
+      { status: "HALF_DAY", _count: { _all: 2 } },
+    ]);
+    const individualForEmployee = await attendanceRepository.getSummary(COMPANY_ID, EMPLOYEE_ID, PERIOD_START, PERIOD_END);
+
+    attendanceMock.groupBy.mockResolvedValueOnce([
+      { status: "ABSENT", _count: { _all: 5 } },
+      { status: "ON_LEAVE", _count: { _all: 1 } },
+    ]);
+    const individualForOther = await attendanceRepository.getSummary(COMPANY_ID, OTHER_EMPLOYEE_ID, PERIOD_START, PERIOD_END);
+
+    expect(bulk.get(EMPLOYEE_ID)).toEqual(individualForEmployee);
+    expect(bulk.get(OTHER_EMPLOYEE_ID)).toEqual(individualForOther);
+  });
+});

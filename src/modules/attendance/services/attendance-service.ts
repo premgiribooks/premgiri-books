@@ -81,4 +81,37 @@ export const attendanceService = {
 
     return attendanceRepository.getSummary(user.companyId, employeeId, start, end);
   },
+
+  /**
+   * 73-employee-reports.md's Attendance Summary Report calls this — never
+   * `attendanceRepository` directly, and never `getAttendanceSummary` in a
+   * per-employee loop (which would be N+1 for a company-wide report). A
+   * thin pass-through exposing the batched repository method, mirroring how
+   * `getAttendanceSummary` itself is exposed. Gated on `reports`/`view`, not
+   * `employees`/`view` — its only caller is Employee Reports, and the seeded
+   * Accountant role has `reports`/`view` but no `employees` module access at
+   * all (the same `listPayrollRunsForReport`/`getEmployeeSalaryHistory`
+   * precedent this batch already established; code-review fix, 2026-09-12 —
+   * this method was left on the wrong gate, which would have 403'd the exact
+   * role the whole batch of re-gating was done for).
+   */
+  async getAttendanceSummaryBulk(
+    employeeIds: readonly string[],
+    periodStart: string,
+    periodEnd: string
+  ): Promise<Map<string, AttendanceSummary>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    if (!isValidCalendarDate(periodStart) || !isValidCalendarDate(periodEnd)) {
+      throw new AppError("Enter a valid date range.");
+    }
+    const start = toUtcDate(periodStart);
+    const end = toUtcDate(periodEnd);
+    if (start > end) {
+      throw new AppError("The period's start date must not be after its end date.");
+    }
+
+    return attendanceRepository.aggregateSummaryForEmployees(user.companyId, employeeIds, start, end);
+  },
 };

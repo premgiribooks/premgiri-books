@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, Wallet } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,16 +8,21 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
 // The operational Employee-module hub (62-attendance.md's UI section) —
-// distinct from Employee Master, which stays under /masters/employees. Only
-// an Attendance card exists for now; a Payroll card is added once
-// 63-payroll.md is implemented, mirroring how Purchase Return's own hub grew
-// one card at a time.
+// distinct from Employee Master, which stays under /masters/employees.
+// Payroll's own card (63-payroll.md) added alongside Attendance, mirroring
+// how Purchase Return's own hub grew one card at a time.
 const EMPLOYEE_MODULES = [
   {
     href: "/employees/attendance",
     icon: CalendarCheck,
     title: "Attendance",
     description: "Mark daily attendance and review each employee's attendance history.",
+  },
+  {
+    href: "/employees/payroll",
+    icon: Wallet,
+    title: "Payroll",
+    description: "Aggregate attendance into each active employee's net salary and post one balanced voucher per run.",
   },
 ] as const;
 

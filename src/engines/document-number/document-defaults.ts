@@ -34,6 +34,8 @@ export const DOCUMENT_TYPE_DEFAULT_PREFIXES: Record<DocumentType, string> = {
   STOCK_ADJUSTMENT: "STKADJ",
   STOCK_TRANSFER: "STKTRF",
   PHYSICAL_VERIFICATION: "PHYVER",
+  PAYROLL: "PAY",
+  SALARY_VOUCHER: "SLV",
 };
 
 /** Human-readable labels for the settings screen's document type column. */
@@ -62,4 +64,6 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   STOCK_ADJUSTMENT: "Stock Adjustment",
   STOCK_TRANSFER: "Stock Transfer",
   PHYSICAL_VERIFICATION: "Physical Verification",
+  PAYROLL: "Payroll Run",
+  SALARY_VOUCHER: "Salary Voucher",
 };

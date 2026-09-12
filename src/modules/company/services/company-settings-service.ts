@@ -7,9 +7,11 @@ import { companySettingsRepository } from "@/modules/company/repositories/compan
 import {
   companySettingsSchema,
   gstFilingFrequencySchema,
+  payrollLedgerMappingSchema,
   salesLedgerMappingSchema,
   type CompanySettingsInput,
   type GstFilingFrequencyInput,
+  type PayrollLedgerMappingInput,
   type SalesLedgerMappingInput,
 } from "@/modules/company/validation/company-schema";
 
@@ -75,6 +77,24 @@ export const companySettingsService = {
 
     const data = gstFilingFrequencySchema.parse(input);
     const settings = await companySettingsRepository.updateGstFilingFrequency(companyId, data);
+    if (!settings) {
+      throw new AppError("Company settings not found.");
+    }
+    return settings;
+  },
+
+  // Payroll's ledger mapping (63-payroll.md) — gated by "settings"/"edit"
+  // like updateSalesLedgerMapping above, matching every prior Company
+  // Settings extension's convention.
+  async updatePayrollLedgerMapping(companyId: string, input: PayrollLedgerMappingInput): Promise<CompanySettings> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "settings", "edit");
+    if (user.companyId !== companyId) {
+      throw new AppError("Company settings not found.");
+    }
+
+    const data = payrollLedgerMappingSchema.parse(input);
+    const settings = await companySettingsRepository.updatePayrollLedgerMapping(companyId, data);
     if (!settings) {
       throw new AppError("Company settings not found.");
     }
