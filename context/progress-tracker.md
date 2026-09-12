@@ -1870,6 +1870,47 @@ Mapping so far:
   Payroll (#61, Phase 9) remains the only outstanding item before this project's
   documented phase order would otherwise be back in sync — still awaiting explicit
   instruction to resume it.
+- **Profit & Loss (Phase 10 — Reporting #63, spec 65) implemented 2026-09-12** on branch
+  `feature/profit-and-loss`, per explicit user instruction ("start Profit & Loss") —
+  the second tenant of the Reporting Engine and the `/reports` hub Trial Balance
+  established. See `context/Phases/phase-tracker.md`'s Phase 10 section for the full
+  implementation record: `buildProfitAndLossReport` (pure, no I/O) splits a company's
+  LedgerGroups into Direct/Indirect Income/Expense buckets directly from each group's
+  own `natureType`/`affectsGrossProfit` columns (no parent-chain walk needed), rolls up
+  each bucket's Ledger Group tree the same way Trial Balance does, and computes Gross
+  Profit (Direct Income − Direct Expense) and Net Profit (Gross Profit + Indirect Income
+  − Indirect Expense). `profitAndLossService` is the sole I/O boundary — gated on the
+  pre-existing `reports`/`view` permission, computing a period's movement by calling
+  `voucherEngine.getTrialBalance` twice (as-of `to`, and as-of the day before `from`) and
+  diffing each ledger's `totalDebit`/`totalCredit` (never `closingBalance`), rather than
+  adding a new `voucher-queries.ts` method. New `/reports/profit-and-loss` (Financial
+  Year + from/to Date Range filter bar; a two-section Trading Account / Profit & Loss
+  Account layout down to a visually-distinguished Net Profit/Loss figure) and the
+  `/reports` hub's "Profit & Loss" card wired live. 31 new vitest cases — 1654/1654 total
+  suite passing; `npx tsc --noEmit`, `npx eslint src prisma`, and `next build` all pass;
+  `/reports/profit-and-loss` appears in the build route table.
+
+  **Code review + security review (run in parallel) both APPROVE, zero CRITICAL/HIGH
+  findings.** Code review's one MEDIUM (the spec's Code Standards explicitly requires a
+  test for "`from` equal to the FY's own `startDate`," and the only test touching that
+  boundary didn't assert the actual computed figures) was **fixed before merge** — a
+  test was added mocking a non-zero as-of-`to` total against a zero as-of-`dayBefore(from)`
+  total and asserting the reported period value equals the full since-inception amount;
+  re-verified green. Security review gave an explicit PASS on all six requested areas
+  (permission enforcement, IDOR/cross-tenant isolation on `financialYearId`, input
+  validation of every `searchParams` value, no information disclosure via thrown errors,
+  no raw-SQL/XSS surface, no hardcoded secrets) with an empty findings list.
+
+  **Merged into `main` 2026-09-12** (`--no-ff`, no conflicts, `0a3ca6f` on top of feature
+  commit `94c2ffb` — `tsc`/`eslint`/`vitest` (1654/1654)/`next build` all re-verified
+  green against the merged result). `feature/profit-and-loss` deleted locally now that
+  `main` has it. **No browser/Playwright click-through was performed this session** (no
+  browser-automation tool was available) — confirmed only via `curl` that the route
+  resolves through the auth middleware (307 to `/login` for an unauthenticated request)
+  rather than crashing; a follow-up Playwright-driven verification (matching Trial
+  Balance's own) is still owed. Payroll (#61, Phase 9) and Balance Sheet (#64, Phase 10)
+  remain the two outstanding items — still awaiting explicit instruction on which to
+  resume next.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

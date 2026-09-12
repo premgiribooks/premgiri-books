@@ -928,7 +928,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | #   | Feature           | Depends On     | Status |
 | --- | ----------------- | -------------- | ------ |
 | 62  | Trial Balance     | Voucher Engine | ✅     |
-| 63  | Profit & Loss     | Accounting     | ⬜     |
+| 63  | Profit & Loss     | Accounting     | ✅     |
 | 64  | Balance Sheet     | Accounting     | ⬜     |
 | 65  | Cash Flow         | Accounting     | ⬜     |
 | 66  | Sales Reports     | Sales          | ⬜     |
@@ -1011,6 +1011,98 @@ no other OWASP-relevant gap for a read-only report); its two LOW/informational n
 (the unused forward-noted Server Action; no endpoint-specific rate limiting, consistent
 with every other reporting/list page in this codebase) were accepted as-is, not fixed —
 neither is a vulnerability.
+
+**Profit & Loss (#63, spec 65) implemented 2026-09-12** on branch `feature/profit-and-loss`,
+per explicit user instruction ("start Profit & Loss"), immediately following Trial Balance
+(#62) in the same session. The second tenant of the Reporting Engine and the `/reports`
+hub, reusing both exactly as spec 65 calls for — no engine change to `voucherEngine`, no
+new Prisma model or migration, no new `voucher-queries.ts` method.
+
+New `src/engines/reporting/profit-and-loss.ts` (`buildProfitAndLossReport`, pure; `dayBefore`,
+a small pure calendar-arithmetic helper), reusing `ledger-classification.ts`'s
+`buildLedgerGroupIndex` exactly as `trial-balance.ts` does. Splits a company's LedgerGroups
+into the four Trading/P&L Account buckets (`directIncome`/`directExpense`/`indirectIncome`/
+`indirectExpense`) directly from each group's own `natureType` + `affectsGrossProfit`
+columns — no parent-chain walk needed, since every group (root or child) carries both
+explicitly at creation (confirmed by code review against `ledger-group-service.ts`'s
+inherit-from-parent logic, so a bucket split can never fracture a parent/child chain across
+buckets). Within each bucket, the same recursive parent/child rollup shape as Trial Balance
+applies, but with a single signed `value` per row (INCOME = periodCredit − periodDebit,
+EXPENSE = periodDebit − periodCredit) instead of split Debit/Credit columns — a zero-value
+ledger row is filtered out (unlike Trial Balance, which lists every ledger for completeness),
+and a group left with no rows and no non-empty child sections is omitted entirely, matching
+the spec's "a hundred zero-value expense-head rows is noise" rule. Gross Profit = Direct
+Income − Direct Expense; Net Profit = Gross Profit + Indirect Income − Indirect Expense.
+
+`src/modules/reports/services/profit-and-loss-service.ts` (`profitAndLossService.
+getProfitAndLoss`) is the only I/O: resolves the caller's company from session, gates on
+`reports`/`view` (no permission-catalog change needed), re-verifies the requested Financial
+Year belongs to the caller's own company, validates both `from` and `to` against that FY's
+own `[startDate, endDate]` range, then calls `voucherQueries.getTrialBalance` **twice** in
+parallel (once as-of `to`, once as-of the day immediately before `from`, via `dayBefore`)
+plus `ledgerGroupRepository.findMany`, diffs each ledger's `totalDebit`/`totalCredit` between
+the two results (never `closingBalance` — it folds in `Ledger.openingBalance`, which this
+report must not assume is always zero for an Income/Expense ledger), filters to
+INCOME/EXPENSE-nature ledgers, and hands the diffed movements to `buildProfitAndLossReport`.
+`financial-report-filters-schema.ts` gained `profitAndLossFiltersSchema` (a `from`/`to`
+variant of Trial Balance's shape, `to >= from` enforced by a Zod `refine`) alongside the
+existing `trialBalanceFiltersSchema` — no new schema file, per spec 64's own convention note.
+
+New `/reports/profit-and-loss` (Financial Year + from/to Date Range filter bar defaulting to
+`[FY.startDate, today-clamped]`; a two-section Trading Account / Profit & Loss Account
+layout, each with its own subtotal line down to a visually-distinguished Net Profit/Loss
+figure) and a new `financial-year-date-range-filter-bar.tsx` / `profit-and-loss-statement.tsx`
+component pair — dedicated rather than genericizing `trial-balance-group-tree.tsx` (single
+signed-value column vs. split Debit/Credit), matching this codebase's own established
+precedent of small per-report duplication over premature shared abstraction (as
+`financial-report-filters-schema.ts`'s own comment already documents for its date helpers).
+Wired the `/reports` hub's "Profit & Loss" card (added, unlinked, by spec 64) to
+`/reports/profit-and-loss` and added the `profit-and-loss` breadcrumb label. A forward-noted,
+currently-unused `getProfitAndLossReportAction` Server Action exists alongside the service,
+mirroring Trial Balance's own precedent.
+
+31 new vitest cases (engine: Gross/Net Profit formula against a seeded Direct+Indirect
+fixture, return/reversal netting for both Income- and Expense-nature ledgers, negative
+Expense-ledger value displayed unclamped, zero-activity group omission without affecting
+profit totals, nested-group subtotal rollup within one bucket, ASSET/LIABILITY discard,
+`dayBefore` calendar arithmetic across a month boundary; service: `reports:view` permission
+gate, cross-company Financial Year rejection, both boundary-date rejections/acceptances, the
+two-call diff isolating period-only movement so prior-period activity never leaks in, `from`
+equal to the FY's own `startDate` producing the same result as a since-inception P&L — added
+after code review flagged it as spec-required but missing — INCOME/EXPENSE-only scoping;
+schema: valid/equal/invalid `to`-before-`from` ranges) — 1654/1654 total suite passing.
+`npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2 pre-existing unrelated
+warnings), `npx vitest run`, and `next build` all pass; `/reports/profit-and-loss` appears in
+the build route table.
+
+**Code review + security review (run in parallel) both APPROVE, zero CRITICAL/HIGH findings
+from either.** Code review raised one MEDIUM (the spec's Code Standards section explicitly
+requires a test for "`from` equal to the FY's own `startDate`", and the only test touching
+that boundary asserted `resolves.toBeDefined()` without checking the actual computed figures)
+— **fixed** before merge by adding a test that mocks a non-zero as-of-`to` total and a
+zero as-of-`dayBefore(from)` total and asserts the reported period value equals the full
+since-inception amount; re-verified green afterward. Security review gave an explicit PASS
+on all six requested areas (permission enforcement on every path including the page's own
+`hasPermission` gate and the service's independent `assertPermission`, IDOR/cross-tenant
+isolation on `financialYearId` via two independent checks, input validation of every
+`searchParams` value before it reaches Prisma or date arithmetic, no information disclosure
+via thrown errors — routed through the same `toActionErrorMessage` helper as Trial Balance,
+no raw SQL/eval/XSS surface, no hardcoded secrets) — empty findings list, explicitly stated
+as passing.
+
+**Merged into `main` 2026-09-12** — `feature/profit-and-loss` merged `--no-ff` (`0a3ca6f`,
+on top of feature commit `94c2ffb`), no conflicts, checks re-verified green against the
+merged result (`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` 1654/1654,
+`next build`). Feature branch deleted post-merge per the one-branch-at-a-time rule.
+
+Manual/browser UI verification (the kind Trial Balance received via Playwright) was **not**
+performed this session — no browser-automation tool was available. Confirmed instead via
+`curl` that `/reports/profit-and-loss` resolves through the app's auth middleware correctly
+(307 redirect to `/login` for an unauthenticated request, matching every other protected
+route) rather than crashing. This is a recorded gap, not a silent skip — a follow-up
+Playwright-driven click-through (financial year + date range changes, expand/collapse
+sections, negative Net Profit color, out-of-range date validation) is still owed before this
+can be considered as fully verified as Trial Balance was.
 
 ---
 
