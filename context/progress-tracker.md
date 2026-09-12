@@ -2045,8 +2045,10 @@ Mapping so far:
   real posted multi-row data (including the synthetic-bucket case) was carried by the
   new repository/engine vitest fixtures instead.
 
-  Committed on branch `feature/sales-reports`. Not yet merged into `main` — see this
-  entry's own update once the merge lands.
+  **Merged into `main` 2026-09-12** (`--no-ff`, `402b37a`, on top of feature commit
+  `c3fa1be` — no conflicts, `tsc`/`eslint`/`vitest` (1744/1744)/`next build` all
+  re-verified green against the merged result). `feature/sales-reports` deleted locally
+  per the one-branch-at-a-time rule. Not yet pushed to `origin/main` this session.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

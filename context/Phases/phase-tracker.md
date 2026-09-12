@@ -1439,8 +1439,11 @@ rows, cosmetic only; `customerId`/`productId`/`warehouseId` aren't page-level pr
 the way `dateFrom`/`dateTo`/`status` are, though the shared Zod schema still validates them
 server-side before any query runs) accepted as-is, no fix needed.
 
-Committed on branch `feature/sales-reports`. Not yet merged into `main` — see
-`context/progress-tracker.md`'s Next Up for the merge record once it lands.
+**Merged into `main` 2026-09-12** — `feature/sales-reports` merged `--no-ff` (`402b37a`,
+on top of feature commit `c3fa1be`), no conflicts, checks re-verified green against the
+merged result (`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` 1744/1744,
+`next build`). Feature branch deleted locally per the one-branch-at-a-time rule. Not yet
+pushed to `origin/main` this session.
 
 ---
 
