@@ -86,7 +86,7 @@ Mapping so far:
 | 69           | Purchase Reports (`69-purchase-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#67) — **spec drafted 2026-09-11, not implemented**; direct mirror of spec 68 from the purchase side |
 | 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **implemented 2026-09-12**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
 | 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **implemented 2026-09-12**; Outstanding Report calls `voucherQueries.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
-| 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **spec drafted 2026-09-11, not implemented**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
+| 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **implemented 2026-09-12**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
 | 73           | Employee Reports (`73-employee-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#71) — **spec drafted 2026-09-11, not implemented**; reads Payroll's exact posted snapshot shape, adds one new bulk `getAttendanceSummaryBulk` method |
 | 74           | GST Reports (`74-gst-reports.md`)                                               | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#72) — **spec drafted 2026-09-11, not implemented**; last item in Phase 10, closing it; an analytical dashboard over specs 57/60's data, explicitly distinct from Phase 8's statutory filing screens, gated by both `reports:view` and `gst:view` |
 | 75           | Global Search (`75-global-search.md`)                                          | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#73) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers/Ledgers, wired into the shell's existing Top Navbar search placeholder as a `Ctrl+K` overlay |
@@ -2244,6 +2244,77 @@ Mapping so far:
   merge into `main` not requested this session — awaiting explicit user go-ahead for
   either, per this batch's own established two-step pattern (implement now, "mark as
   done"/merge only on separate explicit instruction).
+- **Supplier Reports (#70, spec 72) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged — not a new branch this session; the branch
+  itself is not yet merged into `main`). The user was asked to start Customer Reports but
+  it turned out already implemented/committed earlier the same day; offered a choice
+  between re-reviewing that work or moving to the next unimplemented Reporting item, and
+  the user chose to move on — so this is Supplier Reports (#70), immediately following
+  Customer Reports (#69) — the fifth of Phase 10's seven operational reports (#66–72), and
+  the direct supplier/payables-side mirror of Customer Reports (spec 71) per spec 72's own
+  framing. **No new Prisma model, enum, field, or migration, and no amendment to any
+  existing module's repository or service** — every primitive this spec needed
+  (`voucherQueries.getTrialBalance`/`getLedgerStatement`,
+  `purchaseInvoiceService.getPartyWisePurchaseReport`) was already public and unmodified.
+  Four views (Outstanding, Statement, Purchase Summary, Directory); a new pure
+  `src/engines/reporting/supplier-reports.ts`; a new `src/modules/reports/suppliers/`
+  module; new `/reports/suppliers*` pages.
+
+  **One structural asymmetry from Customer Reports, deliberate and spec-mandated**: the
+  Supplier Outstanding Report has no "Over Limit" flag and `SupplierOutstandingRow` has no
+  `creditLimit` field at all — `Supplier` has no `creditLimit` column in the schema
+  (27-supplier-management.md's own deliberate omission: a credit limit is a cap the
+  business imposes on a debtor, not something meaningful on the payables side). `creditDays`
+  is carried through as informational-only, never a comparison column. Both the Reporting
+  Engine tests and the service tests assert this directly
+  (`expect(...).not.toHaveProperty("isOverLimit"/"creditLimit")`), not just by omission.
+
+  **Deliberate deviations from the spec's own literal wording, the same precedent Customer
+  Reports already established**: (1) every view queries `prisma.supplier` directly
+  (`supplier-report-service.ts`'s own `listReportSuppliers`/`listSupplierOptions`, and an
+  inline lookup in `getSupplierStatement`) rather than through
+  `supplierService.listSuppliers`/`getSupplier` (the spec's own literal suggestion) — those
+  are gated on `masters`/`view`, which would 403 the seeded Accountant role (`reports`/
+  `view` only). (2) Supplier Purchase Summary reuses `purchase-reports.ts`'s own
+  `buildPartyWisePurchaseReport` unmodified via a thin `buildSupplierPurchaseSummary`
+  delegate — no synthetic-bucket filtering needed here (unlike Customer Sales Summary),
+  since every Purchase Invoice has a required, non-null `supplierId` (spec 44's own
+  Decisions) and `getPartyWisePurchaseReport`'s own output already contains no Walk-in/
+  Quick-equivalent rows to exclude.
+
+  **The Outstanding Report's "supplier not in `getTrialBalance`'s result" fallback**
+  (Business Rules #1) is implemented as specified — `buildSupplierOutstandingReport` falls
+  back to the supplier's own signed opening balance when no matching ledger row is found —
+  identically structurally unreachable in practice to Customer Reports' own equivalent
+  fallback, kept as a defensive, tested branch rather than an assumed-dead one.
+
+  16 new vitest cases (8 Reporting Engine + 8 service-layer) — 1846/1846 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+  `next build` all pass; `/reports/suppliers*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as every other report in this
+  batch: no browser-automation tooling available. Business-logic correctness is carried
+  entirely by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after the feature implementation)**:
+  both APPROVE, **zero CRITICAL/HIGH/MEDIUM findings from either review** — the first
+  report in this batch with a fully clean pass on both, no fix-and-reverify cycle needed.
+  Code review confirmed spec adherence (no `creditLimit`/Over Limit concept anywhere, no
+  new Prisma model, no second independent balance/purchase query, no ageing analysis),
+  permission gating, company scoping, and structural consistency with Customer Reports.
+  Security review confirmed permission gating on every public service method, cross-company
+  isolation on `getSupplierStatement`'s `supplierId` and `getSupplierOutstandingReport`'s
+  `financialYearId` (both resolving identically to "not found" for nonexistent vs.
+  cross-company, no differential existence signal), no raw SQL/injection surface, no error
+  detail leakage (`toActionErrorMessage` genericizes non-`AppError` throws), and the
+  read-only invariant (no write path anywhere in the module) — one LOW/informational note,
+  not a defect: the `asOfDate` bounds check shares whatever timezone-boundary
+  characteristics the original Trial Balance check it mirrors already has, flagged only for
+  awareness.
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #70 stays ⬜) and
+  merge into `main` not requested this session — awaiting explicit user go-ahead for
+  either, per this batch's own established two-step pattern.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
