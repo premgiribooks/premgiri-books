@@ -10,6 +10,16 @@ import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
 /**
+ * The Cash-in-Hand-subtree-or-bank-linked classification test itself, shared
+ * by `assertLedgersAreCashOrBank` (throwing) and `getCashAndBankLedgerIds`
+ * (67-cash-flow.md's plain id-set equivalent) so the rule lives in exactly
+ * one place.
+ */
+function isCashOrBankClass(ledgerGroupId: string, hasBankAccount: boolean, cashGroupIds: Set<string>): boolean {
+  return cashGroupIds.has(ledgerGroupId) || hasBankAccount;
+}
+
+/**
  * The "Cash-in-Hand or bank-linked ledger" restriction, extracted from
  * purchase-invoice-service.ts's original `assertPaymentLedgersValid`
  * (44-purchase-invoice.md's Ledger Posting rule) so it has exactly one
@@ -55,11 +65,38 @@ export async function assertLedgersAreCashOrBank(
     if (!ledger.isActive) {
       throw new AppError(`Ledger "${ledger.name}" is inactive and cannot be used for ${usageLabel}.`);
     }
-    const isCashInHand = cashGroupIds.has(ledger.ledgerGroupId);
-    if (!isCashInHand && !ledger.hasBankAccount) {
+    if (!isCashOrBankClass(ledger.ledgerGroupId, ledger.hasBankAccount, cashGroupIds)) {
       throw new AppError(
         `Ledger "${ledger.name}" is not a Cash-in-Hand or bank-linked ledger and cannot be used for ${usageLabel}.`
       );
     }
   }
+}
+
+/**
+ * Read-only equivalent of `assertLedgersAreCashOrBank`'s classification,
+ * exposed as a plain id set rather than a throwing assertion
+ * (67-cash-flow.md) — every active ledger in the company that is either
+ * under the Cash-in-Hand group subtree or carries a `BankAccount` row.
+ * Built from the same two lookups that assertion already performs
+ * internally (`ledgerGroupRepository.findMany` +
+ * `getGroupSubtreeIds([CASH_IN_HAND_GROUP_NAME])`, plus every ledger's
+ * `hasBankAccount` flag via `ledgerRepository.findAllForValidation` — the
+ * company-wide variant of `findLedgersForValidation`, so this reads the
+ * ledger table once rather than discovering ids and re-fetching them).
+ */
+export async function getCashAndBankLedgerIds(companyId: string): Promise<Set<string>> {
+  const [groups, ledgers] = await Promise.all([
+    ledgerGroupRepository.findMany(companyId),
+    ledgerRepository.findAllForValidation(companyId),
+  ]);
+  const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
+
+  const result = new Set<string>();
+  for (const ledger of ledgers) {
+    if (ledger.isActive && isCashOrBankClass(ledger.ledgerGroupId, ledger.hasBankAccount, cashGroupIds)) {
+      result.add(ledger.id);
+    }
+  }
+  return result;
 }

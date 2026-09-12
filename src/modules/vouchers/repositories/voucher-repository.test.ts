@@ -280,3 +280,47 @@ describe("voucherRepository.aggregateEntriesByLedger", () => {
     expect(result).toEqual([{ ledgerId: LEDGER_A, entryType: "CREDIT", amount: 1234.5 }]);
   });
 });
+
+describe("voucherRepository.findCashTouchingEntries", () => {
+  const FROM = new Date("2026-04-01T00:00:00.000Z");
+  const TO = new Date("2026-04-30T00:00:00.000Z");
+  const CASH_LEDGER_ID = "55555555-5555-4555-8555-555555555555";
+
+  it("returns an empty array without querying when no Cash/Bank ledger ids are supplied", async () => {
+    const result = await voucherRepository.findCashTouchingEntries(COMPANY_ID, FROM, TO, []);
+    expect(result).toEqual([]);
+    expect(voucherEntryFindManyMock).not.toHaveBeenCalled();
+  });
+
+  it("excludes the Cash/Bank-side entries themselves, returning only counter-ledger entries, normalized", async () => {
+    voucherEntryFindManyMock.mockResolvedValueOnce([
+      { entryType: "DEBIT", amount: decimal(500), ledger: { ledgerGroupId: "indirect-expenses" } },
+    ]);
+
+    const result = await voucherRepository.findCashTouchingEntries(COMPANY_ID, FROM, TO, [CASH_LEDGER_ID]);
+
+    expect(result).toEqual([{ ledgerGroupId: "indirect-expenses", entryType: "DEBIT", amount: 500 }]);
+    expect(voucherEntryFindManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ledgerId: { notIn: [CASH_LEDGER_ID] },
+          voucher: expect.objectContaining({
+            companyId: COMPANY_ID,
+            voucherDate: { gte: FROM, lte: TO },
+            entries: { some: { ledgerId: { in: [CASH_LEDGER_ID] } } },
+          }),
+        }),
+      })
+    );
+  });
+
+  it("relies on the where clause to exclude a voucher with no Cash/Bank-class entry at all (a Journal Voucher between two non-cash ledgers)", async () => {
+    // The `entries: { some: { ledgerId: { in: cashLedgerIds } } }` filter
+    // means Prisma itself never returns rows for such a voucher — this test
+    // documents that contract via the exact where clause shape asserted
+    // above; a plain Journal Voucher fixture would simply produce zero rows.
+    voucherEntryFindManyMock.mockResolvedValueOnce([]);
+    const result = await voucherRepository.findCashTouchingEntries(COMPANY_ID, FROM, TO, [CASH_LEDGER_ID]);
+    expect(result).toEqual([]);
+  });
+});
