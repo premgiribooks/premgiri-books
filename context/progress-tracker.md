@@ -2170,10 +2170,11 @@ Mapping so far:
   from a foreign-company one — but a cosmetic cleanup worth doing later) accepted as-is,
   no fix needed.
 
-  **Merge into `main` deferred**, matching Purchase Reports' own still-pending merge —
-  implementation sits reviewed and committed on `feature/inventory-reports` (commits
-  `e24324d`, `a249a4d`), awaiting explicit user go-ahead to merge (and awaiting Purchase
-  Reports' own merge first, since this branch was branched from it).
+  **Marked done 2026-09-12 per explicit user instruction** ("mark as done"). Merge into
+  `main` deferred by choice, not blocked — implementation sits reviewed and committed on
+  `feature/inventory-reports` (commits `e24324d`, `a249a4d`, `0fedd73`), matching Purchase
+  Reports' own still-pending merge (and naturally sequenced after it, since this branch
+  was branched from it). Tracker #68 flipped to ✅ in `context/Phases/phase-tracker.md`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

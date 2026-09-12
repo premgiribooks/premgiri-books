@@ -933,7 +933,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 65  | Cash Flow         | Accounting     | ✅     |
 | 66  | Sales Reports     | Sales          | ✅     |
 | 67  | Purchase Reports  | Purchase       | ✅     |
-| 68  | Inventory Reports | Inventory      | ⬜     |
+| 68  | Inventory Reports | Inventory      | ✅     |
 | 69  | Customer Reports  | Customers      | ⬜     |
 | 70  | Supplier Reports  | Suppliers      | ⬜     |
 | 71  | Employee Reports  | Employees      | ⬜     |
