@@ -160,11 +160,18 @@ export function CommandPalette() {
 
   const navigateTo = React.useCallback(
     (href: string) => {
-      recordRecentPage(href);
+      // Only record hrefs that resolve to a real nav leaf — a DATA-tier row
+      // (Products/Customers/Suppliers) carries an entity-specific href that
+      // would never surface in "Recent" anyway (leafByHref.get() only ever
+      // matches NAVIGATION-tree hrefs), so recording it would just leave an
+      // inert entity id sitting in localStorage for no benefit.
+      if (leafByHref.has(href)) {
+        recordRecentPage(href);
+      }
       setCommandPaletteOpen(false);
       router.push(href);
     },
-    [router]
+    [router, leafByHref]
   );
 
   function handleInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {

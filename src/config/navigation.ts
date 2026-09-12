@@ -69,8 +69,13 @@ export interface NavLeaf {
   /** Overrides the parent group's permissionModule for this leaf only. Used
    * for Company Management / Financial Year / Branch Management under
    * Masters, which are gated by their own modules ("company",
-   * "financial-year"), not "masters". */
-  permissionModule?: PermissionModule;
+   * "financial-year"), not "masters"; and for Employees under Masters
+   * (gated on "employees", not "masters" — a genuinely different module
+   * from the top-level Employees group). An array means the destination
+   * page checks more than one module (e.g. GST Reports requires both
+   * "reports:view" and "gst:view") — every module in the array must grant
+   * "view" for the leaf to render. */
+  permissionModule?: PermissionModule | readonly PermissionModule[];
 }
 
 export interface NavGroup {
@@ -83,7 +88,12 @@ export interface NavGroup {
 
 export type NavItem = NavLeaf | NavGroup;
 
-function leaf(label: string, href: string, icon: LucideIcon, permissionModule?: PermissionModule): NavLeaf {
+function leaf(
+  label: string,
+  href: string,
+  icon: LucideIcon,
+  permissionModule?: PermissionModule | readonly PermissionModule[]
+): NavLeaf {
   return { type: "leaf", label, href, icon, permissionModule };
 }
 
@@ -110,7 +120,7 @@ export const NAVIGATION: NavItem[] = [
     leaf("Price Lists", "/masters/price-lists", ListOrdered),
     leaf("Customers", "/masters/customers", Users),
     leaf("Suppliers", "/masters/suppliers", Truck),
-    leaf("Employees", "/masters/employees", Users),
+    leaf("Employees", "/masters/employees", Users, "employees"),
   ]),
   group("Sales", ShoppingCart, "sales", [
     leaf("Quotations", "/sales/quotations", FileText),
@@ -163,7 +173,7 @@ export const NAVIGATION: NavItem[] = [
     leaf("Customer Reports", "/reports/customers", Users),
     leaf("Supplier Reports", "/reports/suppliers", Building2),
     leaf("Employee Reports", "/reports/employees", UserSquare2),
-    leaf("GST Reports", "/reports/gst", Receipt),
+    leaf("GST Reports", "/reports/gst", Receipt, ["reports", "gst"]),
   ]),
   group("Employees", Users, "employees", [
     leaf("Attendance", "/employees/attendance", CalendarCheck),
