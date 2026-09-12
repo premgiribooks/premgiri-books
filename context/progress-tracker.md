@@ -196,9 +196,62 @@ Mapping so far:
   way Products/Customers/Suppliers already do) and cross-referencing this entry from that
   spec file, rather than re-implementing it from scratch.
 
-  **Not yet pushed or merged into `main`** — implemented, browser-verified, and committed
-  (see Next Up) on its own feature branch, awaiting the user's review before merge, per
-  this project's one-branch-at-a-time git workflow.
+  **Code review: 2 HIGH, 1 LOW — both HIGH fixed, LOW fixed. Security review: APPROVE, 0
+  CRITICAL/HIGH/MEDIUM — 2 INFO notes, 1 addressed as a drive-by fix, 1 accepted as-is.**
+
+  Code review (`src/config/navigation.ts` had no review-flagged issues outside these two):
+  - **[HIGH, fixed]** `Employees` under Masters (`/masters/employees`) inherited the
+    parent group's `"masters"` module, but `masters/employees/page.tsx` actually gates on
+    `"employees":"view"` — a role with `masters:view` but not `employees:view` (Sales,
+    Purchase, Store Manager, per `DEFAULT_ROLE_PERMISSIONS`) would see the link and hit a
+    silent redirect to `/`. Fixed with an explicit `"employees"` override on that one leaf.
+  - **[HIGH, fixed]** `GST Reports` under Reports (`/reports/gst`) inherited only
+    `"reports"`, but `reports/gst/page.tsx` requires **both** `reports:view` **and**
+    `gst:view` — the same three roles have the former without the latter, same dead-link
+    failure mode. `NavLeaf.permissionModule` didn't have a way to express "requires more
+    than one module," so this was a genuine design gap, not just a missed override — fixed
+    by extending it to accept `PermissionModule | readonly PermissionModule[]` (all
+    modules in the array must be granted), used only by this one leaf so far.
+  - **[LOW, fixed]** A DATA-tier Command Palette row (Products/Customers/Suppliers) was
+    calling `recordRecentPage()` with its raw entity-specific href, unlike `AppShell`'s
+    pathname-driven recording which always canonicalizes to a real nav leaf — harmless (it
+    never surfaced in "Recent" anyway, since that list only resolves against
+    `NAVIGATION`-tree hrefs) but inconsistent with the stated "hrefs only" intent. Fixed by
+    only recording a DATA-tier click's href when it resolves to a known nav leaf.
+  - Verified: every other leaf's module (default or overridden) was cross-checked by the
+    reviewer against its destination page's actual `hasPermission`/`isCurrentUserCompanyAdmin`
+    call across every `masters/*`, `sales/*`, `purchase/*`, `inventory/*`, `accounting/*`,
+    `gst/*`, `reports/*`, `employees/*`, and `settings/*` page — no further mismatches
+    found. Independently re-confirmed via a full `grep` sweep of every `hasPermission(user, ...)` /
+    `isCurrentUserCompanyAdmin()` call across all nine module trees before/after applying
+    the fixes above.
+
+  Security review — one INFO addressed as a drive-by fix (the same LOW item the code
+  review flagged, above), one accepted as-is: **no explicit rate limiting on
+  `searchEntities()`** (`src/lib/global-search.ts`) beyond the client's 200ms debounce — a
+  resource-usage consideration at most, since every downstream service it calls already
+  re-validates permission and company scope per call; not introduced by this commit and
+  no broader Server-Action rate-limiting convention exists yet in this codebase to align
+  with, so left as a documented, non-blocking note rather than invented ad hoc here.
+  Reviewer explicitly confirmed: `getNavPermissions()`/`global-search.ts` take no
+  client-supplied identity/company parameter (both are session-derived, server-only); the
+  nav-visibility layer is purely a rendering filter — every existing page's own
+  `assertPermission`/`hasPermission` gate is untouched and still the real enforcement
+  boundary; no injection vector in the new Server Action; localStorage stores only hrefs
+  and UI-state strings, never entity data or PII.
+
+  Both fixes re-verified: `npx tsc --noEmit` and `npx eslint src` clean project-wide (same
+  2 pre-existing unrelated warnings only); a temporary vitest file (written, run, then
+  deleted — not committed) exercised `filterNavigation()` directly against six permission
+  combinations, confirming both leaves now correctly hide/show under every combination of
+  their required module(s), including the two negative cases (has one required module but
+  not the other for GST Reports) and the "both granted" positive case. Committed as a
+  second commit (`8e253f5`) on the same branch.
+
+  **Not yet pushed or merged into `main`** — implemented, browser-verified, code-reviewed,
+  security-reviewed, and committed (both commits — see Next Up) on its own feature branch,
+  awaiting the user's review before merge, per this project's one-branch-at-a-time git
+  workflow.
 
 - **Feature-spec 60 (HSN Summary, Phase 8 — GST #58) implemented 2026-09-11** on branch
   `feature/hsn-summary` — the last item in Phase 8's original four-item batch (GST
@@ -1740,9 +1793,11 @@ Mapping so far:
 ## In Progress
 
 - **Navigation & IA Overhaul** (see the Current Phase entry above for full detail) —
-  implemented, browser-verified with a scratchpad-only Playwright script, and committed on
-  `feature/navigation-ia-overhaul`. **Not yet pushed or merged into `main`** — awaiting the
-  user's review before merge, per this project's one-branch-at-a-time git workflow.
+  implemented, browser-verified with a scratchpad-only Playwright script, code-reviewed (2
+  HIGH found and fixed), and security-reviewed (APPROVE, 0 CRITICAL/HIGH/MEDIUM), all
+  committed on `feature/navigation-ia-overhaul` (two commits: `d9ac101` implementation,
+  `8e253f5` review fixes). **Not yet pushed or merged into `main`** — awaiting the user's
+  review before merge, per this project's one-branch-at-a-time git workflow.
 
 - Feature-spec 38 (Sales Invoice) implemented 2026-09-10 on branch `36-sales-orders`. **Code review: 1 HIGH, 3 MEDIUM, all fixed. Security review: 1 HIGH, 2 MEDIUM/LOW, the HIGH and one MEDIUM fixed; the other MEDIUM/LOW accepted as-is.** Fixed:
   - **[HIGH, code review] Quick Customer auto-conversion silently required an unrelated `masters:create` permission** — `convertQuickCustomer` called the public `customerService.createCustomer`/`listSelectableLedgerGroupsForCustomer`, both gated on `masters:create`/`masters:view`. A cashier role with `sales:create` but no `masters` rights (a realistic, deliberate role split) would have the whole posting transaction abort on this internal side-effect. Fixed by adding `customerService.createCustomerFromSale`/`listSelectableLedgerGroupsForSale` — identical logic, gated on `sales:create` instead, since it's the authorized sale (not a standalone master-data action) that justifies creating the buyer's record. `createCustomer`/`listSelectableLedgerGroupsForCustomer` are untouched for their normal Customer Management callers.

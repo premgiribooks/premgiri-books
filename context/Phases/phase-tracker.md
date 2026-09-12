@@ -2306,8 +2306,23 @@ Masters→Products navigation, auto-expand-on-active-route across reload, Ctrl+K
 collapsed-state persistence, mobile drawer) — one real bug found and fixed along the way
 (`use-favorites.ts`/`use-recent-pages.ts`'s `getServerSnapshot()` returned a fresh `[]`
 each call instead of a stable reference, tripping React's `useSyncExternalStore`
-contract). Committed on its own branch; **not yet pushed or merged into `main`** — awaiting
-the user's review first, per this project's one-branch-at-a-time git workflow.
+contract). Committed on its own branch.
+
+**Code review + security review both ran, found real issues, both fixed** (see
+`context/progress-tracker.md`'s Current Phase entry, same date, for full detail): code
+review found 2 HIGH (two nav leaves gated on the wrong permission module(s) versus what
+their destination page actually enforces — Masters > Employees needed `"employees"`, not
+the inherited `"masters"`; Reports > GST Reports needed **both** `"reports"` and `"gst"`,
+requiring `NavLeaf.permissionModule` to be extended to accept an array) and 1 LOW (a
+Command Palette DATA-tier row recording its entity href into "recent pages," fixed to only
+record real nav-leaf hrefs); security review was a clean APPROVE (0 CRITICAL/HIGH/MEDIUM,
+2 INFO notes, one addressed alongside the LOW code-review fix, one accepted as a
+documented non-blocking note — no rate limiting on the new search Server Action beyond
+client-side debounce, not a regression and no existing convention to align with yet).
+Re-verified with a temporary, uncommitted vitest file exercising the permission-filter
+logic directly against six module combinations — all pass. Fixes committed as a second
+commit on the same branch. **Not yet pushed or merged into `main`** — awaiting the user's
+review first, per this project's one-branch-at-a-time git workflow.
 
 ---
 
