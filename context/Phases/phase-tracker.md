@@ -741,7 +741,7 @@ Voucher screen. Must be implemented in order (#59 → #60 → #61):
 | #   | Feature         | Depends On | Status |
 | --- | --------------- | ---------- | ------ |
 | 59  | Employee Master | Company    | ✅     |
-| 60  | Attendance      | Employee   | ⬜     |
+| 60  | Attendance      | Employee   | ✅     |
 | 61  | Payroll         | Attendance | ⬜     |
 
 **Employee Master (#59) implemented 2026-09-11** on branch `feature/employee-master`,
@@ -815,6 +815,75 @@ AI-agent safety guard blocks a non-interactive consent-flag bypass) before this
 feature's own migration could be created; the dev database was then reseeded
 (`npx tsx prisma/seed.ts`, since the reset did not auto-run it this time) before browser
 verification could log in.
+
+**Attendance (#60) implemented 2026-09-12** on branch `feature/attendance`, merged into
+`main` (`--no-ff`, no conflicts, `9e4a407`). Added a new `Attendance` Prisma model +
+`AttendanceStatus` enum (`PRESENT`/`ABSENT`/`HALF_DAY`/`ON_LEAVE`) per
+`62-attendance.md`'s Granularity Decision: one row per `(employee, date)`, never a
+pre-aggregated monthly summary — `getAttendanceSummary` is a live `groupBy`/`count`
+query, not a materialized cache. `@@unique([companyId, employeeId, date])` backs
+`markAttendance`'s upsert (a corrected day overwrites the existing row; no separate edit
+action, no history/audit trail of prior values, no delete). Both `employeeId` and the
+optional, denormalized `branchId` use composite tenant-safe FKs — `(companyId,
+employeeId) -> Employee(companyId, id)` and `(companyId, branchId) ->
+Branch(companyId, id)` — the same defense-in-depth posture `61-employee-master.md`'s own
+review established; `Employee` gained a new `@@unique([companyId, id])` to support it
+(this feature's own security review caught the spec's literal plain-FK draft on
+`employeeId` before it ever reached `main`, so it was fixed pre-merge rather than as a
+follow-up, unlike Employee Master's `userId` fix which landed after its first merge).
+New `src/modules/attendance/` (repository — `upsertOne`/`upsertMany`/`findMany`/
+`getSummary`, with `assertActiveEmployees` batching bulk entries by distinct
+`employeeId` instead of one lookup per row; service; Zod schema; Server Actions) and a
+new `/employees` hub (distinct from Employee Master's own `/masters/employees`) with
+`/employees/attendance` (roster: date picker, per-employee status/remarks, bulk-save)
+and `/employees/attendance/history` (read-only, employee + date-range filtered,
+defaulting to the current month when no date filter is supplied at all). Wired the
+previously-inert "Employees" sidebar entry to `/employees` and added the
+`employees/attendance`/`attendance/history` breadcrumb labels. Gated on the existing
+`employees` permission module (`view` for reads/history, `create` for marking
+attendance — no separate edit action, matching the upsert design); no permission
+catalog changes needed. 42 new vitest cases (upsert-overwrite behavior, future-date
+rejection, inactive/cross-company employee rejection for both `markAttendance` and
+`markAttendanceBulk`, bulk all-or-nothing transactional behavior, and
+`getAttendanceSummary`'s per-status counts against a fixture spanning all four statuses
+plus unmarked days) — 1604/1604 total suite passing. `npx tsc --noEmit`, `npx eslint src
+prisma` (0 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and
+`next build` all pass; `/employees`, `/employees/attendance`, and
+`/employees/attendance/history` appear in the build route table. Browser-verified
+end-to-end (Playwright-driven): logged in as `admin`, confirmed the Attendance card on
+`/employees`, marked an employee Present on the roster and saved, confirmed it appears
+on the History page with the correct status badge — zero console errors throughout.
+
+**Post-implementation code review + security review (run in parallel) found 1 MEDIUM
+(security) and 2 MEDIUM + 2 LOW (code) — all fixed**, no CRITICAL/HIGH: (1) **MEDIUM,
+security, fixed** — `Attendance.employeeId` was a plain FK with no tenant-scoping at the
+DB level, repeating the exact gap `61-employee-master.md`'s review had already fixed
+once for `Employee.branchId`/`userId`; fixed by adding `@@unique([companyId, id])` to
+`Employee` and repointing `Attendance.employee`'s relation to the composite FK (new
+migration `20260912153446_attendance_employee_composite_fk`, applied via `prisma
+migrate deploy` after generating its SQL with `prisma migrate diff --from-config-datasource`,
+since `prisma migrate dev` again refused to run non-interactively — the same "adds a
+unique constraint" warning Employee Master's own `userId` fix hit). (2) **MEDIUM, code,
+fixed** — `/employees/attendance/history` had no default date bound, so a bare visit
+with no query params queried the company's entire attendance history in one
+unfiltered, unpaginated call; fixed by defaulting to the current calendar month only
+when the visitor supplies neither `dateFrom` nor `dateTo` at all (an explicit one-sided
+range is left exactly as typed). (3) **MEDIUM, code, fixed** — both pages' own
+hand-rolled `DATE_REGEX` validated date-param *shape* only, not calendar validity (e.g.
+`?date=2026-99-99` passed the regex, then reached `new Date(...)` as `Invalid Date` with
+no `error.tsx` boundary anywhere under `src/app/employees/`, crashing the page for any
+user who hand-edited the URL); fixed by reusing `attendance-schema.ts`'s
+`isValidCalendarDate` in both pages instead, re-verified live (malformed dates on both
+pages now return 200, not a crash). (4) **LOW, fixed** — the exported but never-used
+`attendanceListFiltersSchema`/`AttendanceListFiltersInput` (dead code duplicating the
+now-shared `isValidCalendarDate` logic) and the unused `MarkAttendanceEntry` type were
+removed. (5) **LOW, fixed** — `upsertMany`'s per-entry `assertActiveEmployee` call (one
+`findUnique` per row, redundant when a "single employee across a date range" batch
+repeats the same `employeeId` up to 500 times) was replaced with a new
+`assertActiveEmployees` that resolves every distinct `employeeId` in the batch with one
+`findMany` call. Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0
+errors), `npx vitest run` (1604/1604), `next build` all pass; browser re-verified live
+(zero console errors, malformed-date 200 checks passing).
 
 ---
 

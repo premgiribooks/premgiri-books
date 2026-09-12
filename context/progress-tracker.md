@@ -1783,6 +1783,55 @@ Mapping so far:
   non-interactive consent-flag bypass), then reseeded (`npx tsx prisma/seed.ts`) before
   browser verification could log in. **Attendance (#60, spec 62) is next per Phase 9's
   required order** — depends on the `Employee` row this feature creates.
+- **Attendance (Phase 9 — Employee Management #60, spec 62) implemented 2026-09-12** on
+  branch `feature/attendance`, per explicit user instruction ("start Attendance") — the
+  second item of Phase 9's three (Employee Master → Attendance → Payroll). See
+  `context/Phases/phase-tracker.md`'s Phase 9 section for the full implementation
+  record. New `Attendance` Prisma model + `AttendanceStatus` enum: one row per
+  `(employee, date)` (never a pre-aggregated monthly summary), upsert-only
+  (`markAttendance`/`markAttendanceBulk`, no separate edit, no delete, no history of
+  prior values), a live `groupBy`/`count` `getAttendanceSummary` for Payroll (spec 63) to
+  consume directly. Both `employeeId` and the optional, denormalized `branchId` use
+  composite tenant-safe FKs, mirroring Employee Master's own `branchId`/`userId`
+  precedent — `Employee` gained a new `@@unique([companyId, id])` to support it. New
+  `src/modules/attendance/` (repository/service/Zod schema/Server Actions) and a new
+  `/employees` hub (Attendance card) with `/employees/attendance` (roster: date picker,
+  per-employee status/remarks, bulk-save) and `/employees/attendance/history`
+  (read-only, employee + date-range filtered, defaulting to the current month when no
+  date filter is supplied). Wired the previously-inert "Employees" sidebar entry to
+  `/employees`. Gated on the existing `employees` permission module — no catalog
+  changes needed. 42 new vitest cases — 1604/1604 total suite passing;
+  `tsc`/`eslint`/`next build` all clean. Browser-verified end-to-end (Playwright-driven):
+  login, Attendance card on `/employees`, marked an employee Present on the roster,
+  saved, confirmed it on the History page with the correct badge — zero console errors.
+
+  **Post-implementation code review + security review (run in parallel, before merge)
+  found 1 MEDIUM (security) and 2 MEDIUM + 2 LOW (code) — all fixed**, no
+  CRITICAL/HIGH: (1) MEDIUM, security — `Attendance.employeeId` was a plain FK with no
+  DB-level tenant-scoping, repeating the exact gap Employee Master's review had already
+  fixed once for `branchId`/`userId`; fixed with the same composite-FK treatment (new
+  migration `20260912153446_attendance_employee_composite_fk`, applied via `prisma
+  migrate deploy` since `prisma migrate dev` again refused to run non-interactively).
+  (2) MEDIUM, code — the history page had no default date bound, so a bare visit with
+  no query params queried the company's entire attendance history unfiltered; fixed by
+  defaulting to the current calendar month only when neither `dateFrom` nor `dateTo` is
+  supplied at all. (3) MEDIUM, code — both pages' hand-rolled date-shape regex accepted
+  calendar-invalid dates (e.g. `2026-99-99`) that then crashed the page as an
+  unhandled `Invalid Date` reaching Prisma (no `error.tsx` boundary existed); fixed by
+  reusing `attendance-schema.ts`'s real `isValidCalendarDate` in both pages instead,
+  re-verified live (malformed dates now return 200, not a crash). (4) LOW — the unused
+  `attendanceListFiltersSchema`/`AttendanceListFiltersInput` and `MarkAttendanceEntry`
+  dead code was removed. (5) LOW — `upsertMany`'s per-entry employee lookup (one
+  `findUnique` per row, wasteful when a single-employee date-range batch repeats the
+  same id up to 500 times) was replaced with a batched `assertActiveEmployees` (one
+  `findMany` for every distinct `employeeId`). Re-verified after fixes:
+  `tsc`/`eslint`/`vitest` (1604/1604)/`next build` all pass.
+
+  **Merged into `main` 2026-09-12** (`--no-ff`, no conflicts, `9e4a407` —
+  `tsc`/`eslint`/`vitest` (1604/1604)/`next build` all re-verified green against the
+  merged result). `feature/attendance` deleted locally now that `main` has it.
+  **Payroll (#61, spec 63) is next per Phase 9's required order** — depends on this
+  feature's `getAttendanceSummary`.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
