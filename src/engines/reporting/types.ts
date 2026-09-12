@@ -65,3 +65,29 @@ export interface ProfitAndLossReport {
   grossProfit: number;
   netProfit: number;
 }
+
+export interface BalanceSheetRow {
+  ledgerId: string;
+  ledgerName: string;
+  /** Presentation value, sign already applied per side (Assets: closingBalance direct; Liabilities: sign-flipped). */
+  value: number;
+}
+
+export interface BalanceSheetSection {
+  groupId: string;
+  groupName: string;
+  depth: number;
+  rows: BalanceSheetRow[];
+  subtotal: number;
+  childSections: BalanceSheetSection[];
+}
+
+export interface BalanceSheetReport {
+  assets: BalanceSheetSection[];
+  /** Includes the synthetic "Profit & Loss Account (Current Period)" section appended after every real LIABILITY group. */
+  liabilities: BalanceSheetSection[];
+  totalAssets: number;
+  totalLiabilities: number;
+  netProfit: number;
+  isBalanced: boolean;
+}
