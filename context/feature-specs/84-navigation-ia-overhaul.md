@@ -236,6 +236,16 @@ existing URL.
   scrollable") plus a `[&_[data-slot=scroll-area-scrollbar]]:hidden` rule that hides only
   the custom scrollbar thumb/track — the viewport's native overflow scrolling (wheel,
   touch, keyboard) is unaffected, so the rail scrolls with no visible scrollbar clutter.
+- **Manually resizable rail.** A thin drag handle on the rail's right edge
+  (`role="separator"`, pointer events, `src/components/layout/sidebar.tsx`) lets the user
+  widen/narrow the expanded rail between 224px and 420px (default 256px, `src/hooks/
+  use-sidebar-state.ts`'s `SIDEBAR_MIN_WIDTH`/`SIDEBAR_MAX_WIDTH`/`SIDEBAR_DEFAULT_WIDTH`),
+  persisted the same way collapsed/expanded state is. Added because the third-level
+  (grandchild) rows' deeper indent leaves less horizontal room for a label at the default
+  width — some third-level labels (e.g. "Party-wise Purchases") were getting tight/
+  truncated. Not shown in collapsed or mobile-drawer mode (both have their own fixed
+  width). Verified via Playwright: dragging changes the rendered width live, the value
+  persists across reload, and dragging past either bound clamps instead of overflowing.
 - **Command Palette.** `Ctrl`/`Cmd`+`K` (or clicking the Top Navbar search field) opens an
   overlay built on the existing `Dialog` primitive. Empty query shows Favorites + Recent;
   typing filters the same permission-filtered tree (PAGES, including third-level report

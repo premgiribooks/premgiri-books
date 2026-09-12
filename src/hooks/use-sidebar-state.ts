@@ -8,12 +8,27 @@ import * as React from "react";
 // only persistence mechanism this needs (no DB table).
 const STORAGE_KEY = "premgiri.sidebarState.v1";
 
+/** Rail width bounds — the default (256px, Tailwind's `w-64`) comfortably
+ * fits a third-level (grandchild) row's indent + label; the drag handle
+ * lets a user widen it further for a long third-level label the default
+ * width would otherwise truncate. */
+export const SIDEBAR_MIN_WIDTH = 224;
+export const SIDEBAR_MAX_WIDTH = 420;
+export const SIDEBAR_DEFAULT_WIDTH = 256;
+
 interface SidebarState {
   collapsed: boolean;
   expandedGroups: string[];
+  /** Expanded-rail width in px, user-adjustable via a drag handle. Not
+   * used in collapsed (icon-only) or mobile-drawer mode. */
+  width: number;
 }
 
-const DEFAULT_STATE: SidebarState = { collapsed: false, expandedGroups: [] };
+const DEFAULT_STATE: SidebarState = { collapsed: false, expandedGroups: [], width: SIDEBAR_DEFAULT_WIDTH };
+
+function clampWidth(width: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
 
 let snapshot: SidebarState = DEFAULT_STATE;
 let hydrated = false;
@@ -29,6 +44,7 @@ function readStorage(): SidebarState {
     return {
       collapsed: parsed.collapsed === true,
       expandedGroups: Array.isArray(parsed.expandedGroups) ? parsed.expandedGroups.filter((g) => typeof g === "string") : [],
+      width: typeof parsed.width === "number" && Number.isFinite(parsed.width) ? clampWidth(parsed.width) : SIDEBAR_DEFAULT_WIDTH,
     };
   } catch {
     return DEFAULT_STATE;
@@ -82,6 +98,17 @@ export function setSidebarCollapsed(collapsed: boolean): void {
     return;
   }
   snapshot = { ...snapshot, collapsed };
+  persist();
+  emitChange();
+}
+
+export function setSidebarWidth(width: number): void {
+  ensureHydrated();
+  const next = clampWidth(width);
+  if (snapshot.width === next) {
+    return;
+  }
+  snapshot = { ...snapshot, width: next };
   persist();
   emitChange();
 }

@@ -149,8 +149,23 @@ Mapping so far:
      auto-re-expand across a full page reload.
 
   `npx tsc --noEmit` and `npx eslint src` clean throughout (same 2 pre-existing unrelated
-  warnings only). **Committed on the same feature branch as the original overhaul — not
-  yet pushed or merged into `main`**, per this project's one-branch-at-a-time workflow.
+  warnings only).
+
+  **4. Manually resizable rail width**, same day, follow-up request after the above: a
+  drag handle on the rail's right edge (`role="separator"`, `src/components/layout/
+  sidebar.tsx`) lets the user widen/narrow the expanded rail between 224–420px (default
+  256px), persisted via a new `width` field in `use-sidebar-state.ts`'s store
+  (`SIDEBAR_MIN_WIDTH`/`SIDEBAR_MAX_WIDTH`/`SIDEBAR_DEFAULT_WIDTH`) — added because the
+  new third-level rows' deeper indent left some long third-level labels (e.g. "Party-wise
+  Purchases") tight/truncated at the old fixed `w-64`. Live width tracked in local
+  component state while dragging (never writes to `localStorage` on every pointermove),
+  committed via `setSidebarWidth` on pointerup. Not shown in collapsed or mobile-drawer
+  mode. Verified via Playwright: dragging changes the rendered width live, persists across
+  reload, and clamps at both bounds instead of overflowing.
+
+  `npx tsc --noEmit`/`npx eslint src` clean. Spec 84 updated with this addition.
+  **Committed on the same feature branch as the original overhaul — not yet pushed or
+  merged into `main`**, per this project's one-branch-at-a-time workflow.
 
 - **Navigation & Information Architecture Overhaul implemented 2026-09-12** on branch
   `feature/navigation-ia-overhaul` — a cross-cutting UX/architecture initiative requested

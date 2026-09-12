@@ -13,7 +13,14 @@ import { SidebarGroup } from "@/components/layout/sidebar-group";
 import { flattenNavItems, NAVIGATION, type NavGroup, type NavLeaf } from "@/config/navigation";
 import { filterNavigation } from "@/lib/navigation-filter";
 import { useNavPermissions } from "@/components/providers/nav-permissions-provider";
-import { setGroupExpanded, setSidebarCollapsed, useSidebarState } from "@/hooks/use-sidebar-state";
+import {
+  setGroupExpanded,
+  setSidebarCollapsed,
+  setSidebarWidth,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  useSidebarState,
+} from "@/hooks/use-sidebar-state";
 import { toggleFavorite, useFavorites } from "@/hooks/use-favorites";
 
 interface SidebarProps {
@@ -45,10 +52,52 @@ function groupContainsActive(group: NavGroup, pathname: string): boolean {
 export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const permissions = useNavPermissions();
-  const { collapsed: persistedCollapsed, expandedGroups } = useSidebarState();
+  const { collapsed: persistedCollapsed, expandedGroups, width } = useSidebarState();
   const favorites = useFavorites();
 
   const collapsed = variant === "rail" && persistedCollapsed;
+
+  // Manual width adjustment — the 3rd-level (grandchild) rows added under
+  // Reports indent further than a 2-level tree ever did, so a long
+  // third-level label (e.g. "Party-wise Purchases") can get cramped/
+  // truncated at the default width. `dragWidth` holds the live value while
+  // actively dragging (kept as local state so every pointermove doesn't
+  // write to localStorage); the final value is committed via
+  // setSidebarWidth on pointerup.
+  const [dragWidth, setDragWidth] = React.useState<number | null>(null);
+  const displayWidth = dragWidth ?? width;
+
+  const handleResizePointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = width;
+      const previousUserSelect = document.body.style.userSelect;
+      const previousCursor = document.body.style.cursor;
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+
+      function clamp(value: number): number {
+        return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value));
+      }
+
+      function onPointerMove(moveEvent: PointerEvent) {
+        setDragWidth(clamp(startWidth + (moveEvent.clientX - startX)));
+      }
+
+      function onPointerUp(upEvent: PointerEvent) {
+        setSidebarWidth(clamp(startWidth + (upEvent.clientX - startX)));
+        setDragWidth(null);
+        document.body.style.userSelect = previousUserSelect;
+        document.body.style.cursor = previousCursor;
+        window.removeEventListener("pointermove", onPointerMove);
+      }
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp, { once: true });
+    },
+    [width]
+  );
 
   const visibleNav = React.useMemo(() => filterNavigation(NAVIGATION, permissions), [permissions]);
 
@@ -109,10 +158,12 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
     <nav
       aria-label="Primary"
       className={cn(
-        "flex h-full shrink-0 flex-col bg-sidebar transition-[width] duration-150",
+        "relative flex h-full shrink-0 flex-col bg-sidebar",
+        dragWidth === null && "transition-[width] duration-150",
         variant === "rail" && "border-r border-border",
-        variant === "drawer" ? "w-full" : collapsed ? "w-16" : "w-64"
+        variant === "drawer" ? "w-full" : collapsed && "w-16"
       )}
+      style={variant === "rail" && !collapsed ? { width: displayWidth } : undefined}
     >
       {variant === "rail" && (
         <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-2">
@@ -192,6 +243,16 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
           )}
         </div>
       </ScrollArea>
+
+      {variant === "rail" && !collapsed && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          onPointerDown={handleResizePointerDown}
+          className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-primary/30 active:bg-primary/50"
+        />
+      )}
     </nav>
   );
 }
