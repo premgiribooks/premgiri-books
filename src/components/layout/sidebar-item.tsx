@@ -17,8 +17,10 @@ interface SidebarItemProps {
   collapsed: boolean;
   href?: string;
   active?: boolean;
-  /** Renders with child-row indent/sizing (used for a group's children). */
-  indent?: boolean;
+  /** Indent depth: 0/undefined = top-level, 1 = a group's direct child, 2 =
+   * a third-level grandchild (nested under a leaf that itself has
+   * children, e.g. a Reports sub-hub's report types). */
+  indent?: 0 | 1 | 2;
   onClick?: () => void;
   favorite?: boolean;
   onToggleFavorite?: () => void;
@@ -30,7 +32,7 @@ export function SidebarItem({
   collapsed,
   href,
   active = false,
-  indent = false,
+  indent = 0,
   onClick,
   favorite,
   onToggleFavorite,
@@ -41,7 +43,8 @@ export function SidebarItem({
       ? "bg-primary-dim font-medium text-primary"
       : "text-sidebar-foreground/80 hover:bg-muted hover:text-sidebar-foreground",
     collapsed && "justify-center px-0",
-    indent && !collapsed && "pl-9"
+    !collapsed && indent === 1 && "pl-9",
+    !collapsed && indent === 2 && "pl-14"
   );
 
   const content = (

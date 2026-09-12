@@ -32,13 +32,32 @@ function isVisible(modules: PermissionModule[], permissions: NavPermissions): bo
 }
 
 /**
+ * Filters a leaf's optional third-level children the same way a group
+ * filters its own children — falling back to `parentModule` (the enclosing
+ * NavGroup's module) for a grandchild with no override of its own. Every
+ * current third-level leaf (the Reports sub-hubs' report types) only ever
+ * needs the top-level group's module ("reports"), so this never needs the
+ * intermediate leaf's own module specifically.
+ */
+function filterLeafChildren(item: NavLeaf, parentModule: PermissionModule | undefined, permissions: NavPermissions): NavLeaf {
+  if (!item.children || item.children.length === 0) {
+    return item;
+  }
+  const visibleGrandchildren = item.children.filter((grandchild) =>
+    isVisible(requiredModules(grandchild, parentModule), permissions)
+  );
+  return { ...item, children: visibleGrandchildren };
+}
+
+/**
  * Filters the navigation tree down to what the current user is allowed to
  * see, at the same granularity the app already enforces per-page: a leaf is
  * visible only if every one of its required permission modules grants
  * "view" (matching whatever its destination page actually checks — some
  * pages, like GST Reports, require more than one), and a group is visible
- * only if at least one of its children is. Shared by the Sidebar and the
- * Command Palette so the visibility rule lives in one place.
+ * only if at least one of its children is. A leaf's own third-level
+ * children (if any) are filtered the same way. Shared by the Sidebar and
+ * the Command Palette so the visibility rule lives in one place.
  */
 export function filterNavigation(tree: NavItem[], permissions: NavPermissions): NavItem[] {
   const result: NavItem[] = [];
@@ -46,14 +65,14 @@ export function filterNavigation(tree: NavItem[], permissions: NavPermissions): 
   for (const item of tree) {
     if (item.type === "leaf") {
       if (isVisible(requiredModules(item), permissions)) {
-        result.push(item);
+        result.push(filterLeafChildren(item, undefined, permissions));
       }
       continue;
     }
 
-    const visibleChildren = item.children.filter((child) =>
-      isVisible(requiredModules(child, item.permissionModule), permissions)
-    );
+    const visibleChildren = item.children
+      .filter((child) => isVisible(requiredModules(child, item.permissionModule), permissions))
+      .map((child) => filterLeafChildren(child, item.permissionModule, permissions));
     if (visibleChildren.length > 0) {
       result.push({ ...item, children: visibleChildren } satisfies NavGroup);
     }

@@ -98,10 +98,59 @@ Mapping so far:
 | 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#79) — **spec drafted 2026-09-11, not implemented**; last item in Phase 11, closing the drafting of Phases 8–11 in full; introduces a new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one |
 | 82           | GSTR-2 (`82-gstr-2.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#80) — **spec drafted 2026-09-11, not implemented**; added to Phase 8 after its original batch (specs 57–60) was already implemented/drafted, per explicit user request — read-only inward-supply reporting view in the original (suspended) GSTR-2 form's shape, no `GstFilingRecord`/filing workflow, no new schema |
 | 83           | ITC Register (`83-itc-register.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#81) — **spec drafted 2026-09-11, not implemented**; second item added to Phase 8 alongside spec 82 — rate/party/HSN breakdown of GSTR-3B's (#57/spec 59) Table 4(A)(5) lump ITC figure, report-only, explicitly not a full Electronic Credit Ledger, no new schema |
+| 84           | Navigation & Information Architecture Overhaul (`84-navigation-ia-overhaul.md`) | Not a `phase-tracker.md` item (cross-cutting, touches every module's navigation rather than one business feature) — **retrospective spec, implemented 2026-09-12/13** on branch `feature/navigation-ia-overhaul`; hierarchical permission-aware Sidebar, Ctrl+K Command Palette, favorites/recents, mobile drawer, third-level Reports sub-menus, scrollable/scrollbar-less rail, unified collapsed-icon tooltips; substantially (not formally) implements spec 75's PAGES+3-entity-DATA scope |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
 ## Current Phase
+
+- **Navigation & IA Overhaul — follow-up UI-polish round, 2026-09-13**, same branch
+  (`feature/navigation-ia-overhaul`), per explicit user request; retrospective spec now
+  written up as `context/feature-specs/84-navigation-ia-overhaul.md` (row 84 in the
+  mapping table above) covering this session's work in full. Three asks:
+  1. **Scrollable rail with an invisible scrollbar.** Found and fixed a real bug in the
+     process: the rail's `ScrollArea` was a flex item with default `min-height: auto`,
+     which refuses to shrink below its content size even inside an otherwise correctly
+     sized flex column — so expanding enough groups just grew the rail past the viewport
+     instead of scrolling internally (verified: `scrollHeight === clientHeight` before the
+     fix). Fixed with `min-h-0` on the `ScrollArea`, plus a
+     `[&_[data-slot=scroll-area-scrollbar]]:hidden` rule hiding only the custom scrollbar
+     thumb/track — native wheel/touch/keyboard scrolling is unaffected. Verified via
+     Playwright: `scrollHeight > clientHeight` once overflowing, a real `scrollTop` change
+     on mouse-wheel, and the scrollbar thumb never visible.
+  2. **Collapsed-rail tooltip consistency.** The original implementation used the native
+     `title` attribute for a collapsed group's icon (to sidestep composing two portal-based
+     primitives on one trigger), while collapsed leaf items (including Dashboard) already
+     used the shared `Tooltip` component — an inconsistency the user called out directly.
+     Fixed by composing `TooltipTrigger` wrapping a `PopoverTrigger` wrapping the actual
+     button (`src/components/layout/sidebar-group.tsx`) — hovering now shows the identical
+     `Tooltip` component as every other collapsed icon; clicking still opens the existing
+     Popover flyout. Verified working together in a real browser (hover shows the tooltip;
+     click still opens the flyout with all children).
+  3. **A third navigation level, where the underlying pages actually nest that way.**
+     Audited every hub page for a second layer of real sub-pages — only Reports' six
+     sub-hubs (Sales/Purchase/Inventory/Customer/Supplier/Employee Reports) qualify, each
+     already listing 4 report types of its own; every other module's children are
+     terminal. Extended `NavLeaf` (`src/config/navigation.ts`) to optionally carry its own
+     `children`, extended `filterNavigation()`/`flattenNavItems()` (`navigation-filter.ts`)
+     to recurse one level deeper, and added `SidebarSubGroup`
+     (`src/components/layout/sidebar-subgroup.tsx`) for the expanded-rail rendering of a
+     third-level branch (a nested, further-indented toggle header, mirroring how a
+     top-level group header never navigates) — the collapsed rail's flyout shows a
+     third-level branch's grandchildren inline in the same panel rather than nesting a
+     second popover. Auto-expand-on-active-route was extended to cover a third-level
+     leaf's own second-level branch, and the Command Palette's PAGES tier and
+     `AppShell`'s recent-page recording were both updated to correctly resolve the *most
+     specific* (longest-href) matching leaf, not just the first tree-order match — needed
+     now that a route like `/reports/sales/register` could otherwise resolve to the
+     broader `/reports/sales` hub instead of "Sales Register" itself. Verified end-to-end
+     in a real browser: Reports → Sales Reports → Sales Register navigates correctly,
+     highlights all three active levels simultaneously, and both levels correctly
+     auto-re-expand across a full page reload.
+
+  `npx tsc --noEmit` and `npx eslint src` clean throughout (same 2 pre-existing unrelated
+  warnings only). **Committed on the same feature branch as the original overhaul — not
+  yet pushed or merged into `main`**, per this project's one-branch-at-a-time workflow.
 
 - **Navigation & Information Architecture Overhaul implemented 2026-09-12** on branch
   `feature/navigation-ia-overhaul` — a cross-cutting UX/architecture initiative requested

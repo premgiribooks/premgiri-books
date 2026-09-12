@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SidebarItem } from "@/components/layout/sidebar-item";
 import { SidebarGroup } from "@/components/layout/sidebar-group";
-import { NAVIGATION, type NavGroup, type NavLeaf } from "@/config/navigation";
+import { flattenNavItems, NAVIGATION, type NavGroup, type NavLeaf } from "@/config/navigation";
 import { filterNavigation } from "@/lib/navigation-filter";
 import { useNavPermissions } from "@/components/providers/nav-permissions-provider";
 import { setGroupExpanded, setSidebarCollapsed, useSidebarState } from "@/hooks/use-sidebar-state";
@@ -31,8 +31,15 @@ function isLeafActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function leafOrDescendantActive(pathname: string, leaf: NavLeaf): boolean {
+  if (isLeafActive(pathname, leaf.href)) {
+    return true;
+  }
+  return leaf.children?.some((grandchild) => isLeafActive(pathname, grandchild.href)) ?? false;
+}
+
 function groupContainsActive(group: NavGroup, pathname: string): boolean {
-  return group.children.some((child) => isLeafActive(pathname, child.href));
+  return group.children.some((child) => leafOrDescendantActive(pathname, child));
 }
 
 export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
@@ -45,12 +52,20 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
 
   const visibleNav = React.useMemo(() => filterNavigation(NAVIGATION, permissions), [permissions]);
 
+  const isExpanded = React.useCallback((key: string) => expandedGroups.includes(key), [expandedGroups]);
+  const onToggleExpand = React.useCallback(
+    (key: string) => setGroupExpanded(key, !expandedGroups.includes(key)),
+    [expandedGroups]
+  );
+
   // "The active module should automatically expand when a child route is
   // opened" — including on direct URL visit/refresh, and even if the user
   // had previously collapsed that group. Guarded to fire once per pathname
   // change (not on every expandedGroups change) so a user can still
   // manually collapse the active group afterwards without this effect
-  // immediately re-expanding it.
+  // immediately re-expanding it. A route active on a third-level leaf
+  // (e.g. /reports/sales/register) auto-expands both its top-level group
+  // ("Reports") and its own second-level branch ("Reports>Sales Reports").
   const lastAutoExpandedPathname = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (lastAutoExpandedPathname.current === pathname) {
@@ -58,8 +73,17 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
     }
     lastAutoExpandedPathname.current = pathname;
     for (const item of visibleNav) {
-      if (item.type === "group" && groupContainsActive(item, pathname)) {
+      if (item.type !== "group") {
+        continue;
+      }
+      for (const child of item.children) {
+        if (!leafOrDescendantActive(pathname, child)) {
+          continue;
+        }
         setGroupExpanded(item.label, true);
+        if (child.children?.some((grandchild) => isLeafActive(pathname, grandchild.href))) {
+          setGroupExpanded(`${item.label}>${child.label}`, true);
+        }
       }
     }
   }, [pathname, visibleNav]);
@@ -70,14 +94,8 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
   // shortcut that would just redirect them away.
   const visibleLeavesByHref = React.useMemo(() => {
     const map = new Map<string, NavLeaf>();
-    for (const item of visibleNav) {
-      if (item.type === "leaf") {
-        map.set(item.href, item);
-      } else {
-        for (const child of item.children) {
-          map.set(child.href, child);
-        }
-      }
+    for (const item of flattenNavItems(visibleNav)) {
+      map.set(item.href, item);
     }
     return map;
   }, [visibleNav]);
@@ -110,7 +128,15 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
         </div>
       )}
 
-      <ScrollArea className="flex-1">
+      {/* Scrollable once the menu grows past the viewport, with the custom
+          scrollbar thumb hidden — the rail stays scrollable (wheel/touch/
+          keyboard all still work via the viewport's native overflow), it
+          just never shows a visible track/thumb cluttering a 16-64px rail.
+          `min-h-0` is required: a flex item defaults to min-height:auto,
+          which refuses to shrink below its content size even inside a
+          sized flex column, so without it the item list just grows past
+          the rail instead of scrolling internally. */}
+      <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-scrollbar]]:hidden">
         <div className="flex flex-col gap-1 p-2">
           {favoriteLeaves.length > 0 && (
             <>
@@ -154,8 +180,8 @@ export function Sidebar({ variant = "rail", onNavigate }: SidebarProps) {
                 key={item.label}
                 group={item}
                 collapsed={collapsed}
-                expanded={expandedGroups.includes(item.label)}
-                onToggleExpand={() => setGroupExpanded(item.label, !expandedGroups.includes(item.label))}
+                isExpanded={isExpanded}
+                onToggleExpand={onToggleExpand}
                 active={groupContainsActive(item, pathname)}
                 isLeafActive={(href) => isLeafActive(pathname, href)}
                 favorites={favorites}

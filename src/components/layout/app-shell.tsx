@@ -11,8 +11,25 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { BreadcrumbBar } from "@/components/layout/breadcrumb-bar";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { ALL_NAV_LEAVES } from "@/config/navigation";
+import { ALL_NAV_LEAVES, type NavLeaf } from "@/config/navigation";
 import { recordRecentPage } from "@/hooks/use-recent-pages";
+
+/** The most specific (longest-href) nav leaf whose route contains `pathname`
+ * — not just the first match in tree order, since ALL_NAV_LEAVES now
+ * includes both a Reports sub-hub (e.g. "/reports/sales") and its own
+ * third-level report types (e.g. "/reports/sales/register"), and a plain
+ * first-match search would record the broader hub even when the visited
+ * route exactly matches the more specific child. */
+function findClosestNavLeaf(pathname: string): NavLeaf | undefined {
+  let best: NavLeaf | undefined;
+  for (const leaf of ALL_NAV_LEAVES) {
+    const matches = pathname === leaf.href || (leaf.href !== "/" && pathname.startsWith(`${leaf.href}/`));
+    if (matches && (!best || leaf.href.length > best.href.length)) {
+      best = leaf;
+    }
+  }
+  return best;
+}
 
 interface AppShellProps {
   children: ReactNode;
@@ -30,9 +47,7 @@ export function AppShell({ children }: AppShellProps) {
   // "Recent" only ever lists real navigation destinations — a deep route
   // like /masters/products/<id>/edit records as "Products".
   React.useEffect(() => {
-    const match = ALL_NAV_LEAVES.find(
-      (leaf) => pathname === leaf.href || (leaf.href !== "/" && pathname.startsWith(`${leaf.href}/`))
-    );
+    const match = findClosestNavLeaf(pathname);
     if (match) {
       recordRecentPage(match.href);
     }

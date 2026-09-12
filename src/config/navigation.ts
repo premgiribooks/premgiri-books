@@ -1,17 +1,20 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  AlertTriangle,
   ArrowLeftRight,
   BarChart3,
+  BookOpenText,
+  BookText,
+  BookUser,
   Boxes,
   Building,
   Building2,
-  BookOpenText,
-  BookText,
+  Calculator,
   CalendarCheck,
   CalendarRange,
-  Calculator,
   ClipboardCheck,
   ClipboardList,
+  FileClock,
   FileMinus,
   FilePlus,
   FileSpreadsheet,
@@ -19,6 +22,7 @@ import {
   FolderTree,
   HandCoins,
   Hash,
+  History,
   Landmark,
   LayoutDashboard,
   ListChecks,
@@ -37,6 +41,7 @@ import {
   Scale,
   Settings,
   ShieldCheck,
+  ShoppingBag,
   ShoppingCart,
   SlidersHorizontal,
   Tag,
@@ -55,11 +60,14 @@ import type { PermissionModule } from "@/constants/permissions";
  * Central navigation tree — the single source of truth for the sidebar and
  * the command palette. Built only from routes that already exist as real
  * `page.tsx` files (see each hub page's own `..._MODULES`/`..._VIEWS` const,
- * which this mirrors exactly). Two levels deep everywhere: a top-level
- * NavGroup's children are always leaves, never nested groups — this keeps
- * Reports' 11 categories (each already a useful hub page in its own right,
- * e.g. /reports/sales listing its 4 report types) from exploding into 40+
- * sidebar rows.
+ * which this mirrors exactly). Three levels deep where the underlying pages
+ * actually nest that way: a top-level NavGroup's children are usually
+ * leaves, but a child may itself carry `children` (a third level) when its
+ * own hub page has further real sub-pages — today that's only Reports' six
+ * sub-hubs (Sales/Purchase/Inventory/Customer/Supplier/Employee Reports),
+ * each listing its own report types. A third-level leaf never carries its
+ * own `children` — this tree goes exactly one level deeper than before, not
+ * arbitrarily deep.
  */
 export interface NavLeaf {
   type: "leaf";
@@ -76,6 +84,14 @@ export interface NavLeaf {
    * "reports:view" and "gst:view") — every module in the array must grant
    * "view" for the leaf to render. */
   permissionModule?: PermissionModule | readonly PermissionModule[];
+  /** Third-level children — present only where this leaf's own destination
+   * is itself a hub page with further real sub-pages (Reports' six
+   * sub-hubs). When set, the Sidebar renders this leaf as an expandable
+   * sub-group instead of a directly clickable link (mirroring how a
+   * top-level NavGroup's own header only toggles, never navigates); its
+   * `href` stays valid for direct URL access and the Command Palette still
+   * lists it as its own searchable page. */
+  children?: readonly NavLeaf[];
 }
 
 export interface NavGroup {
@@ -92,9 +108,10 @@ function leaf(
   label: string,
   href: string,
   icon: LucideIcon,
-  permissionModule?: PermissionModule | readonly PermissionModule[]
+  permissionModule?: PermissionModule | readonly PermissionModule[],
+  children?: readonly NavLeaf[]
 ): NavLeaf {
-  return { type: "leaf", label, href, icon, permissionModule };
+  return { type: "leaf", label, href, icon, permissionModule, children };
 }
 
 function group(label: string, icon: LucideIcon, permissionModule: PermissionModule, children: NavLeaf[]): NavGroup {
@@ -167,12 +184,42 @@ export const NAVIGATION: NavItem[] = [
     leaf("Profit & Loss", "/reports/profit-and-loss", TrendingUp),
     leaf("Balance Sheet", "/reports/balance-sheet", Landmark),
     leaf("Cash Flow", "/reports/cash-flow", Waves),
-    leaf("Sales Reports", "/reports/sales", ShoppingCart),
-    leaf("Purchase Reports", "/reports/purchase", Truck),
-    leaf("Inventory Reports", "/reports/inventory", Package),
-    leaf("Customer Reports", "/reports/customers", Users),
-    leaf("Supplier Reports", "/reports/suppliers", Building2),
-    leaf("Employee Reports", "/reports/employees", UserSquare2),
+    leaf("Sales Reports", "/reports/sales", ShoppingCart, undefined, [
+      leaf("Sales Register", "/reports/sales/register", ListOrdered),
+      leaf("Item-wise Sales", "/reports/sales/item-wise", Package),
+      leaf("Party-wise Sales", "/reports/sales/party-wise", Users),
+      leaf("Sales Return Summary", "/reports/sales/returns", RotateCcw),
+    ]),
+    leaf("Purchase Reports", "/reports/purchase", Truck, undefined, [
+      leaf("Purchase Register", "/reports/purchase/register", ListOrdered),
+      leaf("Item-wise Purchases", "/reports/purchase/item-wise", Package),
+      leaf("Party-wise Purchases", "/reports/purchase/party-wise", Users),
+      leaf("Purchase Return Summary", "/reports/purchase/returns", RotateCcw),
+    ]),
+    leaf("Inventory Reports", "/reports/inventory", Package, undefined, [
+      leaf("Current Stock", "/reports/inventory/current-stock", Package),
+      leaf("Stock Ledger", "/reports/inventory/ledger", History),
+      leaf("Stock Valuation", "/reports/inventory/valuation", Wallet),
+      leaf("Low Stock / Reorder", "/reports/inventory/low-stock", AlertTriangle),
+    ]),
+    leaf("Customer Reports", "/reports/customers", Users, undefined, [
+      leaf("Outstanding", "/reports/customers/outstanding", Wallet),
+      leaf("Statement", "/reports/customers/statement", FileClock),
+      leaf("Sales Summary", "/reports/customers/sales-summary", ShoppingBag),
+      leaf("Directory", "/reports/customers/directory", BookUser),
+    ]),
+    leaf("Supplier Reports", "/reports/suppliers", Building2, undefined, [
+      leaf("Outstanding", "/reports/suppliers/outstanding", Wallet),
+      leaf("Statement", "/reports/suppliers/statement", FileClock),
+      leaf("Purchase Summary", "/reports/suppliers/purchase-summary", ShoppingBag),
+      leaf("Directory", "/reports/suppliers/directory", BookUser),
+    ]),
+    leaf("Employee Reports", "/reports/employees", UserSquare2, undefined, [
+      leaf("Attendance Summary", "/reports/employees/attendance-summary", CalendarCheck),
+      leaf("Payroll Register", "/reports/employees/payroll-register", ClipboardList),
+      leaf("Salary Register", "/reports/employees/salary-register", Wallet),
+      leaf("Directory", "/reports/employees/directory", BookUser),
+    ]),
     leaf("GST Reports", "/reports/gst", Receipt, ["reports", "gst"]),
   ]),
   group("Employees", Users, "employees", [
@@ -187,8 +234,27 @@ export const NAVIGATION: NavItem[] = [
   ]),
 ];
 
+/** Flattens a nav tree (any depth up to the three this app uses) into a flat
+ * list of every leaf, at every level, in tree order — the level-2 "hub"
+ * leaves (e.g. "Sales Reports") are included alongside their level-3
+ * children, since both are real, independently searchable/linkable pages.
+ * Shared by `ALL_NAV_LEAVES` below (the unfiltered tree) and by the Sidebar/
+ * Command Palette (a permission-filtered tree), so the flattening logic
+ * lives in exactly one place. */
+export function flattenNavItems(tree: readonly NavItem[]): NavLeaf[] {
+  const leaves: NavLeaf[] = [];
+  for (const item of tree) {
+    const children = item.type === "leaf" ? [item] : item.children;
+    for (const child of children) {
+      leaves.push(child);
+      if (child.children) {
+        leaves.push(...child.children);
+      }
+    }
+  }
+  return leaves;
+}
+
 /** Every leaf in the tree, flattened, in tree order — used by the command
  * palette and by favorites/recents to resolve a bare href to its label/icon. */
-export const ALL_NAV_LEAVES: NavLeaf[] = NAVIGATION.flatMap((item) =>
-  item.type === "leaf" ? [item] : item.children
-);
+export const ALL_NAV_LEAVES: NavLeaf[] = flattenNavItems(NAVIGATION);

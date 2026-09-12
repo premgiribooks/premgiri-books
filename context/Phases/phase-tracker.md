@@ -2324,6 +2324,17 @@ logic directly against six module combinations — all pass. Fixes committed as 
 commit on the same branch. **Not yet pushed or merged into `main`** — awaiting the user's
 review first, per this project's one-branch-at-a-time git workflow.
 
+**Follow-up UI-polish round, 2026-09-13, same branch**: scrollable rail with the custom
+scrollbar hidden (fixed a real `min-height:auto` flex bug that prevented internal
+scrolling at all), collapsed-rail group icons now use the same `Tooltip` component as
+every other collapsed icon (composed with the existing Popover flyout), and a third nav
+level added for Reports' six sub-report hubs (the only place a hub page's own children are
+themselves further nested). Full detail now written up as a retrospective spec,
+`context/feature-specs/84-navigation-ia-overhaul.md` — see
+`context/progress-tracker.md`'s Current Phase entry (same date) for the turn-by-turn
+record. `tsc`/`eslint` clean; verified end-to-end in a real browser. Committed on the same
+branch; still not pushed/merged.
+
 ---
 
 # Notes

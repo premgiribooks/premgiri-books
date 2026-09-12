@@ -8,7 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NAVIGATION, type NavLeaf } from "@/config/navigation";
+import { flattenNavItems, NAVIGATION, type NavLeaf } from "@/config/navigation";
 import { filterNavigation } from "@/lib/navigation-filter";
 import { useNavPermissions } from "@/components/providers/nav-permissions-provider";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -47,8 +47,10 @@ export function CommandPalette() {
   // Permission-filtered, not the raw ALL_NAV_LEAVES — a stale favorite/
   // recent the user no longer has access to silently drops out instead of
   // resolving to a shortcut that would just redirect them away.
+  // flattenNavItems also pulls in third-level leaves (e.g. a Reports
+  // sub-hub's own report types), not just its direct children.
   const visibleLeaves = React.useMemo(
-    () => filterNavigation(NAVIGATION, permissions).flatMap((item) => (item.type === "leaf" ? [item] : item.children)),
+    () => flattenNavItems(filterNavigation(NAVIGATION, permissions)),
     [permissions]
   );
   const leafByHref = React.useMemo(() => new Map(visibleLeaves.map((item) => [item.href, item])), [visibleLeaves]);
