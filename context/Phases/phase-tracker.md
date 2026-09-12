@@ -885,6 +885,15 @@ repeats the same `employeeId` up to 500 times) was replaced with a new
 errors), `npx vitest run` (1604/1604), `next build` all pass; browser re-verified live
 (zero console errors, malformed-date 200 checks passing).
 
+**Payroll (#61, spec 63) — Phase 9's last remaining item — was deliberately deferred,
+not implemented, per explicit user instruction 2026-09-12** ("start Trial Balance").
+Asked the user directly whether to implement Payroll first (per Phase 9's documented
+required order) or skip ahead to Phase 10; the user chose to skip ahead. Phase 9 is
+therefore intentionally left open with #61 outstanding while Phase 10 begins — a
+recorded exception to strict phase order, the same kind of deviation Phase 6 (Product
+Detail Page) recorded when it was inserted ahead of Phase 5's own last item. Normal
+one-feature-at-a-time, in-order sequencing resumes whenever Payroll is next picked up.
+
 ---
 
 # Phase 10 — Reporting
@@ -918,7 +927,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 
 | #   | Feature           | Depends On     | Status |
 | --- | ----------------- | -------------- | ------ |
-| 62  | Trial Balance     | Voucher Engine | ⬜     |
+| 62  | Trial Balance     | Voucher Engine | ✅     |
 | 63  | Profit & Loss     | Accounting     | ⬜     |
 | 64  | Balance Sheet     | Accounting     | ⬜     |
 | 65  | Cash Flow         | Accounting     | ⬜     |
@@ -929,6 +938,79 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 70  | Supplier Reports  | Suppliers      | ⬜     |
 | 71  | Employee Reports  | Employees      | ⬜     |
 | 72  | GST Reports       | GST            | ⬜     |
+
+**Trial Balance (#62, spec 64) implemented 2026-09-12** on branch `feature/trial-balance`,
+per explicit user instruction ("start Trial Balance") ahead of Payroll (#61, Phase 9) —
+see the deferral note at the end of Phase 9's section above. The first tenant of the
+Reporting Engine and the `/reports` hub, exactly as spec 64 calls for. Pure UI +
+presentation layer over the already-implemented `voucherEngine.getTrialBalance`
+(feature-spec 31) — no engine changes, no new Prisma model or migration, matching the
+spec's Data Model ("Reports are read-only; reports derive data only from vouchers").
+
+New `src/engines/reporting/` (`types.ts`, `ledger-classification.ts` —
+`buildLedgerGroupIndex`/`getRootGroup`, `trial-balance.ts` — `buildTrialBalanceReport`),
+fully pure: no I/O, no permission checks, no `companyId` parameter anywhere in the
+directory, per the spec's own convention (matching `30-pricing-engine.md`/
+`33-gst-engine.md`/`57-gst-registers.md`'s aggregation functions). `buildTrialBalanceReport`
+walks the `LedgerGroup` hierarchy, attaches each `TrialBalanceRow` to its group, and rolls
+subtotals up from leaf to root; a group with zero ledgers anywhere in its own subtree is
+omitted entirely, one with at least one (even zero-activity) is included with a correct
+subtotal. The report's own `totalDebit`/`totalCredit` are copied straight from
+`TrialBalanceResult`, never independently re-summed — a dedicated test asserts this with
+deliberately mismatched fixture totals to prove no recomputation happens.
+
+`src/modules/reports/services/trial-balance-report-service.ts`
+(`trialBalanceReportService.getTrialBalanceReport`) is the only I/O: resolves the caller's
+company from the session (never client-supplied), gates on the `reports`/`view`
+permission (module already existed in `PERMISSION_MODULES`, no catalog change needed),
+re-verifies the requested Financial Year belongs to the caller's own company, validates
+the as-of date against that Financial Year's own `[startDate, endDate]` range, then calls
+`voucherQueries.getTrialBalance` and `ledgerGroupRepository.findMany` in parallel before
+handing both to `buildTrialBalanceReport`. `src/modules/reports/validation/
+financial-report-filters-schema.ts` holds the shared Zod shape (`financialYearId`,
+`asOfDate`) plus `resolveDefaultAsOfDate` (today, clamped into the selected Financial
+Year's own date range) — written to be reused unmodified by Balance Sheet (spec 66)'s own
+as-of-date screen, per spec 64's own note.
+
+New `/reports` hub (Trial Balance linked; ten placeholder cards — Profit & Loss, Balance
+Sheet, Cash Flow, and the seven Phase 10 operational reports — all "Coming soon," matching
+`57-gst-registers.md`'s "hub exists before every sibling screen does" precedent) and
+`/reports/trial-balance` (Financial Year + As-Of-Date filter bar, a nested/expandable
+Ledger Group tree with Debit/Credit subtotals, a Grand Total row, an out-of-range as-of
+date rendering a friendly inline error instead of crashing). Wired the Sidebar's
+previously-inert "Reports" entry to `/reports` and added `reports`/`trial-balance`
+breadcrumb labels. A forward-noted, currently-unused `getTrialBalanceReportAction` Server
+Action exists alongside the service (the page calls the service directly, matching
+`57-gst-registers.md`'s own precedent of pages calling GST services directly rather than
+through their sibling Server Action).
+
+26 new vitest cases (engine: parent-subtotal rollup across 3 nested levels, grand total
+copied verbatim from a deliberately mismatched fixture, empty-subtree omission,
+zero-activity-ledger inclusion, Debit/Credit sign split, `getRootGroup` 3-level resolution;
+service: `reports:view` permission gate, cross-company Financial Year rejection, both
+as-of-date range boundaries accepted/rejected, grand-total pass-through; schema: calendar
+date validation, `resolveDefaultAsOfDate` clamping in both directions) — 1630/1630 total
+suite passing. `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2
+pre-existing unrelated warnings), `npx vitest run`, and `next build` all pass; `/reports`
+and `/reports/trial-balance` both appear in the build route table. Browser-verified
+end-to-end (Playwright-driven): logged in as `admin`, confirmed the Trial Balance card on
+`/reports`, viewed the seeded company's Cash-in-Hand ledger correctly grouped and
+balancing at 0.00/0.00, collapsed/expanded a group, changed the as-of date, and confirmed
+an out-of-range date renders the inline validation error rather than crashing — zero
+console errors throughout.
+
+**Code review + security review (run in parallel) both APPROVE, zero CRITICAL/HIGH/
+MEDIUM/LOW findings.** Code review confirmed all five spec-critical rules directly against
+the diff (no independent arithmetic, correct empty-subtree pruning, sign convention
+matching `getTrialBalance` exactly, cross-tenant scoping, and a fully I/O-free engine
+layer). Security review gave an explicit PASS on all five requested areas (permission
+enforcement on every path, IDOR/cross-tenant isolation on `financialYearId` — three
+redundant checks all producing the same generic "not found" message, input validation of
+every `searchParams`/`rawFilters` value, no information disclosure via thrown errors, and
+no other OWASP-relevant gap for a read-only report); its two LOW/informational notes
+(the unused forward-noted Server Action; no endpoint-specific rate limiting, consistent
+with every other reporting/list page in this codebase) were accepted as-is, not fixed —
+neither is a vulnerability.
 
 ---
 

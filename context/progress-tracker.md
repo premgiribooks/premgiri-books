@@ -1832,6 +1832,38 @@ Mapping so far:
   merged result). `feature/attendance` deleted locally now that `main` has it.
   **Payroll (#61, spec 63) is next per Phase 9's required order** — depends on this
   feature's `getAttendanceSummary`.
+- **2026-09-12 — explicit user instruction ("start Trial Balance") skips ahead of Payroll.**
+  Asked the user directly whether to implement Payroll (#61, Phase 9's documented next
+  item) first, or skip ahead to Trial Balance (#62, Phase 10) — the user chose to skip
+  ahead. Phase 9 is therefore deliberately left open with #61 outstanding; see
+  `context/Phases/phase-tracker.md`'s Phase 9 section for the recorded deferral note.
+- **Trial Balance (Phase 10 — Reporting #62, spec 64) implemented 2026-09-12** on branch
+  `feature/trial-balance`, per the instruction above — the first tenant of the new
+  Reporting Engine (`src/engines/reporting/`) and the `/reports` hub, exactly as spec 64
+  calls for. See `context/Phases/phase-tracker.md`'s Phase 10 section for the full
+  implementation record: `buildTrialBalanceReport` (pure, no I/O) rolls up Debit/Credit
+  subtotals from leaf `LedgerGroup` to root, omitting any group with zero ledgers
+  anywhere in its own subtree; `trialBalanceReportService` is the sole I/O boundary,
+  gated on the pre-existing `reports`/`view` permission, re-validating both the
+  requested Financial Year's company ownership and the as-of date's range server-side.
+  New `/reports` hub (Trial Balance linked; ten sibling report cards left as "Coming
+  soon" placeholders) and `/reports/trial-balance` (Financial Year + as-of-date filter,
+  expandable group tree, Grand Total row). Wired the previously-inert "Reports" sidebar
+  entry. 26 new vitest cases — 1630/1630 total suite passing; `npx tsc --noEmit`, `npx
+  eslint src prisma`, and `next build` all pass; `/reports` and `/reports/trial-balance`
+  appear in the build route table. Browser-verified end-to-end (Playwright-driven):
+  logged in as `admin`, viewed the seeded company's Trial Balance (Cash-in-Hand
+  balancing at 0.00/0.00), exercised collapse/expand and the as-of-date filter, and
+  confirmed an out-of-range date renders a friendly inline error instead of crashing —
+  zero console errors throughout.
+
+  **Code review + security review (run in parallel) both APPROVE, zero
+  CRITICAL/HIGH/MEDIUM/LOW findings.** Security review gave an explicit PASS on
+  permission enforcement, IDOR/cross-tenant isolation, input validation, and information
+  disclosure; its two LOW/informational notes (an unused forward-noted Server Action; no
+  endpoint-specific rate limiting, consistent with every other reporting page in this
+  codebase) were accepted as-is. Committed on `feature/trial-balance`; not yet merged
+  into `main` — see the entry below once merged.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
