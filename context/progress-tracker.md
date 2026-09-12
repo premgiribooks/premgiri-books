@@ -2154,8 +2154,26 @@ Mapping so far:
   `next build` route-table confirmation. Business-logic correctness is carried entirely
   by the new Reporting Engine/service vitest fixtures.
 
-  **Not yet code-reviewed/security-reviewed or merged** — sits committed on
-  `feature/inventory-reports`, awaiting explicit user go-ahead for either.
+  **Code review + security review (run in parallel, after the feature commit) both
+  APPROVE/PASS, zero CRITICAL/HIGH findings from either.** Code review found zero
+  MEDIUM findings and one LOW note (a product with `minStockLevel` configured as exactly
+  `0` can never appear on the Low Stock Report — a defensible "0 means never reorder"
+  edge case, not a bug, but under-documented/untested). Security review gave an explicit
+  PASS on cross-tenant isolation/IDOR (traced `referenceId` provenance end-to-end through
+  `getStockLedger`'s own `assertProductBelongsToCompany` guard — no path exists for a
+  crafted `productId` to pull another company's referenceIds into the six
+  `DOCUMENT_NUMBER_LOOKUPS` queries), authorization (`reports:view` gated on every public
+  service method, independently re-checked on every page), input validation, and
+  information disclosure — one LOW/informational note (an unmatched `warehouseId` filter
+  value is echoed back verbatim into a synthetic zero-stock row rather than re-validated
+  against the resolved warehouse list; harmless — it doesn't distinguish a nonexistent id
+  from a foreign-company one — but a cosmetic cleanup worth doing later) accepted as-is,
+  no fix needed.
+
+  **Merge into `main` deferred**, matching Purchase Reports' own still-pending merge —
+  implementation sits reviewed and committed on `feature/inventory-reports` (commits
+  `e24324d`, `a249a4d`), awaiting explicit user go-ahead to merge (and awaiting Purchase
+  Reports' own merge first, since this branch was branched from it).
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
