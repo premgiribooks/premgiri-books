@@ -1862,8 +1862,14 @@ Mapping so far:
   permission enforcement, IDOR/cross-tenant isolation, input validation, and information
   disclosure; its two LOW/informational notes (an unused forward-noted Server Action; no
   endpoint-specific rate limiting, consistent with every other reporting page in this
-  codebase) were accepted as-is. Committed on `feature/trial-balance`; not yet merged
-  into `main` — see the entry below once merged.
+  codebase) were accepted as-is.
+
+  **Merged into `main` 2026-09-12** (`--no-ff`, no conflicts, `b0604af` —
+  `tsc`/`eslint`/`vitest` (1630/1630)/`next build` all re-verified green against the
+  merged result). `feature/trial-balance` deleted locally now that `main` has it.
+  Payroll (#61, Phase 9) remains the only outstanding item before this project's
+  documented phase order would otherwise be back in sync — still awaiting explicit
+  instruction to resume it.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
