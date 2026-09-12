@@ -978,7 +978,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 69  | Customer Reports  | Customers      | ✅     |
 | 70  | Supplier Reports  | Suppliers      | ✅     |
 | 71  | Employee Reports  | Employees      | ✅     |
-| 72  | GST Reports       | GST            | ⬜     |
+| 72  | GST Reports       | GST            | ✅     |
 
 **Trial Balance (#62, spec 64) implemented 2026-09-12** on branch `feature/trial-balance`,
 per explicit user instruction ("start Trial Balance") ahead of Payroll (#61, Phase 9) —
@@ -2203,6 +2203,71 @@ tracker number and phase number from the old Phase 6 (Accounting) onward up by o
 numbers changed — spec 56 is simply the next sequential file after 55, and specs 52–55
 (Payment/Receipt/Contra/Journal Voucher) keep their own file names, only their in-body
 tracker-number and phase-number references were updated to match.
+
+---
+
+**GST Reports (#72, spec 74) implemented 2026-09-12** on branch `feature/gst-reports`,
+per explicit user instruction ("start GST Reports") — the last item of Phase 10,
+**closing the Reporting phase in full**. An analytical dashboard over already-implemented
+GST Engine output — explicitly distinct from Phase 8's statutory filing screens (see the
+spec's own Phase-8-vs-Phase-10 comparison table): a month-bucketed Output Tax/Input
+Tax/Net Liability trend, summary tiles, an embedded HSN/rate-wise breakdown (`hsnSummaryService.
+getHsnSummary`, spec 60, reused unmodified — no independent HSN aggregation anywhere in
+this module), and a read-only per-month Filed/Open status overlay resolved from
+`GstFilingRecord` (spec 58, read-only here — never calls `markPeriodFiled`/`reopenPeriod`).
+
+Adds **zero new GST aggregation queries** to `src/engines/gst/`, matching the spec's own
+Business Rules: the only new logic is pure month-bucketing,
+`src/engines/reporting/gst-dashboard.ts` (`buildGstDashboardReport` — buckets
+`GstSupplyLine[]` by `documentDate`'s calendar month, sums signed `cgst+sgst+igst+cess`
+per month; `resolveMonthlyFilingStatus` — overlays a `GstFilingRecord` whose
+`[periodStart, periodEnd]` contains the month, so a quarterly filer's single 3-month
+record correctly produces the identical status on all 3 bucketed months, not 3
+independent flags). A month with Input Tax exceeding Output Tax shows a negative Net
+Liability, never clamped to zero — verified by a dedicated test. One new repository
+method, `gstFilingRepository.findMany(companyId, returnType, from, to)` (range-overlap
+read) — no new repository file, matching the spec's "every read reuses an existing one."
+
+`src/modules/reports/services/gst-reports-service.ts` (`gstReportsService.getGstDashboard`)
+is the only I/O — gated on **both** `reports:view` **and** `gst:view` (Security: the same
+tax-liability confidentiality boundary the GST module itself already draws), calling
+`getOutwardSupplyLines`/`getInwardSupplyLines` (spec 57), `hsnSummaryService.
+getHsnSummary`, and `gstFilingRepository.findMany` in parallel, then composing all three
+into one response. No new Prisma model, enum, or migration (Data Model — matching every
+spec in this batch).
+
+**Deliberate, documented deviations from the spec's literal wording:**
+1. No charting library exists anywhere in this codebase (every other Phase 10 report
+   renders as a table) — the "trend chart" renders as `GstTrendTable`, a table with a
+   small CSS-only relative bar per month standing in for a full chart, rather than
+   introducing a new dependency (`recharts` or similar) for a single widget. Per-month
+   Filed/Open status is folded into the same table's own row (one widget, not two
+   separate "trend chart" + "status strip" pieces), since every figure a separate status
+   strip would show is already keyed by the same month this table renders.
+2. The spec's own literal UI note ("reusing ... the shared Date Range Filter Bar
+   (65-profit-and-loss.md's from/to variant)") named `FinancialYearDateRangeFilterBar`,
+   which requires a `financialYearId` — contradicting this same spec's own Validation
+   section ("no `financialYearId` parameter ... date-range-scoped only"). Built a new,
+   minimal `GstDashboardFilterBar` (from/to only, no Financial Year selector) instead,
+   consistent with the Validation section's explicit instruction and with
+   `gst-report-filter-bar.tsx`'s own plain from/to posture.
+
+**Both code-reviewer and security-reviewer ran before the merge: both APPROVE, zero
+CRITICAL/HIGH/MEDIUM/LOW findings** (security review noted two purely informational,
+non-blocking observations — the page's default-range fallback and the overlay's O(months
+× records) lookup, neither a real concern at this report's expected scale). 20 new vitest
+cases (11 Reporting Engine + 9 service-layer, covering signed netting, negative Net
+Liability, quarterly-record overlay onto all 3 months, dual-permission rejection either
+way, cross-company isolation, and embedded-HSN-output-by-reference) — final total
+1924/1924; `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2 pre-existing
+warnings), and `next build` all pass; `/reports/gst` appears in the build route table.
+Wired the Reports hub's GST Reports card (`available: true`) and a `"reports/gst"`
+breadcrumb entry.
+
+**`feature/gst-reports` has been merged into `main`** (`--no-ff` merged `f686c74`, no
+conflicts, checks re-verified green against the merged result), branch deleted both
+locally and on origin. **This closes Phase 10 — Reporting in full** — all eleven items
+(#62–#72) are now implemented, reviewed, and merged.
 
 ---
 

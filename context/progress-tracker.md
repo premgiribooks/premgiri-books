@@ -2513,6 +2513,42 @@ Mapping so far:
   `context/feature-specs/74-gst-reports.md` for its scope (an analytical dashboard over
   the already-implemented GST Engine/GST Registers/HSN Summary output, gated by both
   `reports:view` and `gst:view`, adding zero new GST aggregation queries).
+- **GST Reports (Phase 10 — Reporting #72, spec 74) implemented 2026-09-12** on branch
+  `feature/gst-reports`, per explicit user instruction ("start GST Reports") — the last
+  item of Phase 10, **closing the Reporting phase in full**. See
+  `context/Phases/phase-tracker.md`'s Phase 10 section for the complete implementation
+  record: a month-bucketed Output Tax/Input Tax/Net Liability trend
+  (`src/engines/reporting/gst-dashboard.ts`'s `buildGstDashboardReport`, pure, no I/O),
+  summary tiles, an embedded HSN/rate-wise breakdown (`hsnSummaryService.getHsnSummary`,
+  spec 60, reused unmodified), and a read-only per-month Filed/Open overlay
+  (`resolveMonthlyFilingStatus`, resolving a `GstFilingRecord` whose period contains the
+  month — a quarterly filer's 3-month record correctly overlays the identical status onto
+  all 3 bucketed months). New `gstFilingRepository.findMany` (range-overlap read, no new
+  repository file). `src/modules/reports/services/gst-reports-service.ts`
+  (`gstReportsService.getGstDashboard`) is the only I/O, gated on **both** `reports:view`
+  **and** `gst:view`. No new Prisma model/enum/migration; zero new GST aggregation
+  queries in `src/engines/gst/`.
+
+  Two deliberate, documented deviations from the spec's literal wording: (1) no charting
+  library exists anywhere in this codebase, so the "trend chart" renders as a table
+  (`GstTrendTable`) with a small CSS-only relative bar per month, and the per-month Filed/
+  Open status is folded into that same table rather than a separate "status strip"
+  widget; (2) built a new minimal from/to-only `GstDashboardFilterBar` instead of the
+  spec's named `FinancialYearDateRangeFilterBar` (which requires a `financialYearId`),
+  since the spec's own Validation section explicitly says this dashboard has no
+  `financialYearId` parameter.
+
+  **Both code-reviewer and security-reviewer ran before the merge: both APPROVE, zero
+  CRITICAL/HIGH/MEDIUM/LOW findings** (security review's two notes were purely
+  informational, non-blocking). 20 new vitest cases (11 Reporting Engine + 9 service) —
+  final total 1924/1924; `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+  pre-existing warnings), and `next build` all pass; `/reports/gst` appears in the build
+  route table. **`feature/gst-reports` merged into `main`** (`--no-ff` merged `f686c74`,
+  no conflicts, checks re-verified green), branch deleted both locally and on origin.
+  **This closes Phase 10 — Reporting in full** — all eleven items (#62–#72) are now
+  implemented, reviewed, and merged. Phase 11 (Productivity Features, #73–#79) remains
+  entirely spec-drafted-but-not-implemented; per `ai-workflow-rules.md`'s one-feature-at-
+  a-time rule, the next feature awaits explicit instruction.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
