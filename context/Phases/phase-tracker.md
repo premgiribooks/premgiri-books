@@ -885,14 +885,55 @@ repeats the same `employeeId` up to 500 times) was replaced with a new
 errors), `npx vitest run` (1604/1604), `next build` all pass; browser re-verified live
 (zero console errors, malformed-date 200 checks passing).
 
-**Payroll (#61, spec 63) — Phase 9's last remaining item — was deliberately deferred,
-not implemented, per explicit user instruction 2026-09-12** ("start Trial Balance").
-Asked the user directly whether to implement Payroll first (per Phase 9's documented
-required order) or skip ahead to Phase 10; the user chose to skip ahead. Phase 9 is
-therefore intentionally left open with #61 outstanding while Phase 10 begins — a
-recorded exception to strict phase order, the same kind of deviation Phase 6 (Product
-Detail Page) recorded when it was inserted ahead of Phase 5's own last item. Normal
-one-feature-at-a-time, in-order sequencing resumes whenever Payroll is next picked up.
+**Payroll (#61, spec 63) — Phase 9's last remaining item — implemented 2026-09-12** on
+branch `feature/inventory-reports` (unchanged — this session continued on the same
+branch every Phase 10 report so far has used, still not merged into `main`). Deliberately
+deferred earlier the same day (below note, now superseded) when the user chose to skip
+ahead to Trial Balance instead of finishing Phase 9 in order; picked back up when
+Employee Reports (#71, spec 73) turned out to hard-depend on this spec's posted
+`PayrollRun`/`PayrollRunItem` data — the user was asked whether to implement Payroll
+first, implement Employee Reports partially (Directory + Attendance Summary only), or
+stop and record the blocker, and chose to implement Payroll first, restoring normal
+in-order sequencing before Phase 10 continues.
+
+Added `PayrollRunStatus` enum, `PayrollRun`/`PayrollRunItem` models, `VoucherType.SALARY`,
+`DocumentType.PAYROLL`/`SALARY_VOUCHER`, and two new nullable `CompanySettings` ledger-
+mapping columns (`salaryExpenseLedgerId`/`salaryPayableLedgerId`) — one migration
+(`20260912143436_add_payroll`). New `src/modules/payroll/` module
+(repository/service/validation/actions/components) plus a new
+`src/modules/company/utils/payroll-ledger-mapping.ts`/`payroll-ledger-mapping-form.tsx`
+pair extending the existing Settings > Sales & Purchase GST Ledgers page with a "Payroll
+Ledgers" section (mirrors `purchase-ledger-mapping.ts` exactly — two fields instead of
+six, no round-off concept). `createDraft`/`refreshDraft` compute each active employee's
+worked-day ratio via `attendanceService.getAttendanceSummary` (never re-implemented) and
+net salary (`presentDays + 0.5 x halfDays`, rounded half-up to paise); an employee with no
+`basicSalary` is excluded from the draft, not an error. `postPayrollRun` re-validates
+every rule against current state inside one Serializable transaction (period-overlap,
+ledger-mapping completeness/group/active/company checks), recomputes every line fresh,
+posts one aggregate `VoucherType.SALARY` voucher (Debit Salary Expense, Credit Salary
+Payable, both equal to `totalNetSalary`), and assigns `payrollNumber` — mirrors
+`purchase-invoice-service.ts`'s `postPurchaseInvoice` orchestration shape. Cancellation
+mirrors the voucher reversal only, per spec: attendance is never un-marked. New
+`/employees/payroll`, `/employees/payroll/new`, `/employees/payroll/[id]` pages; a
+"Payroll" card added to the `/employees` hub. 39 new vitest cases (calculations, schema,
+repository, service) — 1909/1909 final total suite passing (after the two review-fix
+regression tests below); `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`,
+and `next build` all pass; `/employees/payroll*` appears in the build route table.
+
+**Code review + security review (run in parallel) both independently caught the same
+issue — 1 HIGH (code)/1 MEDIUM (security), 1 LOW (security) — all fixed**:
+`attendanceService.getAttendanceSummaryBulk` (added below for Employee Reports) was
+gated on `employees`/`view` instead of `reports`/`view`, which would have 403'd the
+seeded Accountant role the whole Payroll re-gating effort (`listPayrollRunsForReport`/
+`getEmployeeSalaryHistory`) was done to support; re-gated to `reports`/`view`.
+`listPayrollRunsForReport`'s `financialYearId` bypassed schema validation before
+reaching the repository — added a new `payrollRunReportFiltersSchema` and validated
+through it. See `progress-tracker.md`'s Payroll entry for the full writeup.
+
+**Not yet browser-verified this session, not merged into `main`, and not yet marked
+done** — same "implement now, mark done/merge only on separate explicit instruction"
+posture this branch's prior Reports features already established (see Customer/Supplier
+Reports entries in `progress-tracker.md`).
 
 ---
 
@@ -1562,6 +1603,51 @@ foreign id naturally yields zero rows) accepted as-is, no fix needed.
 classifier ("Merge Without Review"), unlike Sales Reports' own same-session merge.
 Implementation sits fully reviewed and committed on `feature/purchase-reports` (commit
 `6b8d22e`), awaiting explicit user go-ahead to merge.
+
+**Inventory Reports (#68), Customer Reports (#69), and Supplier Reports (#70) were
+implemented after this point** — see `progress-tracker.md` for their full narrative
+entries (this file's own entry stream stopped being kept in lockstep after Purchase
+Reports; only the status table above was kept current for those three).
+
+**Employee Reports (#71, spec 73) implemented 2026-09-12** on branch
+`feature/inventory-reports` (unchanged), immediately after Payroll (#61, Phase 9) was
+implemented to unblock it — see Phase 9's own entry above for why Payroll was picked back
+up. Depends on Payroll's posted `PayrollRun`/`PayrollRunItem` data and Attendance's
+`getAttendanceSummary`. Four views: Attendance Summary, Payroll Register, Salary
+Register, Employee Directory. New `src/engines/reporting/employee-reports.ts` (pure
+composition); new `src/modules/reports/employees/` module; new `/reports/employees*`
+pages; `/reports` hub card flipped from disabled "Coming soon" to linked.
+
+**Amendments this spec required, in the Attendance and Payroll modules it consumes**
+(never a second, divergent implementation): `attendanceRepository.
+aggregateSummaryForEmployees`/`attendanceService.getAttendanceSummaryBulk` — the same
+per-status `groupBy` `getSummary` already performs for one employee, batched across many
+via `groupBy(["employeeId", "status"])`, parity-tested against calling `getSummary` once
+per employee. `payrollRunService.listPayrollRunsForReport` (new) and `getEmployeeSalaryHistory`
+(re-gated) both moved to `reports`/`view` instead of `employees`/`view` — the seeded
+Accountant role has `reports`/`view` but no `employees` module access at all, the same
+`listPurchaseInvoicesForReport` precedent Customer/Supplier/Purchase Reports already
+established for their own masters-gated services. `EmployeeListFilters` gained
+`department`/`designation`/`branchId` (Employee Directory's own filters, which spec 73
+assumed already existed on `employeeService.listEmployees` but didn't).
+
+**Deliberate deviation from the spec's own literal wording, the same precedent every
+report in this batch has established**: every view queries `prisma.employee`/`prisma.
+branch` directly in `employee-report-service.ts` (its own `listReportEmployees`) rather
+than through `employeeService.listEmployees`/`listSelectableEmployees` (the spec's own
+literal suggestion) — that service gates on `employees`/`view`, which would 403 the
+seeded Accountant role this module exists to serve.
+
+24 new vitest cases (engine + attendance bulk + service); final suite total 1909/1909
+after the two review-fix regression tests recorded in Payroll's own entry above (one of
+which — the permission gate on this feature's `getAttendanceSummaryBulk` — belongs to
+this feature); `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+`next build` all pass; `/reports/employees*` appears in the build route table.
+
+**Not yet browser-verified this session, not merged into `main`, and not yet marked
+done** — same posture as Payroll above. See Payroll's entry above for the code review +
+security review outcome (both findings were on this feature's own
+`getAttendanceSummaryBulk` permission gate, fixed).
 
 ---
 

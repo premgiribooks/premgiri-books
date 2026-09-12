@@ -2319,6 +2319,183 @@ Mapping so far:
   branched from it, and Customer Reports' own tracker #69 has not itself been marked done
   yet — not touched here, since only Supplier Reports was named in this instruction).
   Tracker #70 flipped to ✅ in `context/Phases/phase-tracker.md`.
+- **Payroll (#61, Phase 9, spec 63) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged — every Phase 10 report this session has used
+  the same branch; still not merged into `main`). The user asked to "start Employee
+  Reports" (#71, Phase 10); reading spec 73 in full surfaced that two of its four views
+  (Payroll Register, Salary Register) hard-depend on Payroll's (#61, Phase 9) posted
+  `PayrollRun`/`PayrollRunItem` data, and Payroll itself was still unimplemented —
+  deliberately deferred earlier the same day when the user chose to skip ahead to Trial
+  Balance rather than finish Phase 9 in order (see that entry above). Presented the user
+  three options (implement Payroll first; implement Employee Reports partially, deferring
+  the two Payroll-dependent views; stop and record the blocker) — the user chose to
+  implement Payroll first, restoring normal in-order sequencing (Employee Master →
+  Attendance → Payroll) before Phase 10 continues.
+
+  **Schema**: one migration (`20260912143436_add_payroll`) adding `PayrollRunStatus`
+  enum; `PayrollRun`/`PayrollRunItem` models (spec 63's Data Model, implemented exactly as
+  drafted — `payrollNumber` nullable until posting, mirroring `PurchaseInvoice.
+  invoiceNumber`'s two-step contract; `PayrollRunItem.basicSalary` a snapshot, never a
+  live `Employee.basicSalary` join; `workedDays` `Decimal(5,2)` since `HALF_DAY`
+  contributes `0.5`); `VoucherType.SALARY` and `DocumentType.PAYROLL`/`SALARY_VOUCHER`
+  appended (never reordering the existing ten/twenty-two values); two new nullable
+  `CompanySettings` columns (`salaryExpenseLedgerId`/`salaryPayableLedgerId`). Back-
+  relations added on `Company`, `FinancialYear`, `Employee`, `Voucher`, `User`, `Ledger`.
+
+  **New `src/modules/payroll/` module** (repository/service/validation/actions/
+  components) plus a new `src/modules/payroll/utils/payroll-calculations.ts` (pure
+  worked-day/net-salary arithmetic, paise-safe rounding, mirroring
+  `purchase-invoice-calculations.ts`'s own convention). `createDraft`/`refreshDraft`
+  select every active employee, split into candidates (non-null `basicSalary`) and
+  excluded (shown to the preparer, never blocking draft creation), call
+  `attendanceService.getAttendanceSummary` once per candidate (never re-implementing that
+  per-status counting — the spec's own explicit instruction, distinct from the batched
+  variant Employee Reports needed for its own Attendance Summary view, added separately
+  below), and compute `workedDays = presentDays + 0.5 x halfDays` /
+  `netSalary = round(basicSalary x workedDays / totalDaysInPeriod, 2)` half-up to paise.
+  `postPayrollRun` re-validates every business rule against CURRENT state inside one
+  Serializable transaction (non-overlapping-period check re-run against everything except
+  itself, ledger-mapping completeness/group/active/company-ownership re-checked), recomputes
+  every line fresh from current Attendance/salary data, generates `payrollNumber`, and
+  posts one aggregate `VoucherType.SALARY` voucher — Debit `salaryExpenseLedgerId`, Credit
+  `salaryPayableLedgerId`, both equal to `totalNetSalary`, no round-off/payment lines (the
+  two amounts are identical by construction) — mirroring `purchase-invoice-service.ts`'s
+  `postPurchaseInvoice` orchestration shape exactly, minus the GST/stock/payment steps
+  that don't apply here. `cancelPayrollRun` reverses only the voucher (via
+  `voucherEngine.cancelVoucher`) — attendance is never un-marked, per spec. Post/Cancel
+  gated on `employees`/`approve` (committing/reversing a real company-wide financial
+  liability); Create/Refresh on `employees`/`create`.
+
+  **New Company Settings extension**: `src/modules/company/utils/payroll-ledger-mapping.ts`
+  (`assertPayrollLedgerMappingValid`/`isPayrollLedgerMappingComplete`, mirroring
+  `purchase-ledger-mapping.ts`'s identical shape — two fields instead of six, no
+  round-off concept) and `payroll-ledger-mapping-form.tsx`, added as a new "Payroll
+  Ledgers" section on the existing `/settings/sales-ledgers` page (per the spec's own
+  instruction to extend that page rather than create a new one) — `salaryExpenseLedgerId`
+  must sit under "Indirect Expenses" (or a descendant), `salaryPayableLedgerId` under
+  "Current Liabilities" (or a descendant); added a new exported
+  `CURRENT_LIABILITIES_GROUP_NAME` constant to `default-groups.ts` for the second check
+  (mirroring the existing `INDIRECT_EXPENSES_GROUP_NAME`/`PURCHASE_ACCOUNTS_GROUP_NAME`
+  pattern).
+
+  New `/employees/payroll` (list, search + status filter), `/employees/payroll/new`
+  (period picker → live, never-persisted preview → "Create Draft"), and
+  `/employees/payroll/[id]` (detail, Refresh/Post/Cancel actions) pages; a "Payroll" card
+  added to the `/employees` hub alongside Attendance; `employees/payroll` breadcrumb key
+  added.
+
+  39 new vitest cases (calculations, schema, repository, service — including a full
+  posting-orchestration test asserting the exact two-entry balanced voucher shape, a test
+  confirming `postPayrollRun` rejects a run with nothing to pay rather than building a
+  zero-amount voucher entry, and a test confirming `listPayrollRunsForReport` rejects a
+  malformed `financialYearId` before it reaches the repository — the latter two added
+  during the code/security review fix pass below) — 1909/1909 total suite passing;
+  `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2 pre-existing unrelated
+  warnings), `npx vitest run`, and `next build` all pass; `/employees/payroll*` appears in
+  the build route table.
+
+  **Not browser-verified this session** — no browser-automation tooling available,
+  same reasoning as every report in this batch. Business-logic correctness is carried
+  entirely by the new repository/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after both Payroll and Employee
+  Reports were implemented) found the identical issue independently — 1 HIGH (code), 1
+  MEDIUM (security, same root cause), 1 LOW (security) — all three fixed; no other
+  CRITICAL/HIGH/MEDIUM findings from either review.** (1) **HIGH/MEDIUM, fixed** —
+  `attendanceService.getAttendanceSummaryBulk` (added for Employee Reports' own
+  Attendance Summary view, see that entry below) was gated on `employees`/`view` instead
+  of `reports`/`view`, which would have 403'd the exact seeded Accountant role this whole
+  batch of Payroll re-gating (`listPayrollRunsForReport`/`getEmployeeSalaryHistory`) was
+  done to support — the Attendance Summary Report, the first of Employee Reports' four
+  views, would have failed for that role while the other three worked. Fixed by re-gating
+  to `reports`/`view`, matching `listPayrollRunsForReport`'s own convention; the test that
+  had locked in the wrong gate (`expect(assertPermissionMock).toHaveBeenCalledWith(...,
+  "employees", "view")`) was updated to assert the correct one. (2) **LOW, fixed** —
+  `listPayrollRunsForReport`'s `financialYearId` bypassed schema validation (accepted
+  directly off the raw input object rather than through a Zod schema) before reaching
+  `payrollRunRepository.findMany`'s `where` clause — not currently exploitable (its sole
+  caller, `employee-report-service.ts`, already validates it via `payrollRegisterFiltersSchema`'s
+  `z.uuid()` first), but a defense-in-depth gap for any future caller. Fixed by adding a
+  new `payrollRunReportFiltersSchema` (the operational `payrollRunListFiltersSchema` plus
+  `financialYearId: z.uuid().optional()`, since the operational list only ever resolves
+  its own financial year from the active-FY cookie, never a raw client value) and
+  validating through it. Both fixes re-verified: `npx tsc --noEmit`, `npx eslint src
+  prisma` (0 errors), `npx vitest run` (1909/1909, +2 new regression tests — one for each
+  fix), and `next build` all pass.
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #61 stays ⬜) and
+  merge into `main` not requested this session — the same two-step pattern this batch has
+  followed throughout (implement now, "mark as done"/merge only on separate explicit
+  instruction).
+- **Employee Reports (#71, spec 73) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged), immediately after Payroll (#61) was implemented
+  to unblock it — the sixth of Phase 10's seven operational reports. Four views
+  (Attendance Summary, Payroll Register, Salary Register, Employee Directory); a new pure
+  `src/engines/reporting/employee-reports.ts`; a new `src/modules/reports/employees/`
+  module; new `/reports/employees*` pages; `/reports` hub card flipped from disabled
+  "Coming soon" to linked.
+
+  **Amendments this spec required, in the Attendance and Payroll modules it consumes —
+  never a second, divergent implementation of either module's own logic**:
+  1. `attendanceRepository.aggregateSummaryForEmployees`/`attendanceService.
+     getAttendanceSummaryBulk` — the identical per-status `groupBy` `getSummary` already
+     performs for one employee, parameterized across many via a single
+     `groupBy(["employeeId", "status"])`, reshaped into a per-employee result map. A
+     dedicated parity test confirms the batched result exactly matches calling
+     `getSummary` once per employee individually, against a seeded multi-employee,
+     multi-status fixture.
+  2. `payrollRunService.listPayrollRunsForReport` (new) and `getEmployeeSalaryHistory`
+     (pre-existing from the Payroll entry above, re-gated) both moved to `reports`/`view`
+     instead of `employees`/`view` — the seeded Accountant role has `reports`/`view` but
+     no `employees` module access at all, the exact `listPurchaseInvoicesForReport`/
+     `getPartyWisePurchaseReport` precedent Customer/Supplier/Purchase Reports already
+     established for their own masters-gated services, applied here to the
+     `employees`-gated Payroll module instead.
+  3. `EmployeeListFilters`/`employeeRepository.findMany` gained `department`/
+     `designation`/`branchId` filters (contains-match for the first two, since neither is
+     an enum per spec 61's own decision) — the Employee Directory view's own filters,
+     which spec 73's own text assumed already existed on `employeeService.listEmployees`
+     but didn't; added as a small, backward-compatible (all-optional) extension rather
+     than inventing a second query.
+
+  **Deliberate deviation from the spec's own literal wording, the identical precedent
+  every report in this batch has already established**: every view queries
+  `prisma.employee`/`prisma.branch` directly in `employee-report-service.ts` (its own
+  `listReportEmployees`/`listEmployeeOptions`/`listBranchOptions`) rather than through
+  `employeeService.listEmployees`/`listSelectableEmployees` (the spec's own literal
+  suggestion) — that service gates on `employees`/`view`, which would 403 the seeded
+  Accountant role this module exists to serve. Also: no separate `actions/` file was
+  created despite the spec listing one — every sibling Reports module (Customer,
+  Supplier, Purchase, Inventory) calls its service directly from the Server Component
+  page instead, since every view here is a plain filtered GET-style page with no
+  client-side mutation to wrap in a Server Action; matched that actual, established
+  convention over the spec's literal file list.
+
+  **Unmarked Days** (Attendance Summary's own column) is computed as a plain calendar-day
+  subtraction (`(periodEnd − periodStart + 1) − totalMarkedDays`) inside the Reporting
+  Engine composition layer, never attendance arithmetic — per Business Rules #1's
+  explicit instruction not to assume an unmarked day means present or absent, something
+  spec 62 itself declined to define.
+
+  24 new vitest cases (10 Reporting Engine + 4 attendance-repository/service bulk-parity +
+  10 employee-report-service) — final total 1909/1909 (see the Payroll entry above for
+  the +2 review-fix regression tests added on top); `npx tsc --noEmit`,
+  `npx eslint src prisma` (0 errors, same 2 pre-existing warnings), `npx vitest run`, and
+  `next build` all pass; `/reports/employees*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as every other report in this
+  batch: no browser-automation tooling available. Business-logic correctness is carried
+  entirely by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review: see the Payroll entry above** — both reviews covered
+  this feature's own `getAttendanceSummaryBulk` permission gate (this feature's sole
+  contribution to the one HIGH/MEDIUM finding both reviews independently caught, since
+  Employee Reports is that method's only caller) in the same pass; no other
+  CRITICAL/HIGH/MEDIUM/LOW finding specific to this feature's own code.
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #71 stays ⬜) and
+  merge into `main` not requested this session — same two-step pattern as every report in
+  this batch.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
