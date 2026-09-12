@@ -31,3 +31,37 @@ export interface TrialBalanceReport {
   totalDebit: number;
   totalCredit: number;
 }
+
+/** One ledger's diffed period movement — see profit-and-loss.ts for how this is derived from two getTrialBalance calls. */
+export interface ProfitAndLossLedgerMovement {
+  ledgerId: string;
+  ledgerName: string;
+  ledgerGroupId: string;
+  periodDebit: number;
+  periodCredit: number;
+}
+
+export interface ProfitAndLossRow {
+  ledgerId: string;
+  ledgerName: string;
+  /** Presentation value for the period, sign per natural-balance convention — may be negative. */
+  value: number;
+}
+
+export interface ProfitAndLossSection {
+  groupId: string;
+  groupName: string;
+  depth: number;
+  rows: ProfitAndLossRow[];
+  subtotal: number;
+  childSections: ProfitAndLossSection[];
+}
+
+export interface ProfitAndLossReport {
+  directIncome: ProfitAndLossSection[];
+  directExpense: ProfitAndLossSection[];
+  indirectIncome: ProfitAndLossSection[];
+  indirectExpense: ProfitAndLossSection[];
+  grossProfit: number;
+  netProfit: number;
+}

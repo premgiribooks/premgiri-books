@@ -19,11 +19,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
-// Trial Balance (64-trial-balance.md) is the first tenant of this hub — the
-// other three financial reports (65-67) and the seven Reporting-phase
-// screens (tracker #66-72, spec files 68-74) all reserve their own card here
-// as an unavailable placeholder, matching 57-gst-registers.md's own "hub
-// exists before every sibling screen does" precedent.
+// Trial Balance (64-trial-balance.md) is the first tenant of this hub;
+// Profit & Loss (65-profit-and-loss.md) is the second. The remaining two
+// financial reports (66-67) and the seven Reporting-phase screens (tracker
+// #66-72, spec files 68-74) all reserve their own card here as an
+// unavailable placeholder, matching 57-gst-registers.md's own "hub exists
+// before every sibling screen does" precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -37,7 +38,7 @@ const REPORT_MODULES = [
     icon: TrendingUp,
     title: "Profit & Loss",
     description: "Income and expenses for a chosen period.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/balance-sheet",
