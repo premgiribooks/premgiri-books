@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Search, Bell, User, UserCog, LogOut } from "lucide-react";
+import { BookOpen, Search, Bell, Menu, User, UserCog, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { useAuth } from "@/components/providers/auth-provider";
 import { logoutAction } from "@/lib/auth-actions";
+import { openCommandPalette } from "@/hooks/use-command-palette";
 
 async function handleLogout() {
   try {
@@ -27,11 +28,27 @@ async function handleLogout() {
   }
 }
 
-export function TopNavbar() {
+interface TopNavbarProps {
+  onOpenMobileNav?: () => void;
+}
+
+export function TopNavbar({ onOpenMobileNav }: TopNavbarProps) {
   const { user } = useAuth();
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-navbar px-4 text-navbar-foreground">
+      {onOpenMobileNav && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Open navigation menu"
+          className="md:hidden"
+          onClick={onOpenMobileNav}
+        >
+          <Menu size={18} />
+        </Button>
+      )}
+
       <div className="flex shrink-0 items-center gap-2">
         <BookOpen size={22} className="text-primary" />
         <span className="text-sm font-semibold tracking-tight">
@@ -46,11 +63,18 @@ export function TopNavbar() {
             className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
           />
           <Input
-            type="search"
-            disabled
-            placeholder="Search products, customers, invoices..."
-            className="pl-9"
-            aria-label="Global search"
+            type="text"
+            readOnly
+            onClick={() => openCommandPalette()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openCommandPalette();
+              }
+            }}
+            placeholder="Search pages, products, customers, invoices... (Ctrl+K)"
+            className="cursor-pointer pl-9"
+            aria-label="Global search — opens quick navigation"
           />
         </div>
       </div>

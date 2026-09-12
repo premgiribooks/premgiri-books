@@ -2289,6 +2289,28 @@ merged) before implementation begins.
 
 ---
 
+**Navigation & Information Architecture Overhaul implemented 2026-09-12** on branch
+`feature/navigation-ia-overhaul` — a cross-cutting UX/architecture request from the user,
+not a numbered item in this tracker's own `#` sequence (it touches every existing module's
+navigation rather than adding a new business feature). Converts the sidebar from a flat
+list forcing Sidebar → card-grid hub page → destination page into a real two-level
+permission-aware hierarchical menu (built only from each hub's own already-existing
+`..._MODULES`/`..._VIEWS` route list), plus Ctrl/Cmd+K quick navigation, favorites, recent
+pages, and a mobile drawer — no business logic, permission-check code, schema, or existing
+URL changed. See `context/progress-tracker.md`'s Current Phase entry (same date) for the
+full file-by-file detail, the real permission-visibility gap it closes (Masters hub was
+gated more strictly than its own children), and its partial overlap with feature-spec 75
+(Global Search, not yet formally implemented). Verified via `tsc`/`eslint` plus a real
+`next dev` session driven end-to-end with a scratchpad-only Playwright script (direct
+Masters→Products navigation, auto-expand-on-active-route across reload, Ctrl+K search,
+collapsed-state persistence, mobile drawer) — one real bug found and fixed along the way
+(`use-favorites.ts`/`use-recent-pages.ts`'s `getServerSnapshot()` returned a fresh `[]`
+each call instead of a stable reference, tripping React's `useSyncExternalStore`
+contract). Committed on its own branch; **not yet pushed or merged into `main`** — awaiting
+the user's review first, per this project's one-branch-at-a-time git workflow.
+
+---
+
 # Notes
 
 - Complete one feature at a time.

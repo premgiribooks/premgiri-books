@@ -103,6 +103,103 @@ Mapping so far:
 
 ## Current Phase
 
+- **Navigation & Information Architecture Overhaul implemented 2026-09-12** on branch
+  `feature/navigation-ia-overhaul` — a cross-cutting UX/architecture initiative requested
+  directly by the user (not a numbered `feature-specs/NN-*.md` item, though it partially
+  overlaps and effectively implements the Ctrl+K/PAGES portion of **spec 75, Global
+  Search**, row 92 of the mapping table above — see the note at the end of this entry).
+  Every ERP module's sidebar navigation previously forced Sidebar → a card-grid "hub" page
+  (`masters/page.tsx`, `sales/page.tsx`, etc.) → click a card → the destination page. This
+  converts the sidebar into a real two-level hierarchical parent/child menu built only
+  from routes that already exist (each hub page's own `..._MODULES`/`..._VIEWS` const was
+  the source of truth — nothing invented), adds Ctrl/Cmd+K quick navigation, favorites,
+  recently-visited pages, and a mobile drawer, without touching business logic, permission
+  enforcement, database schema, or any existing URL (every hub page, e.g. `/masters`,
+  `/sales`, stays live — just no longer the forced path).
+
+  **New files**: `src/config/navigation.ts` (the nav tree, `NavGroup`/`NavLeaf` types);
+  `src/lib/navigation-filter.ts` (one shared `filterNavigation()` used by both the Sidebar
+  and the Command Palette, so the permission-visibility rule lives in one place, not two);
+  `src/lib/global-search.ts` (the DATA-tier search — Products/Customers/Suppliers, reusing
+  each module's own already-permission-checked `productService.listProducts`/
+  `customerService.listCustomers`/`supplierService.listSuppliers`, no new query logic
+  duplicated); `src/components/providers/nav-permissions-provider.tsx` (`NavPermissionsProvider`/
+  `useNavPermissions()`, copying `AuthProvider`'s exact shape); `src/components/layout/
+  sidebar-group.tsx` (new expandable-group sub-component; collapsed/icon-only rail shows a
+  child-list flyout via the existing `Popover` instead of losing access to children);
+  `src/components/layout/command-palette.tsx`; `src/hooks/use-sidebar-state.ts`,
+  `use-favorites.ts`, `use-recent-pages.ts`, `use-command-palette.ts` (all the same
+  hand-rolled `useSyncExternalStore` + `localStorage` pattern already established by
+  `use-breadcrumb-label.ts` — pure client preference data, no new DB table).
+
+  **Edited files**: `src/lib/permissions.ts` (additive `getNavPermissions()` — one batched
+  `prisma.rolePermission.findMany` per request, `cache()`-wrapped like the existing
+  `hasPermission`); `src/app/layout.tsx` (~3 lines, wires `NavPermissionsProvider` next to
+  the existing `AuthProvider`); `src/components/layout/sidebar.tsx` (rewritten from a flat
+  list to the permission-filtered tree); `src/components/layout/sidebar-item.tsx` (added an
+  `active` prop — the flat sidebar never had active-route highlighting at all before this,
+  even though feature-spec 03's original Application Shell used plain `<button>`s with no
+  routing yet; added an optional inline favorite-star toggle); `src/components/layout/
+  app-shell.tsx` (mobile `Sheet` drawer, mounts `CommandPalette` once, records recent-page
+  visits); `src/components/layout/top-navbar.tsx` (the disabled search placeholder from
+  feature-spec 03 now opens the Command Palette; added a `md:hidden` hamburger button).
+  **Not touched, deliberately**: any of the ~198 existing pages' own per-page
+  `isAdmin`/`hasPermission()` gate and `<AppShell isAdmin={isAdmin}>` call (that prop stays
+  on `AppShellProps` for backward compatibility but is no longer read for nav filtering —
+  the Sidebar/Command Palette now get their visibility from the new
+  `NavPermissionsProvider` context instead); `BreadcrumbBar`/`breadcrumbs.ts` (already
+  covered every route correctly — verified, not touched); `PlatformSidebar`/
+  `/administration` (Super Admin module, explicitly out of scope); Prisma schema; any
+  existing Server Action/API contract.
+
+  **A real permission gap this closes, without changing any permission-check code**: the
+  `/masters` hub page (and `/settings`) gate on the coarse `isCurrentUserCompanyAdmin()`
+  (`settings:view`), but each individual `/masters/*` child page (Products, Customers,
+  etc.) gates on the finer `masters:view` — meaning a non-admin role holding `masters:view`
+  (Sales, Purchase, Store Manager, per `DEFAULT_ROLE_PERMISSIONS` in
+  `src/constants/permissions.ts`) could already open `/masters/products` directly by URL
+  but got bounced trying to click through the `/masters` hub first. The new Sidebar gates
+  the Masters *group* on `masters:view` (matching what its children actually enforce), so
+  those roles now see a correctly-scoped Masters menu (the 9 true master-data items) —
+  Company Management/Financial Year/Branch Management are individually gated on
+  `company`/`financial-year` per-leaf overrides, since that's what those three pages
+  themselves check. This also finally resolves the Phase 01-closure Platform Improvement
+  flagged in the Architecture Decisions entry below ("The Sidebar's 'Accounting' nav entry
+  gets a real `href` but keeps the existing coarse-grained `isAdmin`/`adminOnly` visibility
+  gate... flagged as a Platform Improvement to revisit if a future module wants real
+  per-permission nav visibility") — solved at the root-layout level via one new context
+  provider, not by threading a new prop through the ~198 existing `AppShell` callers.
+
+  **Verified**: `npx tsc --noEmit` clean; `npx eslint src` clean (0 errors, the same 2
+  pre-existing unrelated warnings); a real `next dev` session was driven end-to-end with a
+  standalone Playwright script (installed into the session scratchpad only, never added to
+  this project's `package.json`/lockfile) logged in as the seeded `admin` user: direct
+  Masters → Products navigation with no `/masters` hub detour (confirmed via `href`
+  inspection and `waitForURL`, screenshotted); Masters auto-expands and Products stays
+  highlighted across a full page reload; Ctrl+K opens the palette, typing "prod" filters
+  to a "PAGES → Products" row, arrow keys + Enter navigate; collapsed rail state persists
+  across reload; a 375px viewport hides the inline rail and opens a working `Sheet` drawer
+  from the new hamburger button, with all 16 expected links present inside it. One real bug
+  was found and fixed during this pass: `use-favorites.ts`/`use-recent-pages.ts`'s
+  `getServerSnapshot()` returned a new `[]` array literal per call, which
+  `useSyncExternalStore` requires to be a stable/cached reference (React logged "The result
+  of getServerSnapshot should be cached to avoid an infinite loop") — fixed by returning a
+  shared module-level constant, matching `use-sidebar-state.ts`'s already-correct pattern.
+
+  **Relationship to feature-spec 75 (Global Search, row 92 above)**: this work
+  independently implements that spec's Ctrl+K-overlay-over-the-TopNavbar-search-placeholder
+  mechanic and its Products/Customers/Suppliers DATA-search scope, but was not built as
+  "spec 75" and does not cover that spec's fourth entity (Ledgers) or its own documented
+  acceptance criteria file. Treat spec 75 as **substantially, not formally, implemented**
+  — closing it properly would mean adding a Ledgers search call to
+  `src/lib/global-search.ts` (reusing an existing ledger-search-capable service the same
+  way Products/Customers/Suppliers already do) and cross-referencing this entry from that
+  spec file, rather than re-implementing it from scratch.
+
+  **Not yet pushed or merged into `main`** — implemented, browser-verified, and committed
+  (see Next Up) on its own feature branch, awaiting the user's review before merge, per
+  this project's one-branch-at-a-time git workflow.
+
 - **Feature-spec 60 (HSN Summary, Phase 8 — GST #58) implemented 2026-09-11** on branch
   `feature/hsn-summary` — the last item in Phase 8's original four-item batch (GST
   Registers #55, GSTR-1 #56, GSTR-3B #57, HSN Summary #58 are all now implemented; GSTR-2
@@ -1641,6 +1738,11 @@ Mapping so far:
   - Verified: `next build` succeeds, `eslint` clean, `tsc --noEmit` clean, Electron TS compiles, and Electron genuinely launches a `BrowserWindow` (confirmed via real `electron.exe` processes attempting to load the dev server).
 
 ## In Progress
+
+- **Navigation & IA Overhaul** (see the Current Phase entry above for full detail) —
+  implemented, browser-verified with a scratchpad-only Playwright script, and committed on
+  `feature/navigation-ia-overhaul`. **Not yet pushed or merged into `main`** — awaiting the
+  user's review before merge, per this project's one-branch-at-a-time git workflow.
 
 - Feature-spec 38 (Sales Invoice) implemented 2026-09-10 on branch `36-sales-orders`. **Code review: 1 HIGH, 3 MEDIUM, all fixed. Security review: 1 HIGH, 2 MEDIUM/LOW, the HIGH and one MEDIUM fixed; the other MEDIUM/LOW accepted as-is.** Fixed:
   - **[HIGH, code review] Quick Customer auto-conversion silently required an unrelated `masters:create` permission** — `convertQuickCustomer` called the public `customerService.createCustomer`/`listSelectableLedgerGroupsForCustomer`, both gated on `masters:create`/`masters:view`. A cashier role with `sales:create` but no `masters` rights (a realistic, deliberate role split) would have the whole posting transaction abort on this internal side-effect. Fixed by adding `customerService.createCustomerFromSale`/`listSelectableLedgerGroupsForSale` — identical logic, gated on `sales:create` instead, since it's the authorized sale (not a standalone master-data action) that justifies creating the buyer's record. `createCustomer`/`listSelectableLedgerGroupsForCustomer` are untouched for their normal Customer Management callers.

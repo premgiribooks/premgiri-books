@@ -1,7 +1,8 @@
 import { cache } from "react";
 
 import { prisma } from "@/lib/prisma";
-import { AuthorizationError, getCurrentCompanyUser, type CompanyCurrentUser } from "@/lib/current-user";
+import { AuthorizationError, getCurrentCompanyUser, type CompanyCurrentUser, type CurrentUser } from "@/lib/current-user";
+import { PERMISSION_MODULES, type PermissionModule } from "@/constants/permissions";
 
 /**
  * Only ever called for a CompanyCurrentUser — a PLATFORM user (Super Admin)
@@ -75,3 +76,42 @@ export async function isCurrentUserCompanyAdmin(): Promise<boolean> {
   const user = await getCurrentCompanyUser();
   return hasPermission(user, "settings", "view");
 }
+
+/**
+ * Batched nav-visibility read for the Sidebar/Command Palette (see
+ * navigation-filter.ts): one query for every module the user holds "view"
+ * on, instead of one hasPermission() round trip per module. Purely additive
+ * — no existing page's own hasPermission()/isCurrentUserCompanyAdmin() gate
+ * changes; this only feeds what the nav renders, not what a page allows.
+ *
+ * A PLATFORM user (Super Admin) has no Role/company and uses the separate
+ * PlatformSidebar, which doesn't consult this; a null user is the
+ * unauthenticated case (public pages render no Sidebar at all). Both get an
+ * all-false map rather than throwing, since RootLayout calls this
+ * unconditionally for every request.
+ */
+export const getNavPermissions = cache(
+  async (user: CurrentUser | null): Promise<Record<PermissionModule, boolean>> => {
+    const allFalse = Object.fromEntries(PERMISSION_MODULES.map((module) => [module, false])) as Record<
+      PermissionModule,
+      boolean
+    >;
+
+    if (!user || user.userType !== "COMPANY") {
+      return allFalse;
+    }
+
+    const rows = await prisma.rolePermission.findMany({
+      where: {
+        role: { name: user.role, companyId: user.companyId },
+        permission: { action: "view" },
+      },
+      select: { permission: { select: { module: true } } },
+    });
+
+    const granted = new Set(rows.map((row) => row.permission.module));
+    return Object.fromEntries(
+      PERMISSION_MODULES.map((module) => [module, granted.has(module)])
+    ) as Record<PermissionModule, boolean>;
+  }
+);
