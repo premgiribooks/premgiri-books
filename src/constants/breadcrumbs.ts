@@ -77,6 +77,16 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   ledger: "Stock Ledger",
   valuation: "Stock Valuation",
   "low-stock": "Low Stock",
+  // 71-customer-reports.md: "reports/customers" disambiguates against the
+  // bare "customers" key (/masters/customers' own list page). "outstanding",
+  // "statement", "sales-summary", and "directory" have no existing bare-key
+  // collision anywhere else in this table, so they're added unqualified
+  // rather than as composite keys.
+  "reports/customers": "Customer Reports",
+  outstanding: "Outstanding",
+  statement: "Statement",
+  "sales-summary": "Sales Summary",
+  directory: "Directory",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",

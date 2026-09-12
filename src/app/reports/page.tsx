@@ -28,11 +28,14 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // tracker #67) is the sixth — a direct mirror of Sales Reports from the
 // purchase side. Inventory Reports (70-inventory-reports.md, tracker #68) is
 // the seventh, composing the Inventory Engine's already-reserved
-// getCurrentStock/getStockLedger/getStockValuation primitives. The remaining
-// four Reporting-phase screens (tracker #69-72, spec files 71-74) still
-// reserve their own card here as an unavailable placeholder, matching
-// 57-gst-registers.md's own "hub exists before every sibling screen does"
-// precedent.
+// getCurrentStock/getStockLedger/getStockValuation primitives. Customer
+// Reports (71-customer-reports.md, tracker #69) is the eighth, composing
+// Customer master data, the Voucher Engine's getTrialBalance/
+// getLedgerStatement, and Sales Reports' getPartyWiseSalesReport. The
+// remaining three Reporting-phase screens (tracker #70-72, spec files
+// 72-74) still reserve their own card here as an unavailable placeholder,
+// matching 57-gst-registers.md's own "hub exists before every sibling
+// screen does" precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -88,7 +91,7 @@ const REPORT_MODULES = [
     icon: Users,
     title: "Customer Reports",
     description: "Outstanding and transaction summaries by customer.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/suppliers",
