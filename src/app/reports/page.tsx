@@ -24,10 +24,12 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // (66-balance-sheet.md) is the third; Cash Flow (67-cash-flow.md) is the
 // fourth of the phase's four financial reports. Sales Reports
 // (68-sales-reports.md, tracker #66) is the fifth, and the first of the
-// phase's operational reports. The remaining six Reporting-phase screens
-// (tracker #67-72, spec files 69-74) still reserve their own card here as
-// an unavailable placeholder, matching 57-gst-registers.md's own "hub
-// exists before every sibling screen does" precedent.
+// phase's operational reports. Purchase Reports (69-purchase-reports.md,
+// tracker #67) is the sixth — a direct mirror of Sales Reports from the
+// purchase side. The remaining five Reporting-phase screens (tracker
+// #68-72, spec files 70-74) still reserve their own card here as an
+// unavailable placeholder, matching 57-gst-registers.md's own "hub exists
+// before every sibling screen does" precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -69,7 +71,7 @@ const REPORT_MODULES = [
     icon: Truck,
     title: "Purchase Reports",
     description: "Purchase register, item-wise, party-wise, and return summary.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/inventory",

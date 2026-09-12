@@ -20,6 +20,8 @@ const {
   findCompanyStateCodeMock,
   findLedgersForValidationMock,
   findActiveLedgersForPaymentPickerMock,
+  aggregateItemWisePurchasesMock,
+  aggregatePartyWisePurchasesMock,
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
   assertPermissionMock,
@@ -50,6 +52,8 @@ const {
   findCompanyStateCodeMock: vi.fn(),
   findLedgersForValidationMock: vi.fn(),
   findActiveLedgersForPaymentPickerMock: vi.fn(),
+  aggregateItemWisePurchasesMock: vi.fn(),
+  aggregatePartyWisePurchasesMock: vi.fn(),
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
   assertPermissionMock: vi.fn(),
@@ -82,6 +86,8 @@ vi.mock("@/modules/purchase-invoices/repositories/purchase-invoice-repository", 
     findSelectableWarehouses: findSelectableWarehousesMock,
     findCompanyStateCode: findCompanyStateCodeMock,
     findActiveLedgersForPaymentPicker: findActiveLedgersForPaymentPickerMock,
+    aggregateItemWisePurchases: aggregateItemWisePurchasesMock,
+    aggregatePartyWisePurchases: aggregatePartyWisePurchasesMock,
   },
 }));
 
@@ -306,6 +312,8 @@ beforeEach(() => {
   findCompanyStateCodeMock.mockReset();
   findLedgersForValidationMock.mockReset();
   findActiveLedgersForPaymentPickerMock.mockReset();
+  aggregateItemWisePurchasesMock.mockReset();
+  aggregatePartyWisePurchasesMock.mockReset();
   getCurrentCompanyUserMock.mockReset();
   getCurrentFinancialYearMock.mockReset();
   assertPermissionMock.mockReset();
@@ -866,6 +874,54 @@ describe("getPurchaseInvoice / listPurchaseInvoices — cross-company and scopin
     const result = await purchaseInvoiceService.listPurchaseInvoices();
     expect(result).toEqual([]);
     expect(findManyMock).not.toHaveBeenCalled();
+  });
+});
+
+// 69-purchase-reports.md's Purchase Reports module calls these three instead
+// of listPurchaseInvoices — mirrors sales-invoice-service.test.ts's own
+// "report-scoped reads" describe block; the only difference from their
+// purchase:view-gated siblings is which permission they check.
+describe("report-scoped reads — listPurchaseInvoicesForReport / getItemWisePurchaseReport / getPartyWisePurchaseReport", () => {
+  it("listPurchaseInvoicesForReport gates on reports:view, not purchase:view", async () => {
+    await purchaseInvoiceService.listPurchaseInvoicesForReport();
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+  });
+
+  it("listPurchaseInvoicesForReport returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await purchaseInvoiceService.listPurchaseInvoicesForReport();
+    expect(result).toEqual([]);
+    expect(findManyMock).not.toHaveBeenCalled();
+  });
+
+  it("getItemWisePurchaseReport gates on reports:view and scopes to the caller's company + active financial year", async () => {
+    aggregateItemWisePurchasesMock.mockResolvedValueOnce([]);
+    const filters = { fromDate: new Date("2026-04-01"), toDate: new Date("2026-04-30") };
+    await purchaseInvoiceService.getItemWisePurchaseReport(filters);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+    expect(aggregateItemWisePurchasesMock).toHaveBeenCalledWith(COMPANY_ID, FY_ID, filters);
+  });
+
+  it("getItemWisePurchaseReport returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await purchaseInvoiceService.getItemWisePurchaseReport({ fromDate: new Date(), toDate: new Date() });
+    expect(result).toEqual([]);
+    expect(aggregateItemWisePurchasesMock).not.toHaveBeenCalled();
+  });
+
+  it("getPartyWisePurchaseReport gates on reports:view and scopes to the caller's company + active financial year", async () => {
+    aggregatePartyWisePurchasesMock.mockResolvedValueOnce([]);
+    const filters = { fromDate: new Date("2026-04-01"), toDate: new Date("2026-04-30") };
+    await purchaseInvoiceService.getPartyWisePurchaseReport(filters);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+    expect(aggregatePartyWisePurchasesMock).toHaveBeenCalledWith(COMPANY_ID, FY_ID, filters);
+  });
+
+  it("getPartyWisePurchaseReport returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await purchaseInvoiceService.getPartyWisePurchaseReport({ fromDate: new Date(), toDate: new Date() });
+    expect(result).toEqual([]);
+    expect(aggregatePartyWisePurchasesMock).not.toHaveBeenCalled();
   });
 });
 

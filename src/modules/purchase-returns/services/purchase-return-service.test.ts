@@ -727,6 +727,30 @@ describe("getPurchaseReturn / listPurchaseReturns — cross-company and scoping"
   });
 });
 
+// 69-purchase-reports.md's Purchase Return Summary calls this instead of
+// listPurchaseReturns — mirrors sales-return-service.test.ts's own
+// `listSalesReturnsForReport` coverage; the only difference from its
+// purchase:view-gated sibling is which permission it checks.
+describe("listPurchaseReturnsForReport", () => {
+  it("gates on reports:view, not purchase:view", async () => {
+    await purchaseReturnService.listPurchaseReturnsForReport();
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+  });
+
+  it("returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await purchaseReturnService.listPurchaseReturnsForReport();
+    expect(result).toEqual([]);
+    expect(findManyMock).not.toHaveBeenCalled();
+  });
+
+  it("delegates to purchaseReturnRepository.findMany scoped to the caller's company + active financial year", async () => {
+    findManyMock.mockResolvedValueOnce([]);
+    await purchaseReturnService.listPurchaseReturnsForReport({ status: "POSTED" });
+    expect(findManyMock).toHaveBeenCalledWith(COMPANY_ID, FY_ID, { status: "POSTED" });
+  });
+});
+
 describe("getReturnableInvoice", () => {
   it("returns null for a non-POSTED invoice", async () => {
     findPurchaseInvoiceForReturnMock.mockResolvedValueOnce(invoiceForReturn({ status: "DRAFT" }));

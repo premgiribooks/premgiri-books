@@ -350,6 +350,24 @@ export const purchaseReturnService = {
     return purchaseReturnRepository.findMany(user.companyId, financialYear.id, filters);
   },
 
+  /**
+   * The same read as `listPurchaseReturns`, gated on `reports`/`view`
+   * instead of `purchase`/`view` — 69-purchase-reports.md's Purchase Return
+   * Summary calls this one, mirroring sales-return-service.ts's own
+   * `listSalesReturnsForReport` precedent. Still goes through this service
+   * (Invariant 5) — no new repository method.
+   */
+  async listPurchaseReturnsForReport(filters: PurchaseReturnListFilters = {}): Promise<PurchaseReturnListRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return purchaseReturnRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
   async getPurchaseReturn(id: string): Promise<PurchaseReturnDetail | null> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "purchase", "view");

@@ -3,6 +3,10 @@ import { Prisma, type PurchaseInvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
+  ItemWisePurchaseAggregateRow,
+  ItemWisePurchaseFilters,
+  PartyWisePurchaseAggregateRow,
+  PartyWisePurchaseFilters,
   PurchaseInvoiceDetail,
   PurchaseInvoiceItemDetail,
   PurchaseInvoiceListFilters,
@@ -535,6 +539,126 @@ export const purchaseInvoiceRepository = {
       ledgerGroupId: row.ledgerGroupId,
       ledgerGroupName: row.ledgerGroup.name,
       hasBankAccount: row.bankAccount !== null,
+    }));
+  },
+
+  /**
+   * 69-purchase-reports.md's Item-wise Purchase Report — groups every
+   * `POSTED` PurchaseInvoiceItem row (joined through its parent invoice for
+   * the date/supplier scoping) by `productId`, summing quantity/taxable/tax/
+   * total. Mirrors sales-invoice-repository.ts's aggregateItemWiseSales
+   * exactly: Prisma's `groupBy` has no "count distinct purchaseInvoiceId"
+   * option, so a second, narrow query fetches just the (productId,
+   * purchaseInvoiceId) pairs the where clause matches, and the invoice count
+   * is the size of each product's own distinct-id Set. One batched
+   * `product.findMany` resolves every group's name/code.
+   */
+  async aggregateItemWisePurchases(
+    companyId: string,
+    financialYearId: string,
+    filters: ItemWisePurchaseFilters
+  ): Promise<ItemWisePurchaseAggregateRow[]> {
+    const where: Prisma.PurchaseInvoiceItemWhereInput = {
+      purchaseInvoice: {
+        companyId,
+        financialYearId,
+        status: "POSTED",
+        invoiceDate: { gte: filters.fromDate, lte: filters.toDate },
+        ...(filters.supplierId ? { supplierId: filters.supplierId } : {}),
+      },
+      ...(filters.productId ? { productId: filters.productId } : {}),
+      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+    };
+
+    const grouped = await prisma.purchaseInvoiceItem.groupBy({
+      by: ["productId"],
+      where,
+      _sum: { quantity: true, taxableAmount: true, cgst: true, sgst: true, igst: true, cess: true, totalAmount: true },
+    });
+    if (grouped.length === 0) {
+      return [];
+    }
+
+    const [pairs, products] = await Promise.all([
+      prisma.purchaseInvoiceItem.findMany({ where, select: { productId: true, purchaseInvoiceId: true } }),
+      prisma.product.findMany({
+        where: { id: { in: grouped.map((row) => row.productId) }, companyId },
+        select: { id: true, name: true, productCode: true },
+      }),
+    ]);
+
+    const invoiceIdsByProduct = new Map<string, Set<string>>();
+    for (const pair of pairs) {
+      const set = invoiceIdsByProduct.get(pair.productId) ?? new Set<string>();
+      set.add(pair.purchaseInvoiceId);
+      invoiceIdsByProduct.set(pair.productId, set);
+    }
+    const productById = new Map(products.map((product) => [product.id, product]));
+
+    return grouped.map((row) => {
+      const product = productById.get(row.productId);
+      return {
+        productId: row.productId,
+        productName: product?.name ?? "Unknown product",
+        productCode: product?.productCode ?? "",
+        quantity: row._sum.quantity?.toNumber() ?? 0,
+        taxableAmount: row._sum.taxableAmount?.toNumber() ?? 0,
+        cgst: row._sum.cgst?.toNumber() ?? 0,
+        sgst: row._sum.sgst?.toNumber() ?? 0,
+        igst: row._sum.igst?.toNumber() ?? 0,
+        cess: row._sum.cess?.toNumber() ?? 0,
+        totalAmount: row._sum.totalAmount?.toNumber() ?? 0,
+        invoiceCount: invoiceIdsByProduct.get(row.productId)?.size ?? 0,
+      };
+    });
+  },
+
+  /**
+   * 69-purchase-reports.md's Party-wise Purchase Summary — groups every
+   * `POSTED` invoice by `supplierId`. Unlike
+   * sales-invoice-repository.ts's aggregatePartyWiseSales, `supplierId` is
+   * never null (every Purchase Invoice has a required supplier, spec 44), so
+   * no synthetic-bucket grouping dimension is needed — a plain `groupBy` on
+   * `supplierId` alone.
+   */
+  async aggregatePartyWisePurchases(
+    companyId: string,
+    financialYearId: string,
+    filters: PartyWisePurchaseFilters
+  ): Promise<PartyWisePurchaseAggregateRow[]> {
+    const where: Prisma.PurchaseInvoiceWhereInput = {
+      companyId,
+      financialYearId,
+      status: "POSTED",
+      invoiceDate: { gte: filters.fromDate, lte: filters.toDate },
+    };
+
+    const grouped = await prisma.purchaseInvoice.groupBy({
+      by: ["supplierId"],
+      where,
+      _sum: { taxableAmount: true, totalCgst: true, totalSgst: true, totalIgst: true, totalCess: true, grandTotal: true },
+      _count: { _all: true },
+    });
+    if (grouped.length === 0) {
+      return [];
+    }
+
+    const suppliers = await prisma.supplier.findMany({
+      where: { id: { in: grouped.map((row) => row.supplierId) }, companyId },
+      select: { id: true, ledger: { select: { name: true } } },
+    });
+    const nameBySupplierId = new Map(suppliers.map((supplier) => [supplier.id, supplier.ledger.name]));
+
+    return grouped.map((row) => ({
+      supplierId: row.supplierId,
+      supplierName: nameBySupplierId.get(row.supplierId) ?? "Unknown supplier",
+      invoiceCount: row._count._all,
+      taxableAmount: row._sum.taxableAmount?.toNumber() ?? 0,
+      cgst: row._sum.totalCgst?.toNumber() ?? 0,
+      sgst: row._sum.totalSgst?.toNumber() ?? 0,
+      igst: row._sum.totalIgst?.toNumber() ?? 0,
+      cess: row._sum.totalCess?.toNumber() ?? 0,
+      grandTotal: row._sum.grandTotal?.toNumber() ?? 0,
     }));
   },
 };

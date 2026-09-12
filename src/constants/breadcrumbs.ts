@@ -52,6 +52,21 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   register: "Sales Register",
   "item-wise": "Item-wise Sales",
   "party-wise": "Party-wise Sales",
+  // 69-purchase-reports.md: "reports/purchase" disambiguates against the
+  // bare "purchase" key (/purchase's own hub). "purchase/register",
+  // "purchase/item-wise", and "purchase/party-wise" disambiguate against
+  // the bare "register"/"item-wise"/"party-wise" keys above (Sales Reports'
+  // own screens) — the previous path segment before each of those three is
+  // "purchase" for every /reports/purchase/* route. "returns" has the same
+  // known, accepted limitation 68-sales-reports.md's own comment records:
+  // /reports/purchase/returns' "returns" segment falls back to the existing
+  // "purchase/returns" composite key ("Purchase Returns", the actual
+  // Purchase Returns document list) rather than a more specific "Purchase
+  // Return Summary" — a cosmetic-only mismatch, not worth a workaround.
+  "reports/purchase": "Purchase Reports",
+  "purchase/register": "Purchase Register",
+  "purchase/item-wise": "Item-wise Purchases",
+  "purchase/party-wise": "Party-wise Purchases",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",
