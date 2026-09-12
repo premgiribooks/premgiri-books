@@ -1992,11 +1992,16 @@ Mapping so far:
   **No browser/Playwright click-through was performed this session** (no
   browser-automation tool was available, same recorded gap as Profit & Loss and
   Balance Sheet) — confirmed only via `curl` that `/reports/cash-flow` resolves
-  through the auth middleware (307 to `/login`) rather than crashing. Merge to `main`
-  is the remaining step for this feature. Payroll (#61, Phase 9) is now the sole
-  outstanding item closest to this project's documented order among previously
-  drafted-but-unimplemented specs — still awaiting explicit instruction on which to
-  resume next.
+  through the auth middleware (307 to `/login`) rather than crashing.
+
+  **Merged into `main` 2026-09-12** (`--no-ff`, no conflicts, on top of feature commit
+  `f4da842` — `tsc`/`eslint`/`vitest` (1693/1693)/`next build` all re-verified green
+  against the merged result, then pushed to `origin/main`). `feature/cash-flow` deleted
+  both locally and on `origin` afterward. **Phase 10 — Reporting's four financial
+  reports (#62–65: Trial Balance, Profit & Loss, Balance Sheet, Cash Flow) are now all
+  implemented and merged.** Payroll (#61, Phase 9) is now the sole outstanding item
+  closest to this project's documented order among previously drafted-but-unimplemented
+  specs — still awaiting explicit instruction on which to resume next.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

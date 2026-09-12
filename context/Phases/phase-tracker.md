@@ -1299,9 +1299,16 @@ network dependency, consistent with the project's Offline First rule) — zero C
 MEDIUM findings, explicitly stated as passing.
 
 **No browser/Playwright click-through was performed this session** (no browser-automation
-tool was available, same recorded gap as Profit & Loss and Balance Sheet) — verification and
-merge to `main` are the remaining steps for this feature, tracked as the immediate next
-action in `progress-tracker.md`.
+tool was available, same recorded gap as Profit & Loss and Balance Sheet) — confirmed
+instead via `curl` that `/reports/cash-flow` resolves through the app's auth middleware
+correctly (307 redirect to `/login`) rather than crashing.
+
+**Merged into `main` 2026-09-12** — `feature/cash-flow` merged `--no-ff`, no conflicts, on
+top of feature commit `f4da842`, checks re-verified green against the merged result
+(`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` 1693/1693, `next build`), then
+pushed to `origin/main`. Feature branch deleted both locally and on `origin` post-merge per
+the one-branch-at-a-time rule. **This completes Phase 10 — Reporting's four financial
+reports (#62–65).**
 
 ---
 
