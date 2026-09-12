@@ -196,4 +196,58 @@ export const attendanceRepository = {
       totalMarkedDays: presentDays + halfDays + absentDays + onLeaveDays,
     };
   },
+
+  /**
+   * 73-employee-reports.md's batching optimization for its own Attendance
+   * Summary Report — the identical per-status counting logic `getSummary`
+   * performs for one employee, parameterized to run once across many
+   * `employeeId`s via a single `groupBy` on `[employeeId, status]`, reshaped
+   * into one per-employee result map. Never a second, divergent
+   * implementation of the counting logic; an employee with no rows in the
+   * range simply gets an all-zero summary (mirrors `getSummary`'s own
+   * "no row is absent from every count" behavior).
+   */
+  async aggregateSummaryForEmployees(
+    companyId: string,
+    employeeIds: readonly string[],
+    periodStart: Date,
+    periodEnd: Date
+  ): Promise<Map<string, AttendanceSummary>> {
+    const distinctIds = [...new Set(employeeIds)];
+    const result = new Map<string, AttendanceSummary>(
+      distinctIds.map((employeeId) => [
+        employeeId,
+        { presentDays: 0, halfDays: 0, absentDays: 0, onLeaveDays: 0, totalMarkedDays: 0 },
+      ])
+    );
+    if (distinctIds.length === 0) {
+      return result;
+    }
+
+    const grouped = await prisma.attendance.groupBy({
+      by: ["employeeId", "status"],
+      where: { companyId, employeeId: { in: distinctIds }, date: { gte: periodStart, lte: periodEnd } },
+      _count: { _all: true },
+    });
+
+    for (const row of grouped) {
+      const summary = result.get(row.employeeId);
+      if (!summary) {
+        continue;
+      }
+      const count = row._count._all;
+      if (row.status === "PRESENT") {
+        summary.presentDays += count;
+      } else if (row.status === "HALF_DAY") {
+        summary.halfDays += count;
+      } else if (row.status === "ABSENT") {
+        summary.absentDays += count;
+      } else if (row.status === "ON_LEAVE") {
+        summary.onLeaveDays += count;
+      }
+      summary.totalMarkedDays += count;
+    }
+
+    return result;
+  },
 };

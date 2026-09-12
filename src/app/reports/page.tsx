@@ -34,11 +34,14 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // getLedgerStatement, and Sales Reports' getPartyWiseSalesReport. Supplier
 // Reports (72-supplier-reports.md, tracker #70) is the ninth, the
 // supplier/payables-side mirror of Customer Reports — no "Over Limit" flag,
-// since `Supplier` has no `creditLimit` field. The remaining two
-// Reporting-phase screens (tracker #71-72, spec files 73-74) still reserve
-// their own card here as an unavailable placeholder, matching
-// 57-gst-registers.md's own "hub exists before every sibling screen does"
-// precedent.
+// since `Supplier` has no `creditLimit` field. Employee Reports
+// (73-employee-reports.md, tracker #71) is the tenth — Attendance Summary,
+// Payroll Register, Salary Register, and Employee Directory, depending on
+// Payroll (63-payroll.md, Phase 9) which was implemented first to unblock
+// this spec. The remaining Reporting-phase screen (tracker #72, spec file
+// 74) still reserves its own card here as an unavailable placeholder,
+// matching 57-gst-registers.md's own "hub exists before every sibling
+// screen does" precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -108,7 +111,7 @@ const REPORT_MODULES = [
     icon: UserSquare2,
     title: "Employee Reports",
     description: "Attendance and payroll summaries by employee.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/gst",

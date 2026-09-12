@@ -132,6 +132,19 @@ function buildWhere(companyId: string, filters: EmployeeListFilters): Prisma.Emp
     ];
   }
 
+  // 73-employee-reports.md's Employee Directory filters — added to this
+  // existing query rather than a second, parallel one, per that spec's own
+  // instruction to reuse `employeeService.listEmployees(filters)` directly.
+  if (filters.department) {
+    where.department = { contains: filters.department, mode: "insensitive" };
+  }
+  if (filters.designation) {
+    where.designation = { contains: filters.designation, mode: "insensitive" };
+  }
+  if (filters.branchId) {
+    where.branchId = filters.branchId;
+  }
+
   return where;
 }
 
