@@ -29,7 +29,7 @@ const NAV_ITEMS = [
   { icon: Calculator, label: "Accounting", href: "/accounting" },
   { icon: Receipt, label: "GST", href: "/gst" },
   { icon: BarChart3, label: "Reports" },
-  { icon: Users, label: "Employees" },
+  { icon: Users, label: "Employees", href: "/employees" },
   { icon: Settings, label: "Settings", href: "/settings", adminOnly: true },
 ] as const;
 
