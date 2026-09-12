@@ -57,3 +57,19 @@ export const trialBalanceFiltersSchema = z.object({
 });
 
 export type TrialBalanceFiltersInput = z.infer<typeof trialBalanceFiltersSchema>;
+
+// Profit & Loss's own from/to variant (65-profit-and-loss.md) — same shared
+// file rather than a separate schema module, per 64-trial-balance.md's own
+// convention note above.
+export const profitAndLossFiltersSchema = z
+  .object({
+    financialYearId: z.uuid("Select a valid financial year"),
+    from: CALENDAR_DATE_SCHEMA,
+    to: CALENDAR_DATE_SCHEMA,
+  })
+  .refine((data) => toUtcDate(data.to).getTime() >= toUtcDate(data.from).getTime(), {
+    message: "To date must be on or after the From date",
+    path: ["to"],
+  });
+
+export type ProfitAndLossFiltersInput = z.infer<typeof profitAndLossFiltersSchema>;
