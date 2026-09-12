@@ -17,6 +17,8 @@ const {
   findInvoiceableProductsMock,
   findSelectableWarehousesMock,
   findCompanyStateCodeMock,
+  aggregateItemWiseSalesMock,
+  aggregatePartyWiseSalesMock,
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
   assertPermissionMock,
@@ -49,6 +51,8 @@ const {
   findInvoiceableProductsMock: vi.fn(),
   findSelectableWarehousesMock: vi.fn(),
   findCompanyStateCodeMock: vi.fn(),
+  aggregateItemWiseSalesMock: vi.fn(),
+  aggregatePartyWiseSalesMock: vi.fn(),
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
   assertPermissionMock: vi.fn(),
@@ -84,6 +88,8 @@ vi.mock("@/modules/sales-invoices/repositories/sales-invoice-repository", () => 
     findInvoiceableProducts: findInvoiceableProductsMock,
     findSelectableWarehouses: findSelectableWarehousesMock,
     findCompanyStateCode: findCompanyStateCodeMock,
+    aggregateItemWiseSales: aggregateItemWiseSalesMock,
+    aggregatePartyWiseSales: aggregatePartyWiseSalesMock,
   },
 }));
 
@@ -271,6 +277,8 @@ beforeEach(() => {
   findInvoiceableProductsMock.mockReset();
   findSelectableWarehousesMock.mockReset();
   findCompanyStateCodeMock.mockReset();
+  aggregateItemWiseSalesMock.mockReset();
+  aggregatePartyWiseSalesMock.mockReset();
   getCurrentCompanyUserMock.mockReset();
   getCurrentFinancialYearMock.mockReset();
   assertPermissionMock.mockReset();
@@ -699,6 +707,54 @@ describe("getSalesInvoice / listSalesInvoices — cross-company and scoping", ()
     const result = await salesInvoiceService.listSalesInvoices();
     expect(result).toEqual([]);
     expect(findManyMock).not.toHaveBeenCalled();
+  });
+});
+
+// 68-sales-reports.md's Sales Reports module calls these three instead of
+// listSalesInvoices — the only difference from their sales:view-gated
+// siblings is which permission they check (see each method's own comment
+// in sales-invoice-service.ts for why).
+describe("report-scoped reads — listSalesInvoicesForReport / getItemWiseSalesReport / getPartyWiseSalesReport", () => {
+  it("listSalesInvoicesForReport gates on reports:view, not sales:view", async () => {
+    await salesInvoiceService.listSalesInvoicesForReport();
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+  });
+
+  it("listSalesInvoicesForReport returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await salesInvoiceService.listSalesInvoicesForReport();
+    expect(result).toEqual([]);
+    expect(findManyMock).not.toHaveBeenCalled();
+  });
+
+  it("getItemWiseSalesReport gates on reports:view and scopes to the caller's company + active financial year", async () => {
+    aggregateItemWiseSalesMock.mockResolvedValueOnce([]);
+    const filters = { fromDate: new Date("2026-04-01"), toDate: new Date("2026-04-30") };
+    await salesInvoiceService.getItemWiseSalesReport(filters);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+    expect(aggregateItemWiseSalesMock).toHaveBeenCalledWith(COMPANY_ID, FY_ID, filters);
+  });
+
+  it("getItemWiseSalesReport returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await salesInvoiceService.getItemWiseSalesReport({ fromDate: new Date(), toDate: new Date() });
+    expect(result).toEqual([]);
+    expect(aggregateItemWiseSalesMock).not.toHaveBeenCalled();
+  });
+
+  it("getPartyWiseSalesReport gates on reports:view and scopes to the caller's company + active financial year", async () => {
+    aggregatePartyWiseSalesMock.mockResolvedValueOnce([]);
+    const filters = { fromDate: new Date("2026-04-01"), toDate: new Date("2026-04-30") };
+    await salesInvoiceService.getPartyWiseSalesReport(filters);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+    expect(aggregatePartyWiseSalesMock).toHaveBeenCalledWith(COMPANY_ID, FY_ID, filters);
+  });
+
+  it("getPartyWiseSalesReport returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await salesInvoiceService.getPartyWiseSalesReport({ fromDate: new Date(), toDate: new Date() });
+    expect(result).toEqual([]);
+    expect(aggregatePartyWiseSalesMock).not.toHaveBeenCalled();
   });
 });
 

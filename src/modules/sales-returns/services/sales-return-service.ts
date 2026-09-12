@@ -335,6 +335,27 @@ export const salesReturnService = {
     return salesReturnRepository.findMany(user.companyId, financialYear.id, filters);
   },
 
+  /**
+   * The same read as `listSalesReturns`, gated on `reports`/`view` instead
+   * of `sales`/`view` — 68-sales-reports.md's Sales Return Summary calls
+   * this one, not `listSalesReturns`, so the seeded Accountant role
+   * (`reports:view`, no `sales:view` — see `DEFAULT_ROLE_PERMISSIONS`) can
+   * view it without also needing Sales module access. Mirrors
+   * sales-invoice-service.ts's own `listSalesInvoicesForReport` precedent.
+   * Still goes through this service (Invariant 5) — no new repository
+   * method.
+   */
+  async listSalesReturnsForReport(filters: SalesReturnListFilters = {}): Promise<SalesReturnListRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return salesReturnRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
   async getSalesReturn(id: string): Promise<SalesReturnDetail | null> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "sales", "view");

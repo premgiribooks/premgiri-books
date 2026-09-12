@@ -3,6 +3,10 @@ import { Prisma, type SalesInvoiceStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
+  ItemWiseSalesAggregateRow,
+  ItemWiseSalesFilters,
+  PartyWiseSalesAggregateRow,
+  PartyWiseSalesFilters,
   SalesInvoiceCustomerOption,
   SalesInvoiceDetail,
   SalesInvoiceItemDetail,
@@ -496,5 +500,135 @@ export const salesInvoiceRepository = {
   async findCompanyStateCode(companyId: string): Promise<string | null> {
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { stateCode: true } });
     return company?.stateCode ?? null;
+  },
+
+  /**
+   * 68-sales-reports.md's Item-wise Sales Report — groups every `POSTED`
+   * SalesInvoiceItem row (joined through its parent invoice for the
+   * date/customer scoping) by `productId`, summing quantity/taxable/tax/
+   * total. Prisma's `groupBy` has no "count distinct salesInvoiceId" option,
+   * so a second, narrow query fetches just the (productId, salesInvoiceId)
+   * pairs the where clause matches, and the invoice count is the size of
+   * each product's own distinct-id Set — never approximated by row count,
+   * which would over-count a product billed twice on one invoice. One
+   * batched `product.findMany` resolves every group's name/code, matching
+   * this codebase's "no query inside the grouping loop" convention
+   * (hsn-summary-service.ts's own precedent).
+   */
+  async aggregateItemWiseSales(
+    companyId: string,
+    financialYearId: string,
+    filters: ItemWiseSalesFilters
+  ): Promise<ItemWiseSalesAggregateRow[]> {
+    const where: Prisma.SalesInvoiceItemWhereInput = {
+      salesInvoice: {
+        companyId,
+        financialYearId,
+        status: "POSTED",
+        invoiceDate: { gte: filters.fromDate, lte: filters.toDate },
+        ...(filters.customerId ? { customerId: filters.customerId } : {}),
+      },
+      ...(filters.productId ? { productId: filters.productId } : {}),
+      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+    };
+
+    const grouped = await prisma.salesInvoiceItem.groupBy({
+      by: ["productId"],
+      where,
+      _sum: { quantity: true, taxableAmount: true, cgst: true, sgst: true, igst: true, cess: true, totalAmount: true },
+    });
+    if (grouped.length === 0) {
+      return [];
+    }
+
+    const [pairs, products] = await Promise.all([
+      prisma.salesInvoiceItem.findMany({ where, select: { productId: true, salesInvoiceId: true } }),
+      prisma.product.findMany({
+        where: { id: { in: grouped.map((row) => row.productId) }, companyId },
+        select: { id: true, name: true, productCode: true },
+      }),
+    ]);
+
+    const invoiceIdsByProduct = new Map<string, Set<string>>();
+    for (const pair of pairs) {
+      const set = invoiceIdsByProduct.get(pair.productId) ?? new Set<string>();
+      set.add(pair.salesInvoiceId);
+      invoiceIdsByProduct.set(pair.productId, set);
+    }
+    const productById = new Map(products.map((product) => [product.id, product]));
+
+    return grouped.map((row) => {
+      const product = productById.get(row.productId);
+      return {
+        productId: row.productId,
+        productName: product?.name ?? "Unknown product",
+        productCode: product?.productCode ?? "",
+        quantity: row._sum.quantity?.toNumber() ?? 0,
+        taxableAmount: row._sum.taxableAmount?.toNumber() ?? 0,
+        cgst: row._sum.cgst?.toNumber() ?? 0,
+        sgst: row._sum.sgst?.toNumber() ?? 0,
+        igst: row._sum.igst?.toNumber() ?? 0,
+        cess: row._sum.cess?.toNumber() ?? 0,
+        totalAmount: row._sum.totalAmount?.toNumber() ?? 0,
+        invoiceCount: invoiceIdsByProduct.get(row.productId)?.size ?? 0,
+      };
+    });
+  },
+
+  /**
+   * 68-sales-reports.md's Party-wise Sales Summary — groups every `POSTED`
+   * invoice by `(customerId, customerMode)`. A non-null `customerId` always
+   * carries `customerMode: "PERMANENT"` (a QUICK invoice converts to
+   * PERMANENT before it can ever receive a `customerId` — see
+   * sales-invoice-service.ts's `convertQuickCustomer`), so grouping by the
+   * pair rather than `customerId` alone still yields exactly one row per
+   * real customer while cleanly separating the two `customerId: null`
+   * buckets (WALK_IN vs. unconverted QUICK) from each other. Assigning the
+   * synthetic buckets' own display labels/`groupType` is the Reporting
+   * Engine's job, not this repository's (see sales-reports.ts).
+   */
+  async aggregatePartyWiseSales(
+    companyId: string,
+    financialYearId: string,
+    filters: PartyWiseSalesFilters
+  ): Promise<PartyWiseSalesAggregateRow[]> {
+    const where: Prisma.SalesInvoiceWhereInput = {
+      companyId,
+      financialYearId,
+      status: "POSTED",
+      invoiceDate: { gte: filters.fromDate, lte: filters.toDate },
+    };
+
+    const grouped = await prisma.salesInvoice.groupBy({
+      by: ["customerId", "customerMode"],
+      where,
+      _sum: { taxableAmount: true, totalCgst: true, totalSgst: true, totalIgst: true, totalCess: true, grandTotal: true },
+      _count: { _all: true },
+    });
+    if (grouped.length === 0) {
+      return [];
+    }
+
+    const customerIds = grouped.map((row) => row.customerId).filter((id): id is string => id !== null);
+    const customers = customerIds.length
+      ? await prisma.customer.findMany({
+          where: { id: { in: customerIds }, companyId },
+          select: { id: true, ledger: { select: { name: true } } },
+        })
+      : [];
+    const nameByCustomerId = new Map(customers.map((customer) => [customer.id, customer.ledger.name]));
+
+    return grouped.map((row) => ({
+      customerId: row.customerId,
+      customerMode: row.customerMode,
+      customerName: row.customerId ? (nameByCustomerId.get(row.customerId) ?? "Unknown customer") : null,
+      invoiceCount: row._count._all,
+      taxableAmount: row._sum.taxableAmount?.toNumber() ?? 0,
+      cgst: row._sum.totalCgst?.toNumber() ?? 0,
+      sgst: row._sum.totalSgst?.toNumber() ?? 0,
+      igst: row._sum.totalIgst?.toNumber() ?? 0,
+      cess: row._sum.totalCess?.toNumber() ?? 0,
+      grandTotal: row._sum.grandTotal?.toNumber() ?? 0,
+    }));
   },
 };

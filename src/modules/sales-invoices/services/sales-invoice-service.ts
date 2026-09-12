@@ -49,6 +49,10 @@ import {
 } from "@/modules/sales-invoices/validation/sales-invoice-schema";
 import type {
   DeliveryChallanPrefill,
+  ItemWiseSalesAggregateRow,
+  ItemWiseSalesFilters,
+  PartyWiseSalesAggregateRow,
+  PartyWiseSalesFilters,
   ResolvedSalesInvoiceLinePrice,
   SalesInvoiceDetail,
   SalesInvoiceFormOptions,
@@ -668,6 +672,63 @@ export const salesInvoiceService = {
       return [];
     }
     return salesInvoiceRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /**
+   * The same read as `listSalesInvoices`, gated on `reports`/`view` instead
+   * of `sales`/`view` — 68-sales-reports.md's Sales Register calls this one,
+   * not `listSalesInvoices`, so the seeded Accountant role (`reports:view`,
+   * no `sales:view` — see `DEFAULT_ROLE_PERMISSIONS`) can view it without
+   * also needing Sales module access. Mirrors gst-register-service.ts's own
+   * `listPartyOptions` precedent of avoiding a mismatched permission
+   * dependency rather than reusing a same-shaped method gated on the wrong
+   * module. Still goes through this service (Invariant 5), calling the same
+   * `salesInvoiceRepository.findMany` `listSalesInvoices` does — no new
+   * repository method.
+   */
+  async listSalesInvoicesForReport(filters: SalesInvoiceListFilters = {}): Promise<SalesInvoiceListRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return salesInvoiceRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /**
+   * 68-sales-reports.md's Item-wise Sales Report — the entry point Sales
+   * Reports (and, per that spec, Customer Reports' own future Customer
+   * Sales Summary — 71-customer-reports.md) calls; cross-module reads go
+   * through this service method, never `sales-invoice-repository.ts`
+   * directly (Invariant 5). Gated on `reports`/`view`, not `sales`/`view` —
+   * see `listSalesInvoicesForReport`'s own note on why. Scoped to the
+   * active financial year only, matching every other method in this module
+   * (this module has no caller-selectable financial year anywhere else).
+   */
+  async getItemWiseSalesReport(filters: ItemWiseSalesFilters): Promise<ItemWiseSalesAggregateRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return salesInvoiceRepository.aggregateItemWiseSales(user.companyId, financialYear.id, filters);
+  },
+
+  /** 68-sales-reports.md's Party-wise Sales Summary — mirrors
+   * getItemWiseSalesReport's own permission/financial-year posture exactly. */
+  async getPartyWiseSalesReport(filters: PartyWiseSalesFilters): Promise<PartyWiseSalesAggregateRow[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "reports", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return [];
+    }
+    return salesInvoiceRepository.aggregatePartyWiseSales(user.companyId, financialYear.id, filters);
   },
 
   async getSalesInvoice(id: string): Promise<SalesInvoiceDetail | null> {

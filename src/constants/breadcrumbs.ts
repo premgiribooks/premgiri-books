@@ -41,6 +41,17 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   "profit-and-loss": "Profit & Loss",
   "balance-sheet": "Balance Sheet",
   "cash-flow": "Cash Flow",
+  // 68-sales-reports.md: "reports/sales" disambiguates against the bare
+  // "sales" key (/sales's own hub). Known, accepted limitation: the
+  // composite-key mechanism only looks one segment back, so
+  // /reports/sales/returns' own "returns" segment (previousSegment "sales",
+  // identical to /sales/returns') falls back to the bare "Sales Returns"
+  // label rather than a more specific "Sales Return Summary" — recorded
+  // here rather than adding a workaround for a cosmetic-only mismatch.
+  "reports/sales": "Sales Reports",
+  register: "Sales Register",
+  "item-wise": "Item-wise Sales",
+  "party-wise": "Party-wise Sales",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",
