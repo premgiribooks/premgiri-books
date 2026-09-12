@@ -85,7 +85,7 @@ Mapping so far:
 | 68           | Sales Reports (`68-sales-reports.md`)                                          | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#66) — **spec drafted 2026-09-11, not implemented**; MVP scoped to Sales Register/Item-wise/Party-wise/Return Summary over Sales Invoice/Return only |
 | 69           | Purchase Reports (`69-purchase-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#67) — **spec drafted 2026-09-11, not implemented**; direct mirror of spec 68 from the purchase side |
 | 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **implemented 2026-09-12**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
-| 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **spec drafted 2026-09-11, not implemented**; Outstanding Report calls `voucherEngine.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
+| 71           | Customer Reports (`71-customer-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#69) — **implemented 2026-09-12**; Outstanding Report calls `voucherQueries.getTrialBalance` once rather than looping `getLedgerBalance` per customer |
 | 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **spec drafted 2026-09-11, not implemented**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
 | 73           | Employee Reports (`73-employee-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#71) — **spec drafted 2026-09-11, not implemented**; reads Payroll's exact posted snapshot shape, adds one new bulk `getAttendanceSummaryBulk` method |
 | 74           | GST Reports (`74-gst-reports.md`)                                               | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#72) — **spec drafted 2026-09-11, not implemented**; last item in Phase 10, closing it; an analytical dashboard over specs 57/60's data, explicitly distinct from Phase 8's statutory filing screens, gated by both `reports:view` and `gst:view` |
@@ -2175,6 +2175,75 @@ Mapping so far:
   `feature/inventory-reports` (commits `e24324d`, `a249a4d`, `0fedd73`), matching Purchase
   Reports' own still-pending merge (and naturally sequenced after it, since this branch
   was branched from it). Tracker #68 flipped to ✅ in `context/Phases/phase-tracker.md`.
+- **Customer Reports (#69, spec 71) implemented 2026-09-12** on branch
+  `feature/inventory-reports` (unchanged — not a new branch this session; the branch
+  itself is not yet merged into `main`), per explicit user instruction ("start Customer
+  Reports"), immediately following Inventory Reports (#68) in the same session — the
+  fourth of Phase 10's seven operational reports. **No new Prisma model, enum, field, or
+  migration, and no amendment to any existing module's repository or service** — every
+  primitive this spec needed (`voucherQueries.getTrialBalance`/`getLedgerStatement`,
+  `salesInvoiceService.getPartyWiseSalesReport`) was already public and unmodified. Four
+  views (Outstanding, Statement, Sales Summary, Directory); a new pure
+  `src/engines/reporting/customer-reports.ts`; a new `src/modules/reports/customers/`
+  module; new `/reports/customers*` pages.
+
+  **Deliberate deviations from the spec's own literal wording, all following this batch's
+  own established precedent**: (1) every view queries `prisma.customer` directly
+  (`customer-report-service.ts`'s own `listReportCustomers`/`listCustomerOptions`, and an
+  inline lookup in `getCustomerStatement`) rather than through
+  `customerService.listCustomers`/`getCustomer` (the spec's own literal suggestion) —
+  those are gated on `masters`/`view`, which would 403 the seeded Accountant role
+  (`reports`/`view` only), the exact `listReportProducts`/`listSupplierOptions` precedent
+  Inventory/Purchase/Sales Reports already established. (2) Customer Sales Summary has no
+  `financialYearId` filter, unlike the spec's own filter list — `getPartyWiseSalesReport`
+  scopes to `getCurrentFinancialYear()` internally and has no caller-selectable financial
+  year anywhere else, matching Sales/Purchase Reports' own Party-wise filter shape
+  exactly. (3) the Customer Statement's "reference label resolution" turned out to need no
+  document-number lookup at all (unlike the spec's own comparison to Stock Ledger's
+  DOCUMENT_NUMBER_LOOKUPS map) — `getLedgerStatement`'s own `LedgerStatementLine` already
+  carries `voucherNumber`/`voucherType` directly, so the Statement table just humanizes
+  `voucherType` and splits the single signed `entryType`/`amount` into separate
+  Debit/Credit columns, a simpler composition than the spec anticipated.
+
+  **The Outstanding Report's "customer not in `getTrialBalance`'s result" fallback**
+  (Business Rules #1) is implemented as specified — `buildCustomerOutstandingReport` falls
+  back to the customer's own signed opening balance when no matching ledger row is found —
+  but is expected to be structurally unreachable in practice, since `getTrialBalance`
+  already lists every ledger in the company per its own documented contract; kept as a
+  defensive, tested fallback rather than an assumed-dead branch.
+
+  22 new vitest cases (13 Reporting Engine + 9 service-layer) — 1830/1830 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and
+  `next build` all pass; `/reports/customers*` appears in the build route table.
+
+  **Not browser-verified this session** — same reasoning as Purchase/Inventory Reports'
+  own note: no browser-automation tooling available. Business-logic correctness is
+  carried entirely by the new Reporting Engine/service vitest fixtures.
+
+  **Code review + security review (run in parallel, after the feature implementation)**:
+  code review returned one MEDIUM finding — the Outstanding Report table's column header
+  read "Status" but rendered the Over Limit flag, not the customer's active/inactive
+  state (a naming collision against the Directory report's own, genuinely
+  active/inactive, "Status" column) — fixed immediately (header renamed to "Over Limit").
+  No other CRITICAL/HIGH/MEDIUM findings from either review. Security review gave an
+  explicit PASS on cross-tenant isolation/IDOR (traced both `customerId` in
+  `getCustomerStatement` and `financialYearId` in `getCustomerOutstandingReport` — each
+  rejected before any second query, with an identically-worded "not found" `AppError`
+  regardless of nonexistent-vs-cross-company, so no differential existence signal),
+  authorization (`reports:view` gated first-statement on every public method,
+  independently re-checked on every page), and input validation (every query-string value
+  narrowed before reaching the service layer, then re-validated by its Zod schema before
+  reaching a Prisma `where`) — two INFO-level defense-in-depth notes accepted as-is, no
+  fix needed (`getCustomerStatement`'s cross-company check happens via a post-fetch
+  comparison rather than folding `companyId` into the initial `where`, matching an
+  existing precedent elsewhere in the codebase; `getTrialBalance`/`getLedgerStatement`'s
+  own independent company re-validation is intentional, not redundant-by-accident,
+  defense-in-depth).
+
+  **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #69 stays ⬜) and
+  merge into `main` not requested this session — awaiting explicit user go-ahead for
+  either, per this batch's own established two-step pattern (implement now, "mark as
+  done"/merge only on separate explicit instruction).
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold
