@@ -87,6 +87,16 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   statement: "Statement",
   "sales-summary": "Sales Summary",
   directory: "Directory",
+  // 72-supplier-reports.md: "reports/suppliers" disambiguates against the
+  // bare "suppliers" key (/masters/suppliers' own list page). "outstanding"
+  // and "statement" reuse the identical bare keys Customer Reports already
+  // claims above (both sections' own screens share the same generic label,
+  // an accepted cosmetic-only overlap, same posture as 69-purchase-
+  // reports.md's own "register"/"item-wise"/"party-wise" note). "directory"
+  // is likewise shared. "purchase-summary" has no existing bare-key
+  // collision, so it's added unqualified.
+  "reports/suppliers": "Supplier Reports",
+  "purchase-summary": "Purchase Summary",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",

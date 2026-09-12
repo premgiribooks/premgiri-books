@@ -31,11 +31,14 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // getCurrentStock/getStockLedger/getStockValuation primitives. Customer
 // Reports (71-customer-reports.md, tracker #69) is the eighth, composing
 // Customer master data, the Voucher Engine's getTrialBalance/
-// getLedgerStatement, and Sales Reports' getPartyWiseSalesReport. The
-// remaining three Reporting-phase screens (tracker #70-72, spec files
-// 72-74) still reserve their own card here as an unavailable placeholder,
-// matching 57-gst-registers.md's own "hub exists before every sibling
-// screen does" precedent.
+// getLedgerStatement, and Sales Reports' getPartyWiseSalesReport. Supplier
+// Reports (72-supplier-reports.md, tracker #70) is the ninth, the
+// supplier/payables-side mirror of Customer Reports — no "Over Limit" flag,
+// since `Supplier` has no `creditLimit` field. The remaining two
+// Reporting-phase screens (tracker #71-72, spec files 73-74) still reserve
+// their own card here as an unavailable placeholder, matching
+// 57-gst-registers.md's own "hub exists before every sibling screen does"
+// precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -98,7 +101,7 @@ const REPORT_MODULES = [
     icon: Building2,
     title: "Supplier Reports",
     description: "Outstanding and transaction summaries by supplier.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/employees",
