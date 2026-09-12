@@ -27,6 +27,21 @@ export const gstFilingRepository = {
     });
   },
 
+  /**
+   * Every `GstFilingRecord` of `returnType` whose period overlaps
+   * `[from, to]` — 74-gst-reports.md's own read for the GST Dashboard's
+   * Filed/Open overlay (read-only here; `markPeriodFiled`/`reopenPeriod`
+   * remain 58-gstr-1.md's exclusive mutations). Overlap (not exact-period
+   * match) so a quarterly filer's record — whose own period spans 3
+   * calendar months — is still returned for any month inside that span.
+   */
+  findMany(companyId: string, returnType: GstReturnType, from: Date, to: Date): Promise<GstFilingRecord[]> {
+    return prisma.gstFilingRecord.findMany({
+      where: { companyId, returnType, periodStart: { lte: to }, periodEnd: { gte: from } },
+      orderBy: { periodStart: "asc" },
+    });
+  },
+
   upsert(
     companyId: string,
     financialYearId: string,
