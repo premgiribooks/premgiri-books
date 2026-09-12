@@ -2049,6 +2049,55 @@ Mapping so far:
   `c3fa1be` — no conflicts, `tsc`/`eslint`/`vitest` (1744/1744)/`next build` all
   re-verified green against the merged result). `feature/sales-reports` deleted locally
   per the one-branch-at-a-time rule. Not yet pushed to `origin/main` this session.
+- **Purchase Reports (#67, spec 69) implemented 2026-09-12** on branch
+  `feature/purchase-reports`, per explicit user instruction ("start Purchase Reports"),
+  immediately following Sales Reports (#66) in the same session — the purchase-side
+  mirror of spec 68, the second of Phase 10's seven operational reports (#66–72). **No
+  new Prisma model, enum, field, or migration** — every figure is read directly from an
+  already-posted `PurchaseInvoice`/`PurchaseInvoiceItem`/`PurchaseReturn` row or a plain
+  sum/group of those stored columns. Four views (Purchase Register, Item-wise Purchases,
+  Party-wise Purchase Summary, Purchase Return Summary); two new aggregate repository
+  methods on `purchase-invoice-repository.ts`; new report-scoped service methods on both
+  sibling services (`purchase-invoice-service.ts`, `purchase-return-service.ts`) gated on
+  `reports`/`view` instead of `purchase`/`view`; a new pure `src/engines/reporting/
+  purchase-reports.ts`; a new `src/modules/reports/purchase/` module; new
+  `/reports/purchase*` pages. **Party-wise Purchase Summary needs no synthetic-bucket
+  grouping** — every Purchase Invoice has a required `supplierId` (no Walk-in/Quick
+  equivalent, per spec 44), a genuine simplification over Sales Reports' own
+  Walk-in/unconverted-Quick bucketing, recorded explicitly in the types/engine/tests
+  rather than silently assumed symmetric. 48 new vitest cases — 1792/1792 total suite
+  passing; `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`, and `next build`
+  all pass; `/reports/purchase*` appears in the build route table.
+
+  **Code review + security review (run in parallel, before merge) both APPROVE/PASS,
+  zero CRITICAL/HIGH/MEDIUM findings from either.** Security review gave an explicit PASS
+  on cross-tenant isolation/IDOR, authorization (`reports:view` vs `purchase:view`),
+  input validation, and information disclosure — three LOW/informational notes (the
+  in-memory `supplierId` post-filter on Purchase Return Summary fetches more rows than
+  strictly necessary before filtering, matching Sales Reports' identical accepted
+  pattern; the same cosmetic breadcrumb-label collision on `/reports/purchase/returns`
+  spec 68's own comment already documents for its sales counterpart; `productId`/
+  `warehouseId` aren't independently re-verified against the caller's company before
+  entering the `groupBy` where clause, safe today only because Prisma's implicit
+  AND-combination with the sibling `purchaseInvoice: { companyId }` condition means a
+  foreign id naturally yields zero rows) accepted as-is, no fix needed.
+
+  **Not browser-verified this session** — unlike Sales Reports' own Playwright-driven
+  check, no browser-automation tooling (`chromium-cli`, Playwright) was available in
+  this environment, and the login form is a Next.js Server Action (not curl-testable
+  without reverse-engineering the action id). Verified instead via an unauthenticated
+  `curl` smoke test against a locally started `next dev` server: all five new
+  `/reports/purchase*` routes returned the expected `307` auth-redirect (not a `500`),
+  confirming the routes resolve and render at the Next.js routing layer without
+  crashing. Full authenticated click-through (filter bar rendering, empty-state message,
+  zero console errors) was not performed — flagged here explicitly rather than claimed.
+  Business-logic correctness is carried entirely by the new repository/engine vitest
+  fixtures, mirroring Sales Reports' own dev-database-has-no-seeded-data situation.
+
+  **Merge into `main` deferred** — blocked by this session's auto-mode classifier
+  ("Merge Without Review"). Implementation sits reviewed and committed on
+  `feature/purchase-reports` (commit `6b8d22e`), awaiting explicit user go-ahead to
+  merge.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

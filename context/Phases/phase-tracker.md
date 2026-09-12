@@ -932,7 +932,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 64  | Balance Sheet     | Accounting     | ✅     |
 | 65  | Cash Flow         | Accounting     | ✅     |
 | 66  | Sales Reports     | Sales          | ✅     |
-| 67  | Purchase Reports  | Purchase       | ⬜     |
+| 67  | Purchase Reports  | Purchase       | ✅     |
 | 68  | Inventory Reports | Inventory      | ⬜     |
 | 69  | Customer Reports  | Customers      | ⬜     |
 | 70  | Supplier Reports  | Suppliers      | ⬜     |
@@ -1444,6 +1444,124 @@ on top of feature commit `c3fa1be`), no conflicts, checks re-verified green agai
 merged result (`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` 1744/1744,
 `next build`). Feature branch deleted locally per the one-branch-at-a-time rule. Not yet
 pushed to `origin/main` this session.
+
+**Purchase Reports (#67, spec 69) implemented 2026-09-12** on branch
+`feature/purchase-reports`, per explicit user instruction ("start Purchase Reports"),
+immediately following Sales Reports (#66) in the same session — the second of Phase 10's
+seven **operational** reports (#66–72), explicitly the purchase-side mirror of spec 68 per
+that spec's own Project Context note ("read `68-sales-reports.md` first in full ... only
+what differs is elaborated here"). **No new Prisma model, enum, field, or migration** —
+every figure is read directly from an already-posted `PurchaseInvoice`/
+`PurchaseInvoiceItem`/`PurchaseReturn` row or a plain sum/group of those stored columns.
+
+Four views, all MVP-scoped per the spec's own Goal section: **Purchase Register** (every
+`PurchaseInvoice`, POSTED by default with an explicit status override, showing both the
+system invoice number and the supplier's own `supplierInvoiceNumber`), **Item-wise
+Purchase Report** (grouped by product), **Party-wise Purchase Summary** (grouped by
+supplier — **no synthetic-bucket handling needed**, unlike Sales Reports' own
+`WALK_IN`/unconverted-`QUICK` bucketing, since every `PurchaseInvoice` has a required,
+non-null `supplierId` per spec 44's own Decisions — a genuine structural simplification
+recorded explicitly in the types/engine/tests rather than silently assumed symmetric with
+spec 68), and **Purchase Return Summary** (every `PurchaseReturn`, resolving its supplier
+via the parent invoice since `PurchaseReturn` has no direct `supplierId` column, POSTED by
+default with a totals footer).
+
+Amended `purchase-invoice-repository.ts` with two new aggregate methods
+(`aggregateItemWisePurchases`, `aggregatePartyWisePurchases`), mirroring
+`sales-invoice-repository.ts`'s own `aggregateItemWiseSales`/`aggregatePartyWiseSales`
+exactly — distinct-invoice-count via a `Set` (never a raw row count, which would
+over-count a product billed twice on one invoice), scoped to `companyId`/
+`financialYearId`/`status: "POSTED"`/date range, with the batched `product.findMany`/
+`supplier.findMany` name-resolution lookups themselves `companyId`-scoped. New
+report-scoped service methods (`listPurchaseInvoicesForReport`,
+`getItemWisePurchaseReport`, `getPartyWisePurchaseReport` on `purchase-invoice-service.ts`;
+`listPurchaseReturnsForReport` on `purchase-return-service.ts`), all gated on
+`reports`/`view` instead of `purchase`/`view` — so the seeded Accountant role
+(`reports:view`, no `purchase:view`) can reach every Purchase Reports view without also
+needing Purchase module access; the original `purchase:view`-gated `listPurchaseInvoices`/
+`listPurchaseReturns` methods are untouched.
+
+New `src/engines/reporting/purchase-reports.ts` (`buildPurchaseRegister`,
+`buildItemWisePurchaseReport`, `buildPartyWisePurchaseReport`, `buildPurchaseReturnSummary`
+— all pure, no Prisma import, no `gstEngine`/`pricingEngine`/`inventoryEngine` call
+anywhere), composing each owning service's read into this spec's view-model types:
+combining each row's separate `cgst`/`sgst`/`igst`/`cess` into one presentation `totalTax`
+figure, and the Purchase Return Summary's in-memory `supplierId` filter (resolved via each
+return's parent invoice, since `PurchaseReturn` has no direct `supplierId` column) against
+rows already company-scoped by `listPurchaseReturnsForReport` — a cross-company id
+naturally yields an empty result, never a throw.
+
+New `src/modules/reports/purchase/` module (`validation/purchase-report-schema.ts` — same
+shared date-range/uuid-filter/status-default shape as `sales-report-schema.ts` with
+`supplierId` in place of `customerId` and no `customerMode`-equivalent field;
+`services/purchase-report-service.ts` — the layer every page calls, gating all four public
+methods plus three filter-bar option lookups (`listSupplierOptions`/`listProductOptions`/
+`listWarehouseOptions`) on `reports`/`view`; five components mirroring the Sales Reports
+components 1:1, with `PartyWisePurchaseTable` correctly omitting the synthetic-bucket
+badge its Sales counterpart has).
+
+New `/reports/purchase` (a four-card sub-hub) and `/reports/purchase/{register,item-wise,
+party-wise,returns}`. Flipped the `/reports` hub's "Purchase Reports" card from disabled
+"Coming soon" to linked — the sixth of the hub's eleven cards to go live. Added
+`reports/purchase` (the composite-key form, disambiguating against the bare `purchase` key
+already used by `/purchase`), `purchase/register`, `purchase/item-wise`, and
+`purchase/party-wise` composite breadcrumb labels — disambiguating against the bare
+`register`/`item-wise`/`party-wise` keys Sales Reports' own screens already claimed, since
+the previous path segment before each of those three is `purchase` for every
+`/reports/purchase/*` route (`returns` has the identical known, accepted, purely-cosmetic
+limitation spec 68's own entry above records: `/reports/purchase/returns`'s `returns`
+segment falls back to the existing `purchase/returns` composite key, "Purchase Returns" —
+the actual document list's own label — rather than a more specific "Purchase Return
+Summary").
+
+48 new vitest cases (engine: totals-footer math for all four `build*` functions including
+the totalTax-combination formula, an explicit assertion that `PartyWisePurchaseRow` never
+carries a `groupType` property, the Purchase-Return-Summary in-memory supplierId filter
+and its cross-company/no-match empty-result case; repository — proactively written
+alongside the implementation this time (not added after a code-review fix, unlike Sales
+Reports' own history): distinct-invoice-count via `Set` proven against a product billed
+twice on one invoice, per-group where-clause scoping, unresolved-product/supplier
+placeholder fallback; service: `reports:view` (not `purchase:view`) permission gate on
+every report-scoped method, empty-financial-year short-circuit without calling the
+repository; schema: date-range refine, status default, uuid rejection) — 1792/1792 total
+suite passing. `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, the same 2
+pre-existing unrelated warnings), `npx vitest run`, and `next build` all pass;
+`/reports/purchase*` all appear in the build route table.
+
+**Not browser-verified end-to-end this session** — unlike Sales Reports' own
+Playwright-driven click-through, no browser-automation tooling (`chromium-cli`,
+Playwright) was available in this environment, and this app's login form is a Next.js
+Server Action, not readily curl-testable without reverse-engineering the action id.
+Verified instead via an unauthenticated `curl` smoke test against a locally started
+`next dev` server: all five new `/reports/purchase*` routes returned the expected `307`
+auth-redirect (not a `500`), confirming the routes resolve and render at the Next.js
+routing layer without crashing — a narrower check than Sales Reports' own live,
+authenticated filter-bar/empty-state/zero-console-error verification, recorded here
+explicitly rather than overclaimed. Business-logic correctness is carried entirely by the
+new repository/engine vitest fixtures, the same trade-off Sales Reports' own entry above
+made for real posted-invoice data.
+
+**Code review + security review (run in parallel, before merge) both APPROVE/PASS, zero
+CRITICAL/HIGH/MEDIUM findings from either.** Unlike Sales Reports' own history, no
+post-review fix was needed — the aggregate-repository test coverage code review's earlier
+pass flagged as missing on the Sales side was written proactively here from the start.
+Security review gave an explicit PASS on all four requested areas (cross-tenant
+isolation/IDOR; authorization — every page and every new/changed service method
+independently calls `assertPermission`/`hasPermission`; input validation — every filter
+value is Zod-validated server-side; information disclosure — errors route through the
+existing `toActionErrorMessage` helper) — three LOW/informational notes (the Purchase
+Return Summary's in-memory `supplierId` filter fetches more rows than strictly necessary
+before filtering, matching Sales Reports' own identical accepted pattern; the same
+cosmetic `/reports/purchase/returns` breadcrumb-label collision noted above; `productId`/
+`warehouseId` aren't independently re-verified against the caller's company before
+entering the `groupBy` where clause, safe today only because Prisma's implicit
+AND-combination with the sibling `purchaseInvoice: { companyId }` condition means a
+foreign id naturally yields zero rows) accepted as-is, no fix needed.
+
+**Merge into `main` deferred this session** — blocked by this session's auto-mode
+classifier ("Merge Without Review"), unlike Sales Reports' own same-session merge.
+Implementation sits fully reviewed and committed on `feature/purchase-reports` (commit
+`6b8d22e`), awaiting explicit user go-ahead to merge.
 
 ---
 
