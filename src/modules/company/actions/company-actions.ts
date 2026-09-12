@@ -15,6 +15,7 @@ import type {
   CompanyProfileInput,
   CompanySettingsInput,
   GstFilingFrequencyInput,
+  PayrollLedgerMappingInput,
   SalesLedgerMappingInput,
 } from "@/modules/company/validation/company-schema";
 import type { ActionResult } from "@/types/api";
@@ -71,6 +72,19 @@ export async function updateGstFilingFrequencyAction(
 ): Promise<ActionResult<CompanySettings>> {
   try {
     const settings = await companySettingsService.updateGstFilingFrequency(companyId, input);
+    revalidatePath("/settings/sales-ledgers");
+    return { success: true, data: settings };
+  } catch (error) {
+    return { success: false, error: toActionErrorMessage(error) };
+  }
+}
+
+export async function updatePayrollLedgerMappingAction(
+  companyId: string,
+  input: PayrollLedgerMappingInput
+): Promise<ActionResult<CompanySettings>> {
+  try {
+    const settings = await companySettingsService.updatePayrollLedgerMapping(companyId, input);
     revalidatePath("/settings/sales-ledgers");
     return { success: true, data: settings };
   } catch (error) {

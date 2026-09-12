@@ -128,3 +128,16 @@ export const gstFilingFrequencySchema = z.object({
 });
 
 export type GstFilingFrequencyInput = z.infer<typeof gstFilingFrequencySchema>;
+
+// Payroll's (63-payroll.md) posting-time ledger mapping — its own section/
+// schema/action, gated by "settings"/"edit" like salesLedgerMappingSchema
+// above. Both optional so a partial save is allowed while configuring;
+// postPayrollRun itself enforces both are configured before posting. No
+// field shared with salesLedgerMappingSchema (payroll posting has no
+// round-off concept — see the schema's Data Model Decisions).
+export const payrollLedgerMappingSchema = z.object({
+  salaryExpenseLedgerId: z.uuid("Select a valid ledger").optional(),
+  salaryPayableLedgerId: z.uuid("Select a valid ledger").optional(),
+});
+
+export type PayrollLedgerMappingInput = z.infer<typeof payrollLedgerMappingSchema>;

@@ -118,65 +118,75 @@ model Company {
   gstFilingRecords      GstFilingRecord[]
   employees             Employee[]
   attendanceRecords     Attendance[]
+  payrollRuns           PayrollRun[]
 
   @@index([companyName])
 }
 
 model CompanySettings {
-  id                 String             @id @default(uuid())
-  companyId          String             @unique
-  defaultTheme       String             @default("dark")
-  dateFormat         String             @default("DD/MM/YYYY")
-  timeFormat         String             @default("24h")
-  numberFormat       String             @default("en-IN")
-  currencyFormat     String             @default("INR")
+  id                    String             @id @default(uuid())
+  companyId             String             @unique
+  defaultTheme          String             @default("dark")
+  dateFormat            String             @default("DD/MM/YYYY")
+  timeFormat            String             @default("24h")
+  numberFormat          String             @default("en-IN")
+  currencyFormat        String             @default("INR")
   // Inventory Engine's negative-stock gate (32-inventory-engine.md;
   // code-standards.md "Negative stock depends on company settings") — when
   // false (default), an OUT movement that would take current stock below
   // zero is rejected; when true, it is allowed and stock reads back
   // negative.
-  allowNegativeStock Boolean            @default(false)
+  allowNegativeStock    Boolean            @default(false)
   // Sales Invoice's posting-time ledger mapping (38-sales-invoice.md) — six
   // optional nullable FKs rather than auto-detection ("explicit over
   // clever," this codebase's posture since the Document Number Engine's
   // prefix map). Posting a Sales Invoice requires all six configured;
   // drafting/editing does not. outputIgstLedgerId/outputCessLedgerId stay
   // required even for an intra-state-only company for the same reason.
-  salesLedgerId      String?
-  salesLedger        Ledger?            @relation("CompanySettingsSalesLedger", fields: [salesLedgerId], references: [id])
-  outputCgstLedgerId String?
-  outputCgstLedger   Ledger?            @relation("CompanySettingsOutputCgst", fields: [outputCgstLedgerId], references: [id])
-  outputSgstLedgerId String?
-  outputSgstLedger   Ledger?            @relation("CompanySettingsOutputSgst", fields: [outputSgstLedgerId], references: [id])
-  outputIgstLedgerId String?
-  outputIgstLedger   Ledger?            @relation("CompanySettingsOutputIgst", fields: [outputIgstLedgerId], references: [id])
-  outputCessLedgerId String?
-  outputCessLedger   Ledger?            @relation("CompanySettingsOutputCess", fields: [outputCessLedgerId], references: [id])
-  roundOffLedgerId   String?
-  roundOffLedger     Ledger?            @relation("CompanySettingsRoundOff", fields: [roundOffLedgerId], references: [id])
+  salesLedgerId         String?
+  salesLedger           Ledger?            @relation("CompanySettingsSalesLedger", fields: [salesLedgerId], references: [id])
+  outputCgstLedgerId    String?
+  outputCgstLedger      Ledger?            @relation("CompanySettingsOutputCgst", fields: [outputCgstLedgerId], references: [id])
+  outputSgstLedgerId    String?
+  outputSgstLedger      Ledger?            @relation("CompanySettingsOutputSgst", fields: [outputSgstLedgerId], references: [id])
+  outputIgstLedgerId    String?
+  outputIgstLedger      Ledger?            @relation("CompanySettingsOutputIgst", fields: [outputIgstLedgerId], references: [id])
+  outputCessLedgerId    String?
+  outputCessLedger      Ledger?            @relation("CompanySettingsOutputCess", fields: [outputCessLedgerId], references: [id])
+  roundOffLedgerId      String?
+  roundOffLedger        Ledger?            @relation("CompanySettingsRoundOff", fields: [roundOffLedgerId], references: [id])
+  // Payroll's posting-time ledger mapping (63-payroll.md's Data Model) — two
+  // new fields, no shared field reused from Sales/Purchase Invoice's own
+  // mapping above (payroll posting has no round-off concept: the two amounts
+  // are identical by construction). Posting a Payroll Run requires both
+  // configured.
+  salaryExpenseLedgerId String?
+  salaryExpenseLedger   Ledger?            @relation("CompanySettingsSalaryExpense", fields: [salaryExpenseLedgerId], references: [id])
+  salaryPayableLedgerId String?
+  salaryPayableLedger   Ledger?            @relation("CompanySettingsSalaryPayable", fields: [salaryPayableLedgerId], references: [id])
   // Purchase Invoice's posting-time ledger mapping (44-purchase-invoice.md) —
   // five new fields alongside the Sales/Output-GST mapping above, reusing
   // roundOffLedgerId rather than adding a second Round Off account (one
   // Round Off ledger serves both directions). Posting a Purchase Invoice
   // requires these five plus the shared roundOffLedgerId (six total) to be
   // configured — same missing-mapping rejection style as Sales Invoice.
-  purchaseLedgerId   String?
-  purchaseLedger     Ledger?            @relation("CompanySettingsPurchaseLedger", fields: [purchaseLedgerId], references: [id])
-  inputCgstLedgerId  String?
-  inputCgstLedger    Ledger?            @relation("CompanySettingsInputCgst", fields: [inputCgstLedgerId], references: [id])
-  inputSgstLedgerId  String?
-  inputSgstLedger    Ledger?            @relation("CompanySettingsInputSgst", fields: [inputSgstLedgerId], references: [id])
-  inputIgstLedgerId  String?
-  inputIgstLedger    Ledger?            @relation("CompanySettingsInputIgst", fields: [inputIgstLedgerId], references: [id])
-  inputCessLedgerId  String?
-  inputCessLedger    Ledger?            @relation("CompanySettingsInputCess", fields: [inputCessLedgerId], references: [id])
+  purchaseLedgerId      String?
+  purchaseLedger        Ledger?            @relation("CompanySettingsPurchaseLedger", fields: [purchaseLedgerId], references: [id])
+  inputCgstLedgerId     String?
+  inputCgstLedger       Ledger?            @relation("CompanySettingsInputCgst", fields: [inputCgstLedgerId], references: [id])
+  inputSgstLedgerId     String?
+  inputSgstLedger       Ledger?            @relation("CompanySettingsInputSgst", fields: [inputSgstLedgerId], references: [id])
+  inputIgstLedgerId     String?
+  inputIgstLedger       Ledger?            @relation("CompanySettingsInputIgst", fields: [inputIgstLedgerId], references: [id])
+  inputCessLedgerId     String?
+  inputCessLedger       Ledger?            @relation("CompanySettingsInputCess", fields: [inputCessLedgerId], references: [id])
   // GSTR-1/GSTR-3B period-selector granularity (58-gstr-1.md) — drives only
   // the UI's month-vs-quarter picker and a GstFilingRecord's human-readable
   // period label; getOutwardSupplyLines/getGstr1Return take a plain date
   // range regardless, so no query-layer logic branches on this setting.
-  gstFilingFrequency GstFilingFrequency @default(MONTHLY)
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  gstFilingFrequency    GstFilingFrequency @default(MONTHLY)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   company Company @relation(fields: [companyId], references: [id])
 }
@@ -211,6 +221,7 @@ model FinancialYear {
   stockTransfers        StockTransfer[]
   physicalVerifications PhysicalVerification[]
   gstFilingRecords      GstFilingRecord[]
+  payrollRuns           PayrollRun[]
 
   @@unique([companyId, name])
   @@index([companyId, isCurrent])
@@ -288,6 +299,7 @@ model User {
   stockTransfers               StockTransfer[]
   physicalVerifications        PhysicalVerification[]
   gstFilingRecords             GstFilingRecord[]
+  payrollRuns                  PayrollRun[]
   // Nullable, unique — see Employee.userId's own comment (61-employee-master.md)
   // for why User and Employee are kept as two separate, optionally-linked
   // entities rather than merged.
@@ -420,22 +432,24 @@ model Ledger {
   supplier       Supplier?
   voucherEntries VoucherEntry[]
 
-  salesInvoicePayments              SalesInvoicePayment[]
-  purchaseInvoicePayments           PurchaseInvoicePayment[]
-  salesReturnsAsRefundLedger        SalesReturn[]            @relation("SalesReturnRefundLedger")
-  purchaseReturnsAsRefundLedger     PurchaseReturn[]         @relation("PurchaseReturnRefundLedger")
-  creditNotesAsRefundLedger         CreditNote[]             @relation("CreditNoteRefundLedger")
-  companySettingsAsSalesLedger      CompanySettings[]        @relation("CompanySettingsSalesLedger")
-  companySettingsAsOutputCgstLedger CompanySettings[]        @relation("CompanySettingsOutputCgst")
-  companySettingsAsOutputSgstLedger CompanySettings[]        @relation("CompanySettingsOutputSgst")
-  companySettingsAsOutputIgstLedger CompanySettings[]        @relation("CompanySettingsOutputIgst")
-  companySettingsAsOutputCessLedger CompanySettings[]        @relation("CompanySettingsOutputCess")
-  companySettingsAsRoundOffLedger   CompanySettings[]        @relation("CompanySettingsRoundOff")
-  companySettingsAsPurchaseLedger   CompanySettings[]        @relation("CompanySettingsPurchaseLedger")
-  companySettingsAsInputCgstLedger  CompanySettings[]        @relation("CompanySettingsInputCgst")
-  companySettingsAsInputSgstLedger  CompanySettings[]        @relation("CompanySettingsInputSgst")
-  companySettingsAsInputIgstLedger  CompanySettings[]        @relation("CompanySettingsInputIgst")
-  companySettingsAsInputCessLedger  CompanySettings[]        @relation("CompanySettingsInputCess")
+  salesInvoicePayments                 SalesInvoicePayment[]
+  purchaseInvoicePayments              PurchaseInvoicePayment[]
+  salesReturnsAsRefundLedger           SalesReturn[]            @relation("SalesReturnRefundLedger")
+  purchaseReturnsAsRefundLedger        PurchaseReturn[]         @relation("PurchaseReturnRefundLedger")
+  creditNotesAsRefundLedger            CreditNote[]             @relation("CreditNoteRefundLedger")
+  companySettingsAsSalesLedger         CompanySettings[]        @relation("CompanySettingsSalesLedger")
+  companySettingsAsOutputCgstLedger    CompanySettings[]        @relation("CompanySettingsOutputCgst")
+  companySettingsAsOutputSgstLedger    CompanySettings[]        @relation("CompanySettingsOutputSgst")
+  companySettingsAsOutputIgstLedger    CompanySettings[]        @relation("CompanySettingsOutputIgst")
+  companySettingsAsOutputCessLedger    CompanySettings[]        @relation("CompanySettingsOutputCess")
+  companySettingsAsRoundOffLedger      CompanySettings[]        @relation("CompanySettingsRoundOff")
+  companySettingsAsPurchaseLedger      CompanySettings[]        @relation("CompanySettingsPurchaseLedger")
+  companySettingsAsInputCgstLedger     CompanySettings[]        @relation("CompanySettingsInputCgst")
+  companySettingsAsInputSgstLedger     CompanySettings[]        @relation("CompanySettingsInputSgst")
+  companySettingsAsInputIgstLedger     CompanySettings[]        @relation("CompanySettingsInputIgst")
+  companySettingsAsInputCessLedger     CompanySettings[]        @relation("CompanySettingsInputCess")
+  companySettingsAsSalaryExpenseLedger CompanySettings[]        @relation("CompanySettingsSalaryExpense")
+  companySettingsAsSalaryPayableLedger CompanySettings[]        @relation("CompanySettingsSalaryPayable")
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -735,6 +749,7 @@ model Employee {
   updatedAt       DateTime @updatedAt
 
   attendanceRecords Attendance[]
+  payrollRunItems   PayrollRunItem[]
 
   @@unique([companyId, employeeCode])
   // Required alongside the plain userId @unique above for Prisma to accept
@@ -796,6 +811,68 @@ model Attendance {
   @@unique([companyId, employeeId, date])
   @@index([companyId, date])
   @@index([employeeId, date])
+}
+
+// 63-payroll.md's Data Model — the period-based, numbered document that
+// aggregates Attendance into each active employee's net salary for the
+// period and posts one balanced accounting voucher for the whole run.
+enum PayrollRunStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+model PayrollRun {
+  id              String           @id @default(uuid())
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id])
+  financialYearId String
+  financialYear   FinancialYear    @relation(fields: [financialYearId], references: [id])
+  // Nullable — assigned only at posting time, mirroring
+  // PurchaseInvoice.invoiceNumber's own two-step contract (44-purchase-
+  // invoice.md's Decisions): a DRAFT run has no committed identity yet, and
+  // Postgres treats NULL as distinct under the composite unique index below,
+  // so multiple drafts coexist safely.
+  payrollNumber   String?
+  periodStart     DateTime         @db.Date
+  periodEnd       DateTime         @db.Date
+  status          PayrollRunStatus @default(DRAFT)
+  narration       String?
+  totalNetSalary  Decimal          @default(0) @db.Decimal(14, 2)
+  voucherId       String?          @unique
+  voucher         Voucher?         @relation(fields: [voucherId], references: [id])
+  createdByUserId String?
+  createdBy       User?            @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  items PayrollRunItem[]
+
+  @@unique([companyId, financialYearId, payrollNumber])
+  @@index([companyId, status])
+  @@index([companyId, periodStart, periodEnd])
+}
+
+model PayrollRunItem {
+  id                String     @id @default(uuid())
+  payrollRunId      String
+  payrollRun        PayrollRun @relation(fields: [payrollRunId], references: [id])
+  lineNumber        Int
+  employeeId        String
+  employee          Employee   @relation(fields: [employeeId], references: [id])
+  // Snapshot at run time — see 63-payroll.md's Decisions: a later edit to the
+  // employee's own basicSalary never retroactively changes a posted run's
+  // stored figure (the same "financial data is immutable" posture every
+  // other posted document's line items already follow).
+  basicSalary       Decimal    @db.Decimal(14, 2)
+  totalDaysInPeriod Int
+  // presentDays + 0.5 x halfDays — not always whole, hence Decimal not Int.
+  workedDays        Decimal    @db.Decimal(5, 2)
+  netSalary         Decimal    @db.Decimal(14, 2)
+
+  @@unique([payrollRunId, lineNumber])
+  @@unique([payrollRunId, employeeId])
+  @@index([employeeId])
 }
 
 // Trading Product / Service / Expense Item per architecture-context.md's
@@ -1260,6 +1337,8 @@ enum DocumentType {
   STOCK_ADJUSTMENT
   STOCK_TRANSFER
   PHYSICAL_VERIFICATION
+  PAYROLL
+  SALARY_VOUCHER
 }
 
 // One row per (company, financial year, document type) — the sole owner of
@@ -1296,6 +1375,7 @@ enum VoucherType {
   DEBIT_NOTE
   SALES_RETURN
   PURCHASE_RETURN
+  SALARY // 63-payroll.md's VoucherType Decision — own type, not JOURNAL/PAYMENT
 }
 
 enum VoucherStatus {
@@ -1346,6 +1426,7 @@ model Voucher {
   debitNote       DebitNote?
   purchaseInvoice PurchaseInvoice?
   purchaseReturn  PurchaseReturn?
+  payrollRun      PayrollRun?
 
   @@unique([companyId, financialYearId, voucherType, voucherNumber])
   @@index([companyId, voucherDate])

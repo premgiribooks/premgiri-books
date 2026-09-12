@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { GstFilingFrequencyForm } from "@/modules/company/components/gst-filing-frequency-form";
+import { PayrollLedgerMappingForm } from "@/modules/company/components/payroll-ledger-mapping-form";
 import { SalesLedgerMappingForm } from "@/modules/company/components/sales-ledger-mapping-form";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { ledgerService } from "@/modules/ledgers/services/ledger-service";
@@ -64,6 +65,24 @@ export default async function SalesLedgersSettingsPage() {
             companyId={user.companyId}
             defaultValue={settings?.gstFilingFrequency ?? "MONTHLY"}
             disabled={!canEdit}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-border pt-6">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Payroll Ledgers</h2>
+            <p className="text-xs text-muted-foreground">
+              Map the ledgers Payroll posting uses for the salary expense and salary payable entries.
+            </p>
+          </div>
+          <PayrollLedgerMappingForm
+            companyId={user.companyId}
+            ledgers={ledgers}
+            disabled={!canEdit}
+            defaultValues={{
+              salaryExpenseLedgerId: settings?.salaryExpenseLedgerId ?? undefined,
+              salaryPayableLedgerId: settings?.salaryPayableLedgerId ?? undefined,
+            }}
           />
         </div>
       </div>

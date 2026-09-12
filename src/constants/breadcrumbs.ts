@@ -97,6 +97,19 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   // collision, so it's added unqualified.
   "reports/suppliers": "Supplier Reports",
   "purchase-summary": "Purchase Summary",
+  // 73-employee-reports.md: "reports/employees" disambiguates against both
+  // the bare "employees" key (/employees' own operational hub) and the
+  // composite "employees/payroll" key claimed by Payroll's own segment —
+  // this key only ever matches when the previous path segment is literally
+  // "reports". "attendance-summary"/"payroll-register"/"salary-register"
+  // have no existing bare-key collision, so they're added unqualified;
+  // "directory" reuses the identical bare key Customer/Supplier Reports
+  // already claim above (an accepted cosmetic-only overlap, same posture as
+  // those specs' own shared-key notes).
+  "reports/employees": "Employee Reports",
+  "attendance-summary": "Attendance Summary",
+  "payroll-register": "Payroll Register",
+  "salary-register": "Salary Register",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",
@@ -127,6 +140,10 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   employees: "Employees",
   "employees/attendance": "Attendance",
   "attendance/history": "History",
+  // 63-payroll.md: "employees/payroll" disambiguates against a future bare
+  // "payroll" key collision the same way "employees/attendance" already
+  // does for Attendance.
+  "employees/payroll": "Payroll",
   settings: "Settings",
   "document-numbering": "Document Numbering",
   users: "User Management",
