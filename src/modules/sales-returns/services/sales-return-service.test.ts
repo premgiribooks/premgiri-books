@@ -568,6 +568,28 @@ describe("getSalesReturn / listSalesReturns — cross-company and scoping", () =
   });
 });
 
+// 68-sales-reports.md's Sales Return Summary calls this method instead of
+// listSalesReturns — the only difference is the permission it gates on.
+describe("listSalesReturnsForReport", () => {
+  it("gates on reports:view, not sales:view", async () => {
+    await salesReturnService.listSalesReturnsForReport();
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "view");
+  });
+
+  it("returns [] with no active financial year, without calling the repository", async () => {
+    getCurrentFinancialYearMock.mockResolvedValueOnce(null);
+    const result = await salesReturnService.listSalesReturnsForReport();
+    expect(result).toEqual([]);
+    expect(findManyMock).not.toHaveBeenCalled();
+  });
+
+  it("scopes the read to the caller's own company and active financial year", async () => {
+    findManyMock.mockResolvedValueOnce([]);
+    await salesReturnService.listSalesReturnsForReport({ status: "POSTED" });
+    expect(findManyMock).toHaveBeenCalledWith(COMPANY_ID, FY_ID, { status: "POSTED" });
+  });
+});
+
 describe("getReturnableInvoice", () => {
   it("returns null for a non-POSTED invoice", async () => {
     findSalesInvoiceForReturnMock.mockResolvedValueOnce(invoiceForReturn({ status: "DRAFT" }));

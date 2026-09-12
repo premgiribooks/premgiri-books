@@ -2002,6 +2002,51 @@ Mapping so far:
   implemented and merged.** Payroll (#61, Phase 9) is now the sole outstanding item
   closest to this project's documented order among previously drafted-but-unimplemented
   specs — still awaiting explicit instruction on which to resume next.
+- **Sales Reports (#66, spec 68) implemented 2026-09-12** on branch `feature/sales-reports`,
+  per explicit user instruction ("start Sales Reports"), immediately following Cash Flow
+  (#65) in the same session — the first of Phase 10's seven operational reports
+  (#66–72). **No new Prisma model, enum, field, or migration** — every figure is read
+  directly from an already-posted `SalesInvoice`/`SalesInvoiceItem`/`SalesReturn` row or a
+  plain sum/group of those stored columns. See `context/Phases/phase-tracker.md`'s Phase
+  10 section for the full implementation record: four views (Sales Register, Item-wise
+  Sales, Party-wise Sales Summary — with `WALK_IN`/unconverted-`QUICK` sales bucketed into
+  their own labeled synthetic rows — and Sales Return Summary); two new aggregate
+  repository methods on `sales-invoice-repository.ts`; new report-scoped service methods
+  on both sibling services gated on `reports`/`view` instead of `sales`/`view` (so the
+  seeded Accountant role can reach every view); a new pure `src/engines/reporting/
+  sales-reports.ts`; a new `src/modules/reports/sales/` module; new `/reports/sales*`
+  pages. 29 new vitest cases — 1744/1744 total suite passing; `npx tsc --noEmit`,
+  `npx eslint src prisma`, `npx vitest run`, and `next build` all pass; `/reports/sales*`
+  appears in the build route table.
+
+  **Code review + security review (run in parallel, before merge) both APPROVE, zero
+  CRITICAL/HIGH findings from either.** Code review's one MEDIUM (the spec's own Code
+  Standards section requires vitest coverage for the two new aggregate repository
+  methods against a seeded multi-invoice/multi-product/multi-customer fixture — missing
+  from the initial diff, since the existing tests only mocked the repository) was
+  **fixed** before merge by adding `sales-invoice-repository.test.ts` (11 cases, mocking
+  the module-level Prisma client directly, mirroring `attendance-repository.test.ts`'s
+  convention); re-verified green afterward (1744/1744). Code review's one LOW (no
+  `sales-report-actions.ts` Server Action, despite the spec's own file list naming one)
+  was confirmed consistent with the already-merged financial-reports batch's identical,
+  equally-unused forward-noted action files — left as-is, matching precedent. Security
+  review gave an explicit PASS on cross-tenant isolation/IDOR, authorization, input
+  validation, and information disclosure — two LOW/informational notes (filter-bar
+  option lookups list active rows only; three uuid filter params aren't page-level
+  pre-checked the way date/status are, though the shared Zod schema still validates them
+  server-side) accepted as-is, no fix needed.
+
+  **Browser-verified end-to-end** (Playwright-driven, this session's dev server): logged
+  in as `admin`, confirmed the auto-select company/financial-year/branch redirect chain,
+  then visited all five `/reports/sales*` pages — each renders its full filter bar, the
+  correct spec-mandated empty-state message against this dev database's currently-empty
+  Sales data, and the correct heading, with zero console/page errors throughout. This
+  dev database has no seeded Sales Invoices/Returns, so end-to-end verification against
+  real posted multi-row data (including the synthetic-bucket case) was carried by the
+  new repository/engine vitest fixtures instead.
+
+  Committed on branch `feature/sales-reports`. Not yet merged into `main` — see this
+  entry's own update once the merge lands.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

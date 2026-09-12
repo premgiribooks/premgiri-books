@@ -931,7 +931,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 63  | Profit & Loss     | Accounting     | ✅     |
 | 64  | Balance Sheet     | Accounting     | ✅     |
 | 65  | Cash Flow         | Accounting     | ✅     |
-| 66  | Sales Reports     | Sales          | ⬜     |
+| 66  | Sales Reports     | Sales          | ✅     |
 | 67  | Purchase Reports  | Purchase       | ⬜     |
 | 68  | Inventory Reports | Inventory      | ⬜     |
 | 69  | Customer Reports  | Customers      | ⬜     |
@@ -1309,6 +1309,138 @@ top of feature commit `f4da842`, checks re-verified green against the merged res
 pushed to `origin/main`. Feature branch deleted both locally and on `origin` post-merge per
 the one-branch-at-a-time rule. **This completes Phase 10 — Reporting's four financial
 reports (#62–65).**
+
+**Sales Reports (#66, spec 68) implemented 2026-09-12** on branch `feature/sales-reports`,
+per explicit user instruction ("start Sales Reports"), immediately following Cash Flow
+(#65) in the same session — the first of Phase 10's seven **operational** reports
+(#66–72), as opposed to the four financial reports (#62–65) above. **No new Prisma model,
+enum, field, or migration** — every figure is read directly from an already-posted
+`SalesInvoice`/`SalesInvoiceItem`/`SalesReturn` row or a plain sum/group of those stored
+columns, per the spec's own Data Model section.
+
+Four views, all MVP-scoped per the spec's own Goal section: **Sales Register** (every
+`SalesInvoice`, POSTED by default with an explicit status override — the one view that
+supports one), **Item-wise Sales Report** (grouped by product), **Party-wise Sales
+Summary** (grouped by customer, with `WALK_IN`/unconverted-`QUICK` sales bucketed into
+their own labeled synthetic rows rather than dropped or merged), and **Sales Return
+Summary** (every `SalesReturn`, customer resolved from its parent invoice). Deferred, per
+the spec's own explicit scope decision: Quotation/Sales Order/Delivery Challan reporting,
+a conversion-funnel report, Credit Note/Debit Note registers, margin/profitability
+analysis, and Excel/PDF export mechanics (forward-note only).
+
+**Amended** (not a new repository) `src/modules/sales-invoices/repositories/sales-invoice-
+repository.ts` with two new aggregate methods: `aggregateItemWiseSales` (a Prisma
+`groupBy` on `SalesInvoiceItem.productId`, joined through `salesInvoice` for the
+date/FY/customer/product/warehouse filters, POSTED-only; a product's `invoiceCount` is
+the size of a distinct-`salesInvoiceId` `Set` built from a second narrow `findMany` over
+the same `where` clause — never a raw row count, which would over-count a product billed
+twice on one invoice) and `aggregatePartyWiseSales` (a `groupBy` on `(SalesInvoice.
+customerId, customerMode)` — grouping by the pair rather than `customerId` alone still
+yields exactly one row per real customer, since a `customerId`-bearing invoice is always
+`customerMode: "PERMANENT"` by the time it's ever assigned one, while still separating the
+two `customerId: null` synthetic buckets, WALK_IN vs. unconverted QUICK, from each other).
+Both resolve their own batched product/customer name lookup (one query each, no N+1).
+
+**Amended** both sibling services with report-scoped read methods, gated on `reports`/
+`view` instead of `sales`/`view` — `salesInvoiceService.listSalesInvoicesForReport` /
+`getItemWiseSalesReport` / `getPartyWiseSalesReport`, and `salesReturnService.
+listSalesReturnsForReport` — so the seeded Accountant role (`reports:view`, no
+`sales:view` per `DEFAULT_ROLE_PERMISSIONS`) can reach every Sales Reports view without
+also needing Sales module access; the original `sales:view`-gated `listSalesInvoices`/
+`listSalesReturns` methods are untouched.
+
+New `src/engines/reporting/sales-reports.ts` (`buildSalesRegister`,
+`buildItemWiseSalesReport`, `buildPartyWiseSalesReport`, `buildSalesReturnSummary` — all
+pure, no Prisma import, no `gstEngine`/`pricingEngine`/`inventoryEngine` call anywhere),
+composing each owning service's read into this spec's view-model types: combining each
+row's separate `cgst`/`sgst`/`igst`/`cess` into one presentation `totalTax` figure,
+assigning the two synthetic Party-wise buckets their own display labels ("Walk-in Sales" /
+"Quick Customer Sales (unconverted)"), and computing every totals footer as a plain sum
+(never a business-rule recomputation). New `src/modules/reports/sales/` module
+(`validation/sales-report-schema.ts` — a shared `dateFrom`/`dateTo` + `dateFrom <= dateTo`
+refine shape across all four views, deliberately with **no** `financialYearId` field
+despite the spec's own Business Rules section listing one as optional, since every read
+this module calls already scopes to `getCurrentFinancialYear()` internally and has no
+caller-selectable financial year anywhere else in the Sales module unlike the
+financial-reports batch's ledger data; `services/sales-report-service.ts` — the only
+layer every page calls, itself gated on `reports`/`view`, plus three filter-bar option
+lookups reading Prisma directly by `companyId`, mirroring `gst-register-service.ts`'s own
+`listPartyOptions` precedent for the same Accountant-role reason; `components/` — one
+shared `SalesReportFilterBar` plus four dedicated table components, one per view, each
+with its own totals footer row).
+
+New `/reports/sales` (a four-card sub-hub) and `/reports/sales/{register,item-wise,
+party-wise,returns}`. Flipped the `/reports` hub's "Sales Reports" card from disabled
+"Coming soon" to linked — the fifth of the hub's eleven cards to go live, and the first of
+Phase 10's seven operational reports. Added `reports/sales` (the composite-key form,
+disambiguating against the bare `sales` key already used by `/sales`), `register`,
+`item-wise`, and `party-wise` breadcrumb labels (`returns` already existed from
+`/sales/returns`, so `/reports/sales/returns` falls back to the bare "Sales Returns" label
+rather than a more specific "Sales Return Summary" — a known, accepted, purely-cosmetic
+limitation of the breadcrumb mechanism's one-segment-back lookup, recorded in
+`breadcrumbs.ts` itself rather than worked around).
+
+29 new vitest cases (engine: totals-footer math for all four `build*` functions including
+the totalTax-combination formula, both synthetic Party-wise bucket labels, the
+Sales-Return-Summary in-memory customerId filter and its cross-company/no-match
+empty-result case; repository — added after code review flagged the initial diff's
+coverage gap against this spec's own explicit test requirement: distinct-invoice-count via
+`Set` proven against a product billed twice on one invoice, per-group where-clause
+scoping, both synthetic Party-wise buckets kept as two distinct null-`customerId` rows,
+unresolved-product/customer placeholder fallback; service: `reports:view` (not
+`sales:view`) permission gate on every report-scoped method, empty-financial-year
+short-circuit without calling the repository; schema: date-range refine, status default,
+uuid rejection) — 1744/1744 total suite passing. `npx tsc --noEmit`, `npx eslint src
+prisma` (0 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and
+`next build` all pass; `/reports/sales*` all appear in the build route table.
+
+**Browser-verified end-to-end** (Playwright-driven, this session's dev server): logged in
+as `admin`, confirmed the auto-select company/financial-year/branch redirect chain lands
+correctly, then visited `/reports/sales` and all four view pages — each renders its full
+filter bar (date range plus its own view-specific optional filters), the correct
+spec-mandated empty-state message against this dev database's currently-empty Sales data,
+and the correct page heading/breadcrumb — with zero console/page errors throughout.
+End-to-end verification against real posted-invoice data (multi-invoice/multi-product/
+multi-customer, including the `WALK_IN`/unconverted-`QUICK` synthetic-bucket case) was
+carried by the new repository/engine vitest fixtures instead, since seeding that much
+master + transactional data live was out of proportion to this session's own scope — the
+same trade-off Profit & Loss/Balance Sheet/Cash Flow's own entries above recorded for
+their lack of a live browser click-through, inverted (this feature got the live click-
+through but not live multi-row data; those three got neither).
+
+**Code review + security review (run in parallel, before merge) both APPROVE, zero
+CRITICAL/HIGH findings from either.** Code review raised one MEDIUM — the spec's own Code
+Standards section explicitly requires vitest coverage for `aggregateItemWiseSales`/
+`aggregatePartyWiseSales` "correctness against a seeded multi-invoice, multi-product,
+multi-customer fixture," and the tests that existed before this fix only asserted the
+service layer forwarded arguments to a *mocked* repository, never exercising the real
+`groupBy`/`Set`-based dedup logic — **fixed** before merge by adding a new
+`sales-invoice-repository.test.ts` (11 cases, mirroring `attendance-repository.test.ts`'s
+convention of mocking the module-level Prisma client's specific model methods directly,
+since neither new method takes a `tx` parameter) that proves the distinct-invoice-count
+`Set` and the `(customerId, customerMode)` synthetic-bucket split both hold under a
+multi-line-per-invoice fixture; re-verified green afterward (1744/1744). Code review's one
+LOW (the spec's own file list names a `sales-report-actions.ts` Server Action that was
+never created, since all four pages call `salesReportService` directly instead) was
+confirmed against the merged sibling financial-reports batch to be consistent with
+**already-established practice, not a regression** — `trial-balance-actions.ts`/
+`cash-flow-actions.ts`/etc. are equally unused forward-noted files that no page in `main`
+actually calls — so left as-is, unfixed, matching precedent. Security review gave an
+explicit PASS on all four requested areas (cross-tenant isolation/IDOR — every aggregate
+query scoped by `companyId`/`financialYearId` as an explicit repository parameter, never
+client input, so a cross-company filter id naturally yields an empty result rather than
+leaking data; authorization — every page and every new/changed service method
+independently calls `assertPermission`/`hasPermission` before any data work, and the
+original `sales:view`-gated methods are unchanged; input validation — every filter value
+is Zod-validated server-side before reaching a query; information disclosure — errors
+route through the existing `toActionErrorMessage` helper, never revealing cross-tenant
+existence) — two LOW/informational notes (the filter-bar option lookups only list active
+rows, cosmetic only; `customerId`/`productId`/`warehouseId` aren't page-level pre-checked
+the way `dateFrom`/`dateTo`/`status` are, though the shared Zod schema still validates them
+server-side before any query runs) accepted as-is, no fix needed.
+
+Committed on branch `feature/sales-reports`. Not yet merged into `main` — see
+`context/progress-tracker.md`'s Next Up for the merge record once it lands.
 
 ---
 

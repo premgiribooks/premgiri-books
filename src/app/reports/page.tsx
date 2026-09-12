@@ -22,11 +22,12 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // Trial Balance (64-trial-balance.md) is the first tenant of this hub;
 // Profit & Loss (65-profit-and-loss.md) is the second; Balance Sheet
 // (66-balance-sheet.md) is the third; Cash Flow (67-cash-flow.md) is the
-// fourth and last of the phase's four financial reports. The remaining
-// seven Reporting-phase screens (tracker #66-72, spec files 68-74) all
-// reserve their own card here as an unavailable placeholder, matching
-// 57-gst-registers.md's own "hub exists before every sibling screen does"
-// precedent.
+// fourth of the phase's four financial reports. Sales Reports
+// (68-sales-reports.md, tracker #66) is the fifth, and the first of the
+// phase's operational reports. The remaining six Reporting-phase screens
+// (tracker #67-72, spec files 69-74) still reserve their own card here as
+// an unavailable placeholder, matching 57-gst-registers.md's own "hub
+// exists before every sibling screen does" precedent.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -61,7 +62,7 @@ const REPORT_MODULES = [
     icon: ShoppingCart,
     title: "Sales Reports",
     description: "Sales register, item-wise, party-wise, and return summary.",
-    available: false,
+    available: true,
   },
   {
     href: "/reports/purchase",
