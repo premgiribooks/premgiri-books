@@ -2496,6 +2496,23 @@ Mapping so far:
   **Not yet marked done in `context/Phases/phase-tracker.md`** (tracker #71 stays ⬜) and
   merge into `main` not requested this session — same two-step pattern as every report in
   this batch.
+- **`feature/inventory-reports` merged into `main` 2026-09-12** (`--no-ff`, no conflicts,
+  `a30f38e`, pushed to `origin/main`), per explicit user instruction ("start GST Reports")
+  and an explicit choice to merge before branching, given `ai-workflow-rules.md`'s
+  one-branch-at-a-time rule. The branch had six already-implemented, already-reviewed
+  features stacked without an intermediate merge: Purchase Reports (#67), Inventory
+  Reports (#68), Customer Reports (#69), Supplier Reports (#70), Payroll (#61), and
+  Employee Reports (#71) — all now marked ✅ in `context/Phases/phase-tracker.md`'s Phase
+  9/Phase 10 status tables. Re-verified against the merged result: `npx prisma format`/
+  `validate`/`generate`, `npx tsc --noEmit` (clean), `npx eslint src prisma` (0 errors, 2
+  pre-existing warnings — `GeneratedNumber` unused import, `LEDGER_ID` unused test var,
+  both predating this merge), `npx vitest run` (1909/1909), and `next build` (all routes
+  pass, including every `/reports/*` page) all pass. Local branch
+  `feature/inventory-reports` deleted post-merge. This closes Phase 9 in full and leaves
+  GST Reports (#72, spec 74) as the last item of Phase 10 — see
+  `context/feature-specs/74-gst-reports.md` for its scope (an analytical dashboard over
+  the already-implemented GST Engine/GST Registers/HSN Summary output, gated by both
+  `reports:view` and `gst:view`, adding zero new GST aggregation queries).
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

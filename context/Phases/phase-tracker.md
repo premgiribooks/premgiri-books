@@ -742,7 +742,7 @@ Voucher screen. Must be implemented in order (#59 → #60 → #61):
 | --- | --------------- | ---------- | ------ |
 | 59  | Employee Master | Company    | ✅     |
 | 60  | Attendance      | Employee   | ✅     |
-| 61  | Payroll         | Attendance | ⬜     |
+| 61  | Payroll         | Attendance | ✅     |
 
 **Employee Master (#59) implemented 2026-09-11** on branch `feature/employee-master`,
 merged into `main` (`--no-ff`, no conflicts, `596d8fe`). Added a new `Employee` Prisma
@@ -975,9 +975,9 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 66  | Sales Reports     | Sales          | ✅     |
 | 67  | Purchase Reports  | Purchase       | ✅     |
 | 68  | Inventory Reports | Inventory      | ✅     |
-| 69  | Customer Reports  | Customers      | ⬜     |
+| 69  | Customer Reports  | Customers      | ✅     |
 | 70  | Supplier Reports  | Suppliers      | ✅     |
-| 71  | Employee Reports  | Employees      | ⬜     |
+| 71  | Employee Reports  | Employees      | ✅     |
 | 72  | GST Reports       | GST            | ⬜     |
 
 **Trial Balance (#62, spec 64) implemented 2026-09-12** on branch `feature/trial-balance`,
@@ -2203,6 +2203,24 @@ tracker number and phase number from the old Phase 6 (Accounting) onward up by o
 numbers changed — spec 56 is simply the next sequential file after 55, and specs 52–55
 (Payment/Receipt/Contra/Journal Voucher) keep their own file names, only their in-body
 tracker-number and phase-number references were updated to match.
+
+---
+
+**`feature/inventory-reports` merged into `main` 2026-09-12** (`--no-ff`, no conflicts,
+`a30f38e`, pushed to `origin/main`), per explicit user instruction ("start GST Reports")
+applying `ai-workflow-rules.md`'s one-branch-at-a-time rule before starting the next
+feature. This one branch had accumulated six already-implemented-and-reviewed features
+stacked on top of each other without an intermediate merge — Purchase Reports (#67),
+Inventory Reports (#68), Customer Reports (#69), Supplier Reports (#70), Payroll (#61),
+and Employee Reports (#71) — all now reflected as ✅ in this file's Phase 9/Phase 10
+status tables above. Re-verified against the merged result: `npx prisma format`/
+`validate`/`generate`, `npx tsc --noEmit` (clean), `npx eslint src prisma` (0 errors, 2
+pre-existing warnings), `npx vitest run` (1909/1909), and `next build` (all routes,
+including every `/reports/*` page, appear in the route table) all pass. Local branch
+`feature/inventory-reports` deleted after the merge. **This closes out Phase 9 in full**
+(#59–#61) and leaves GST Reports (#72/spec 74) as the sole remaining item of Phase 10 —
+see the Phase 10 section above for its dependency chain (specs 57–60, all implemented and
+merged) before implementation begins.
 
 ---
 
