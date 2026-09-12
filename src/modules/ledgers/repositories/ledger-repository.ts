@@ -181,6 +181,37 @@ export const ledgerRepository = {
     }));
   },
 
+  /**
+   * Every ledger in the company with the same fields
+   * `findLedgersForValidation` returns, in a single query — the company-
+   * wide equivalent `getCashAndBankLedgerIds` (67-cash-flow.md) needs
+   * instead of first discovering ids via `findMany` and then re-fetching
+   * the same rows through `findLedgersForValidation` (two round trips to
+   * the same table for the same data; code review flagged the original
+   * two-call version as a wasteful duplicate fetch).
+   */
+  async findAllForValidation(companyId: string): Promise<LedgerForValidation[]> {
+    const rows = await prisma.ledger.findMany({
+      where: { companyId },
+      select: {
+        id: true,
+        name: true,
+        companyId: true,
+        isActive: true,
+        ledgerGroupId: true,
+        bankAccount: { select: { id: true } },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      companyId: row.companyId,
+      isActive: row.isActive,
+      ledgerGroupId: row.ledgerGroupId,
+      hasBankAccount: row.bankAccount !== null,
+    }));
+  },
+
   async findMany(companyId: string, filters: LedgerListFilters = {}): Promise<LedgerWithGroup[]> {
     const rows = await prisma.ledger.findMany({
       where: buildWhere(companyId, filters),

@@ -81,7 +81,7 @@ Mapping so far:
 | 64           | Trial Balance (`64-trial-balance.md`)                                           | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#62) — **spec drafted 2026-09-11, not implemented**; establishes `src/engines/reporting/` as the Reporting Engine location and the `/reports` hub page, both reused by specs 65–74 |
 | 65           | Profit & Loss (`65-profit-and-loss.md`)                                        | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#63) — **spec drafted 2026-09-11, not implemented**; computes a period P&L by calling `getTrialBalance` twice and diffing, no new engine query |
 | 66           | Balance Sheet (`66-balance-sheet.md`)                                           | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#64) — **spec drafted 2026-09-11, not implemented**; no schema change needed — reuses the existing `LedgerGroup.natureType` field for Asset/Liability/Income/Expense classification |
-| 67           | Cash Flow (`67-cash-flow.md`)                                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#65) — **spec drafted 2026-09-11, not implemented**; uses the direct method (not indirect), justified against this codebase's already-transaction-level ledger data; adds one new read-only `getCashAndBankLedgerIds` helper |
+| 67           | Cash Flow (`67-cash-flow.md`)                                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#65) — **implemented 2026-09-12**; uses the direct method (not indirect), justified against this codebase's already-transaction-level ledger data; adds one new read-only `getCashAndBankLedgerIds` helper and one new `ledgerRepository.findAllForValidation` helper |
 | 68           | Sales Reports (`68-sales-reports.md`)                                          | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#66) — **spec drafted 2026-09-11, not implemented**; MVP scoped to Sales Register/Item-wise/Party-wise/Return Summary over Sales Invoice/Return only |
 | 69           | Purchase Reports (`69-purchase-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#67) — **spec drafted 2026-09-11, not implemented**; direct mirror of spec 68 from the purchase side |
 | 70           | Inventory Reports (`70-inventory-reports.md`)                                  | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#68) — **spec drafted 2026-09-11, not implemented**; composes the Inventory Engine's already-reserved `getCurrentStock`/`getStockLedger`/`getStockValuation` primitives directly, no new repository methods |
@@ -1952,10 +1952,51 @@ Mapping so far:
   automation tool was available, same recorded gap as Profit & Loss) — confirmed only
   via `curl` that the route resolves through the auth middleware (307 to `/login`)
   rather than crashing; a follow-up Playwright-driven verification (matching Trial
-  Balance's own) is still owed for both this and Profit & Loss. Payroll (#61, Phase 9)
-  and Cash Flow (#65, Phase 10) are now the two outstanding items closest to this
-  project's documented order — still awaiting explicit instruction on which to resume
-  next.
+  Balance's own) is still owed for both this and Profit & Loss.
+- **Cash Flow (Phase 10 — Reporting #65, spec 67) implemented 2026-09-12** on branch
+  `feature/cash-flow`, per explicit user instruction ("start Cash Flow") — the fourth
+  and last tenant of the Reporting Engine and the `/reports` hub, **completing Phase
+  10's four financial reports (#62–65)**. No new Prisma model/field/migration. Uses the
+  **direct method** (not indirect), per the spec's own explicit justification: every
+  rupee of cash movement already exists as a `VoucherEntry` against a Cash-in-Hand or
+  `BankAccount`-linked `Ledger`, so there is no accrual-basis gap for an indirect
+  reconciliation to adjust for. New `src/lib/ledger-class.ts` export
+  `getCashAndBankLedgerIds(companyId)` (the read-only equivalent of the existing
+  throwing `assertLedgersAreCashOrBank`, sharing a new `isCashOrBankClass` helper) and
+  new `src/engines/reporting/cash-flow.ts` (`buildCashFlowReport`, pure) — unlike its
+  three sibling reports this produces no ledger-level rows, just three category totals
+  (Operating/Investing/Financing, classified by counter-ledger root group name via
+  `getRootGroup`) plus the headline `netChangeInCash` and a computed `reconciles`
+  integrity flag (mirroring Balance Sheet's `isBalanced`). New
+  `voucherRepository.findCashTouchingEntries` (the one genuinely new, additive query
+  this batch adds). New `/reports/cash-flow` (a flat three-row layout, not the shared
+  nested Ledger Group tree the other three reports use, since this report has no
+  ledger-level rows to expand) wired to the `/reports` hub's existing "Cash Flow" card.
+  22 new vitest cases — 1693/1693 total suite passing; `npx tsc --noEmit`,
+  `npx eslint src prisma`, and `next build` all pass; `/reports/cash-flow` appears in
+  the build route table.
+
+  **Code review + security review (run in parallel) both APPROVE.** Code review raised
+  one MEDIUM — `getCashAndBankLedgerIds`'s first version fetched every company ledger
+  via `findMany` purely to discover ids, then immediately re-fetched the same rows via
+  `findLedgersForValidation` (two round trips, one with an unneeded `ledgerGroup` join,
+  for the same data) — **fixed** before merge by adding
+  `ledgerRepository.findAllForValidation(companyId)` (the company-wide variant of
+  `findLedgersForValidation`) and switching to call it directly; re-verified green
+  (1693/1693) afterward. Security review gave an explicit PASS on permission
+  enforcement, IDOR/cross-tenant isolation (re-verified across
+  `getCashAndBankLedgerIds`, `findCashTouchingEntries`, and Financial Year resolution),
+  input validation, no information disclosure, no raw-SQL surface, and no hardcoded
+  secrets/new network dependency — empty findings list otherwise.
+
+  **No browser/Playwright click-through was performed this session** (no
+  browser-automation tool was available, same recorded gap as Profit & Loss and
+  Balance Sheet) — confirmed only via `curl` that `/reports/cash-flow` resolves
+  through the auth middleware (307 to `/login`) rather than crashing. Merge to `main`
+  is the remaining step for this feature. Payroll (#61, Phase 9) is now the sole
+  outstanding item closest to this project's documented order among previously
+  drafted-but-unimplemented specs — still awaiting explicit instruction on which to
+  resume next.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
 
 ## On Hold

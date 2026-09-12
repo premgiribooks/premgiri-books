@@ -91,3 +91,29 @@ export interface BalanceSheetReport {
   netProfit: number;
   isBalanced: boolean;
 }
+
+/** One Cash/Bank ledger's signed period movement (`closingBalance − openingBalance`), from a single getLedgerStatement call. */
+export interface CashLedgerMovement {
+  ledgerId: string;
+  netChange: number;
+}
+
+/** One non-cash counter-ledger VoucherEntry belonging to a cash-touching voucher, before categorization. */
+export interface CategorizableEntry {
+  ledgerGroupId: string;
+  entryType: "DEBIT" | "CREDIT";
+  amount: number;
+}
+
+export interface CashFlowReport {
+  /** Σ of every categorized entry's signed amount whose counter-ledger root group is neither Investing- nor Financing-class. */
+  operating: number;
+  /** Σ of every categorized entry's signed amount whose counter-ledger root group is "Fixed Assets" or "Investments". */
+  investing: number;
+  /** Σ of every categorized entry's signed amount whose counter-ledger root group is "Capital Account", "Reserves & Surplus", or "Loans (Liability)". */
+  financing: number;
+  /** Σ of every Cash/Bank ledger's period movement — the headline figure the three categories must sum to. */
+  netChangeInCash: number;
+  /** `round2(operating + investing + financing) === netChangeInCash` — a genuine computed integrity check, not assumed true. */
+  reconciles: boolean;
+}

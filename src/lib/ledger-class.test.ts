@@ -2,20 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mirrors purchase-invoice-service.test.ts's convention for the same two
 // dependencies this helper was extracted from.
-const { ledgerGroupFindManyMock, findLedgersForValidationMock } = vi.hoisted(() => ({
+const { ledgerGroupFindManyMock, findLedgersForValidationMock, findAllForValidationMock } = vi.hoisted(() => ({
   ledgerGroupFindManyMock: vi.fn(),
   findLedgersForValidationMock: vi.fn(),
+  findAllForValidationMock: vi.fn(),
 }));
 
 vi.mock("@/modules/ledger-groups/repositories/ledger-group-repository", () => ({
   ledgerGroupRepository: { findMany: ledgerGroupFindManyMock },
 }));
 vi.mock("@/modules/ledgers/repositories/ledger-repository", () => ({
-  ledgerRepository: { findLedgersForValidation: findLedgersForValidationMock },
+  ledgerRepository: { findLedgersForValidation: findLedgersForValidationMock, findAllForValidation: findAllForValidationMock },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
-import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
+import { assertLedgersAreCashOrBank, getCashAndBankLedgerIds } from "@/lib/ledger-class";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_COMPANY_ID = "99999999-9999-4999-8999-999999999999";
@@ -33,6 +34,7 @@ const LEDGER_GROUPS = [
 beforeEach(() => {
   ledgerGroupFindManyMock.mockReset().mockResolvedValue(LEDGER_GROUPS);
   findLedgersForValidationMock.mockReset();
+  findAllForValidationMock.mockReset();
 });
 
 describe("assertLedgersAreCashOrBank", () => {
@@ -110,5 +112,52 @@ describe("assertLedgersAreCashOrBank", () => {
     await expect(
       assertLedgersAreCashOrBank({} as never, COMPANY_ID, [CASH_LEDGER_ID, INVALID_LEDGER_ID], "payment")
     ).rejects.toThrow("is not a Cash-in-Hand or bank-linked ledger");
+  });
+});
+
+describe("getCashAndBankLedgerIds", () => {
+  it("matches assertLedgersAreCashOrBank's own classification exactly for the same fixture", async () => {
+    const fixture = [
+      { id: CASH_LEDGER_ID, name: "Cash", companyId: COMPANY_ID, isActive: true, ledgerGroupId: CASH_GROUP_ID, hasBankAccount: false },
+      { id: BANK_LEDGER_ID, name: "HDFC Bank", companyId: COMPANY_ID, isActive: true, ledgerGroupId: OTHER_GROUP_ID, hasBankAccount: true },
+      { id: INVALID_LEDGER_ID, name: "Sundry Creditor", companyId: COMPANY_ID, isActive: true, ledgerGroupId: OTHER_GROUP_ID, hasBankAccount: false },
+    ];
+    findAllForValidationMock.mockResolvedValue(fixture);
+
+    const result = await getCashAndBankLedgerIds(COMPANY_ID);
+
+    for (const ledger of fixture) {
+      findLedgersForValidationMock.mockResolvedValue([ledger]);
+      const expectAccepted = result.has(ledger.id);
+      const assertion = assertLedgersAreCashOrBank({} as never, COMPANY_ID, [ledger.id], "payment");
+      if (expectAccepted) {
+        await expect(assertion).resolves.toBeUndefined();
+      } else {
+        await expect(assertion).rejects.toThrow();
+      }
+    }
+
+    expect(result.has(CASH_LEDGER_ID)).toBe(true);
+    expect(result.has(BANK_LEDGER_ID)).toBe(true);
+    expect(result.has(INVALID_LEDGER_ID)).toBe(false);
+  });
+
+  it("excludes an inactive ledger even if it is under the Cash-in-Hand group or bank-linked", async () => {
+    const fixture = [
+      { id: CASH_LEDGER_ID, name: "Cash", companyId: COMPANY_ID, isActive: false, ledgerGroupId: CASH_GROUP_ID, hasBankAccount: false },
+    ];
+    findAllForValidationMock.mockResolvedValue(fixture);
+
+    const result = await getCashAndBankLedgerIds(COMPANY_ID);
+
+    expect(result.has(CASH_LEDGER_ID)).toBe(false);
+  });
+
+  it("returns an empty set for a company with no ledgers", async () => {
+    findAllForValidationMock.mockResolvedValue([]);
+
+    const result = await getCashAndBankLedgerIds(COMPANY_ID);
+
+    expect(result.size).toBe(0);
   });
 });

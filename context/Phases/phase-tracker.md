@@ -930,7 +930,7 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 62  | Trial Balance     | Voucher Engine | ✅     |
 | 63  | Profit & Loss     | Accounting     | ✅     |
 | 64  | Balance Sheet     | Accounting     | ✅     |
-| 65  | Cash Flow         | Accounting     | ⬜     |
+| 65  | Cash Flow         | Accounting     | ✅     |
 | 66  | Sales Reports     | Sales          | ⬜     |
 | 67  | Purchase Reports  | Purchase       | ⬜     |
 | 68  | Inventory Reports | Inventory      | ⬜     |
@@ -1197,6 +1197,111 @@ was available, same recorded gap as Profit & Loss) — confirmed instead via `cu
 click-through (financial year + as-of-date changes, expand/collapse sections, the balanced/
 unbalanced indicator, out-of-range date validation) is still owed for both this and Profit &
 Loss before either can be considered as fully verified as Trial Balance was.
+
+**Cash Flow (#65, spec 67) implemented 2026-09-12** on branch `feature/cash-flow`, per
+explicit user instruction ("start Cash Flow"), immediately following Balance Sheet (#64) in
+the same session. The fourth and last tenant of the Reporting Engine and the `/reports` hub
+— completes Phase 10's four financial reports (#62–65). **No new Prisma model, enum, field,
+or migration.** Uses the **direct method** (not indirect), per the spec's own explicit
+justification: every rupee of cash movement already exists as a `VoucherEntry` against a
+Cash-in-Hand or `BankAccount`-linked `Ledger`, so there is no accrual-basis gap for an
+indirect reconciliation to adjust for.
+
+New `src/lib/ledger-class.ts` export `getCashAndBankLedgerIds(companyId)` — the read-only,
+plain-id-set equivalent of the existing throwing `assertLedgersAreCashOrBank` (spec
+52-payment-voucher.md), sharing a new internal `isCashOrBankClass` classification helper so
+the Cash-in-Hand-subtree-or-bank-linked rule lives in exactly one place. Reads
+`ledgerGroupRepository.findMany` + `getGroupSubtreeIds([CASH_IN_HAND_GROUP_NAME])` plus a new
+`ledgerRepository.findAllForValidation(companyId)` (the company-wide variant of the existing
+`findLedgersForValidation`, added after code review flagged the first version's two
+sequential round trips to the same `ledger` table as a wasteful duplicate fetch — fixed
+before merge). A cross-check test in `ledger-class.test.ts` asserts `getCashAndBankLedgerIds`
+agrees with `assertLedgersAreCashOrBank`'s own classification per-ledger, per the spec's own
+requirement.
+
+New `src/engines/reporting/cash-flow.ts` (`buildCashFlowReport`, pure) — unlike Trial
+Balance/Profit & Loss/Balance Sheet, produces no ledger-level rows: just three category
+totals (`operating`/`investing`/`financing`) plus the headline `netChangeInCash` and a
+computed `reconciles` flag. Categorizes every non-cash counter-ledger entry of a
+cash-touching voucher by its **root group name** via `getRootGroup`/`buildLedgerGroupIndex`
+(64-trial-balance.md, reused unmodified): `"Fixed Assets"`/`"Investments"` → Investing;
+`"Capital Account"`/`"Reserves & Surplus"`/`"Loans (Liability)"` → Financing; every other root
+group → Operating. `CREDIT` contributes `+amount`, `DEBIT` contributes `-amount`. A Contra
+Voucher (every entry Cash/Bank-class) has no non-cash entry to categorize and so contributes
+to no category and to no net change — the correct treatment for an internal transfer between
+cash equivalents, verified by a dedicated test. `reconciles = round2(operating + investing +
+financing) === netChangeInCash` is a genuine computed integrity check (a deliberately
+corrupted fixture asserts it correctly flags `false`), mirroring Balance Sheet's `isBalanced`.
+
+New `src/modules/vouchers/repositories/voucher-repository.ts` method
+`findCashTouchingEntries(companyId, from, to, cashLedgerIds)` — the one genuinely new query
+this batch adds (additive only, no change to any existing exported function): every
+`VoucherEntry` in `[from, to]` whose own ledger is **not** Cash/Bank-class
+(`ledgerId: { notIn: cashLedgerIds }`) but whose `Voucher` has at least one sibling entry that
+is (`entries: { some: { ledgerId: { in: cashLedgerIds } } } }`), company-scoped, returned with
+`ledgerGroupId` joined through `Ledger`.
+
+`src/modules/reports/services/cash-flow-service.ts` (`cashFlowService.getCashFlow`) is the
+only I/O: resolves the caller's company from session, gates on `reports`/`view`, re-verifies
+the requested Financial Year belongs to the caller's own company, validates `from`/`to`
+against that FY's own `[startDate, endDate]` range, resolves the company's Cash/Bank ledger
+id set via `getCashAndBankLedgerIds`, then in parallel calls
+`voucherQueries.getLedgerStatement` once per Cash/Bank ledger (each ledger's period movement
+is `closingBalance − openingBalance`, never re-summed from raw entries — same discipline as
+every sibling report), `voucherRepository.findCashTouchingEntries`, and
+`ledgerGroupRepository.findMany`, before handing everything to `buildCashFlowReport`. Reuses
+`profitAndLossFiltersSchema` (the `from`/`to` shape) verbatim — no new schema file, exactly as
+spec 64/65 anticipated for this reuse.
+
+New `/reports/cash-flow` (the same `financial-year-date-range-filter-bar.tsx` Profit & Loss
+already built, reused unmodified) and a new `cash-flow-statement.tsx` component — a flat
+three-row Operating/Investing/Financing layout plus a headline Net Increase/Decrease in Cash
+figure and a visible `reconciles` indicator, deliberately **not** the nested Ledger Group tree
+interaction the other three reports share, since `CashFlowReport` carries no ledger-level rows
+to expand. Wired the `/reports` hub's "Cash Flow" card (added, unlinked, by spec 64) to
+`/reports/cash-flow` and added the `cash-flow` breadcrumb label. A forward-noted,
+currently-unused `getCashFlowReportAction` Server Action exists alongside the service,
+mirroring every sibling report's own precedent.
+
+22 new vitest cases (engine: Operating+Investing+Financing summing exactly to
+`netChangeInCash` across a fixture spanning a Payment Voucher, a Receipt Voucher, a
+self-cancelling Contra Voucher, a Fixed Assets purchase, a Capital introduction, and a Sales
+Invoice settled partly by cash; the Contra Voucher contributing to no category/no net change
+in isolation; Fixed Assets purchase → Investing; Capital introduction → Financing; a
+3+-level-deep counter-ledger (Current Liabilities → Sundry Creditors) resolving to the
+correct Operating root; `reconciles` correctly `false` against a deliberately corrupted
+fixture; repository: `findCashTouchingEntries` excluding both a fully-non-cash voucher and the
+Cash/Bank-side entries themselves; `ledger-class`: `getCashAndBankLedgerIds` cross-checked
+against `assertLedgersAreCashOrBank`, inactive-ledger exclusion, empty-company handling;
+service: `reports:view` permission gate, cross-company Financial Year rejection, both from/to
+range boundaries accepted/rejected, per-ledger `getLedgerStatement` calls scoped to the
+caller's own company, `findCashTouchingEntries` receiving the resolved Cash/Bank id list,
+company-scoped ledger-group fetch, net-change derived from `closingBalance − openingBalance`
+without re-summing) — 1693/1693 total suite passing. `npx tsc --noEmit`, `npx eslint src
+prisma` (0 errors, the same 2 pre-existing unrelated warnings), `npx vitest run`, and
+`next build` all pass; `/reports/cash-flow` appears in the build route table.
+
+**Code review + security review (run in parallel) both APPROVE.** Code review raised one
+MEDIUM (`getCashAndBankLedgerIds`'s first version called `ledgerRepository.findMany` purely
+to discover ids, then immediately re-fetched the same rows via `findLedgersForValidation` —
+two round trips, one with an unnecessary `ledgerGroup` join, to read the same data once) —
+**fixed** before merge by adding `ledgerRepository.findAllForValidation(companyId)` (the
+company-wide variant of `findLedgersForValidation`, same select shape) and switching
+`getCashAndBankLedgerIds` to call it directly instead of the two-call sequence; re-verified
+green (`tsc`/`eslint`/`vitest` 1693/1693/`next build`) afterward. Security review gave an
+explicit PASS on all six requested areas (permission enforcement before any data fetch,
+IDOR/cross-tenant isolation re-verified independently across `getCashAndBankLedgerIds`,
+`findCashTouchingEntries`, and the Financial Year resolution, input validation of `from`/`to`
+against both the Zod schema and the resolved FY's own range, no information disclosure via
+thrown errors — the "Financial year not found" message is identical whether the FY doesn't
+exist or belongs to another tenant, no raw-SQL/injection surface, no hardcoded secrets/new
+network dependency, consistent with the project's Offline First rule) — zero CRITICAL/HIGH/
+MEDIUM findings, explicitly stated as passing.
+
+**No browser/Playwright click-through was performed this session** (no browser-automation
+tool was available, same recorded gap as Profit & Loss and Balance Sheet) — verification and
+merge to `main` are the remaining steps for this feature, tracked as the immediate next
+action in `progress-tracker.md`.
 
 ---
 

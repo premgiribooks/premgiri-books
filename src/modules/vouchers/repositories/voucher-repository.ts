@@ -98,6 +98,12 @@ export interface LedgerEntryTotal {
   amount: number;
 }
 
+export interface CashTouchingEntry {
+  ledgerGroupId: string;
+  entryType: BalanceType;
+  amount: number;
+}
+
 export const voucherRepository = {
   /**
    * Creates the Voucher + its VoucherEntry rows atomically. `input.entries`
@@ -306,6 +312,51 @@ export const voucherRepository = {
       ledgerId: group.ledgerId,
       entryType: group.entryType,
       amount: (group._sum.amount ?? new Prisma.Decimal(0)).toNumber(),
+    }));
+  },
+
+  /**
+   * Every non-cash counter-ledger VoucherEntry in `[from, to]` belonging to
+   * a Voucher that also has at least one Cash/Bank-class entry
+   * (67-cash-flow.md's Engine section) — additive to this repository's
+   * existing query surface, not a change to any existing method. Entries
+   * whose own ledger is itself Cash/Bank-class are excluded directly by the
+   * query (`ledgerId: { notIn: cashLedgerIds }`), so a Contra Voucher (every
+   * entry Cash/Bank-class) never contributes a row here at all — the
+   * correct treatment for an internal transfer between cash equivalents
+   * (see cash-flow.ts). Same all-statuses reasoning as
+   * `findLedgerEntriesUpTo`/`aggregateEntriesByLedger` applies here.
+   */
+  async findCashTouchingEntries(
+    companyId: string,
+    from: Date,
+    to: Date,
+    cashLedgerIds: readonly string[]
+  ): Promise<CashTouchingEntry[]> {
+    if (cashLedgerIds.length === 0) {
+      return [];
+    }
+
+    const rows = await prisma.voucherEntry.findMany({
+      where: {
+        ledgerId: { notIn: [...cashLedgerIds] },
+        voucher: {
+          companyId,
+          voucherDate: { gte: from, lte: to },
+          entries: { some: { ledgerId: { in: [...cashLedgerIds] } } },
+        },
+      },
+      select: {
+        entryType: true,
+        amount: true,
+        ledger: { select: { ledgerGroupId: true } },
+      },
+    });
+
+    return rows.map((row) => ({
+      ledgerGroupId: row.ledger.ledgerGroupId,
+      entryType: row.entryType,
+      amount: row.amount.toNumber(),
     }));
   },
 };
