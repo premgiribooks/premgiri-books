@@ -38,10 +38,10 @@ import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 // (73-employee-reports.md, tracker #71) is the tenth — Attendance Summary,
 // Payroll Register, Salary Register, and Employee Directory, depending on
 // Payroll (63-payroll.md, Phase 9) which was implemented first to unblock
-// this spec. The remaining Reporting-phase screen (tracker #72, spec file
-// 74) still reserves its own card here as an unavailable placeholder,
-// matching 57-gst-registers.md's own "hub exists before every sibling
-// screen does" precedent.
+// this spec. GST Reports (74-gst-reports.md, tracker #72) is the eleventh
+// and last, closing Phase 10 — an analytical dashboard over the already-
+// implemented GST Engine/GST Registers/HSN Summary output, gated by both
+// reports:view and gst:view.
 const REPORT_MODULES = [
   {
     href: "/reports/trial-balance",
@@ -118,7 +118,7 @@ const REPORT_MODULES = [
     icon: Receipt,
     title: "GST Reports",
     description: "Analytical dashboard over the GST Registers and HSN Summary.",
-    available: false,
+    available: true,
   },
 ] as const;
 

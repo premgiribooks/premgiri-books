@@ -110,6 +110,12 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   "attendance-summary": "Attendance Summary",
   "payroll-register": "Payroll Register",
   "salary-register": "Salary Register",
+  // 74-gst-reports.md: "reports/gst" disambiguates against the bare "gst"
+  // key above, which is already claimed by 57-gst-registers.md's own /gst
+  // hub page label ("GST") — this spec's route lives under /reports/gst, a
+  // different section, so it uses the "parent/segment" composite-key
+  // mechanism rather than colliding with the existing bare key.
+  "reports/gst": "GST Reports",
   registers: "GST Registers",
   "gstr-1": "GSTR-1",
   "gstr-3b": "GSTR-3B",
