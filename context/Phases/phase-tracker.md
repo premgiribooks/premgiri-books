@@ -2072,6 +2072,8 @@ These are intentionally outside the first production release.
 - Voice Search
 - Multi Currency
 - Multi Language
+- Offline SQLite Local Cache & Cloud Sync — design drafted, not implemented; see
+  `context/feature-specs/89-offline-sqlite-sync.md`
 
 ---
 
@@ -2804,6 +2806,31 @@ OS environment variables on the end-user machine — no first-run configuration 
 exists yet; and if the GitHub repo is ever made private, `electron-updater`'s runtime
 update check would need a token, which hasn't been set up (embedding one in a shipped app
 is a real exposure risk) — releases should stay on a public repo.
+
+---
+
+# Installer Database Setup & Offline Sync Spec (2026-09-13)
+
+Per explicit user instruction (build/install-time database configuration, plus an
+offline-SQLite feature spec) — see `progress-tracker.md`'s matching entry for the full
+record. Not tied to a Phase — installer infrastructure and a future-scope spec, same
+precedent as the Desktop Packaging & Auto-Update section above.
+
+- **Feature-spec 88** (`context/feature-specs/88-installer-database-setup.md`) —
+  **implemented**: `scripts/setup-database.mjs` (`pnpm setup:db`) resolves `DATABASE_URL`,
+  persists it as a Windows user environment variable, then runs `prisma migrate deploy` +
+  `prisma db seed` (delegating the new-vs-existing-database decision entirely to
+  `prisma/seed.ts`'s pre-existing idempotency). Closes the "no first-run config screen
+  yet" limitation noted in the Desktop Packaging & Auto-Update section above.
+- **Feature-spec 89** (`context/feature-specs/89-offline-sqlite-sync.md`) — **documentation
+  only, not implemented**, per explicit user request. Designs a local SQLite write-queue
+  syncing to a central/cloud database once reachable, with an explicit Scope
+  Clarification (this app's DB is already local-only per `architecture-context.md`; "sync
+  on internet availability" implies a new central server this spec does not build) and
+  five Open Design Questions a future, explicitly-scheduled implementer must resolve
+  first. Listed under Future Roadmap / Future Online Services, not any active Phase.
+
+Branch: `feature/installer-database-setup`, not yet merged into `main`.
 
 ---
 

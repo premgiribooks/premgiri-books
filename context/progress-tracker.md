@@ -3695,3 +3695,68 @@ compiled output that's already self-contained) — confirmed by grepping for act
 `require()` calls and by every constructive test above passing without them.
 
 Bumped to **v1.0.6**.
+
+## 2026-09-13 — Installer database setup script (feature-spec 88) + offline sync spec drafted (feature-spec 89, not implemented)
+
+Per explicit user instruction ("in build and installation first take latest database url
+and configure in user environment variables add the database url in setup script and then
+seed schema in the database if new else if database itself has details then do not also
+create basic setup with admin and superadmin user login... also for offline system create
+sqlite database for offline system later will sync on server on internet availability
+create this as feature-specs"), on a fresh `feature/installer-database-setup` branch cut
+from `main`.
+
+**Feature-spec 88** (`context/feature-specs/88-installer-database-setup.md`, implemented):
+closes the known limitation recorded in the Desktop Packaging & Auto-Update section and
+the v1.0.4/v1.0.5 entries above ("runtime config (`DATABASE_URL` etc.) must be a real OS
+environment variable on the end-user machine, no first-run config screen yet"). New
+`scripts/setup-database.mjs` (`pnpm setup:db`):
+
+- Resolves `DATABASE_URL` from `process.env`, then the local `.env`, then an interactive
+  prompt — never a hardcoded default, since a committed default would mean embedding a
+  real credential in source control.
+- On Windows, persists it via `setx DATABASE_URL "<value>"` (`HKCU\Environment` — a user-
+  level variable, no elevation needed, matching the user's explicit "user environment
+  variables" ask) and sets `process.env` for the remainder of the same run. On non-Windows,
+  prints an instruction instead of silently no-op'ing.
+- Runs `prisma migrate deploy` (idempotent — applies only unrecorded migrations), then
+  `prisma db seed`, delegating **all** of the "is this database new" decision to the
+  already-existing, unmodified `prisma/seed.ts` idempotency checks (skips bootstrapping
+  `superadmin`/`admin` when they already exist — this logic already existed and needed no
+  change).
+- Never logs the resolved connection string in full — only a redacted host/port/database
+  summary (`code-standards.md`'s "do not log … personal secrets" rule), since the string
+  embeds live credentials.
+- Deliberately **not** wired into `build`/`dist`/CI — kept an explicit, separate,
+  operator-run step so a plain typecheck/build run never has a database side effect.
+
+Also added the previously-undocumented `SEED_SUPER_ADMIN_PASSWORD` to `.env.example`
+(already consumed by `prisma/seed.ts` and already documented in this file's Environment
+Configuration table above, but missing from the example file itself).
+
+**Feature-spec 89** (`context/feature-specs/89-offline-sqlite-sync.md`, documentation
+only, per explicit user request "create this as feature-specs" — no SQLite dependency,
+schema, or sync code was added): formalizes `architecture-context.md`'s Future Online
+Services "Multi-System Synchronization" entry into a real design, the same way spec 81
+formalized "Daily Automatic Backup." Flags a Scope Clarification the user's own wording
+elides: this app's database is already documented as **local** Postgres with no internet
+dependency for daily operation (`architecture-context.md`'s Offline Strategy) — "sync on
+internet availability" only makes sense under a *second*, larger reading (a genuinely new
+central/cloud database that per-install SQLite queues sync against), which is what this
+spec documents, alongside five explicit Open Design Questions (which tables are safely
+queueable offline given posted-voucher immutability, conflict-resolution policy, sync
+trigger mechanism, the new native-dependency packaging cost per the v1.0.4-v1.0.6
+Turbopack-externals lessons above) a future implementer must resolve with the user before
+writing any code. Per `ai-workflow-rules.md`'s Future Modules list ("Cloud Synchronization
+… must not be implemented until explicitly scheduled"), this spec is not built now.
+
+**Verified**: `node --check scripts/setup-database.mjs` (syntax only — the script was not
+executed against the real configured `DATABASE_URL`, since doing so would mutate this
+machine's environment variables and write to a live database as a side effect of drafting
+this feature; that is the user's own operational step to run), `npx eslint scripts` (0
+errors), `npx tsc --noEmit` (clean — the new file is a plain `.mjs`, same category as the
+existing `scripts/prepare-standalone.mjs`/`scripts/build-electron.mjs`, outside the
+TypeScript project).
+
+Committed on `feature/installer-database-setup`. Not yet merged into `main` — a PR is the
+next step, per this project's one-branch-at-a-time Git workflow.
