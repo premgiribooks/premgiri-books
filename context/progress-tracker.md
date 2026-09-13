@@ -3439,3 +3439,37 @@ plus a trailing-newline removal) — not something this session made. Preserved 
 stash/pop across the pull rather than discarded or committed, since its origin and intent
 are unknown; it remains an uncommitted local change on `main` for the user to either
 commit or discard themselves.
+
+## 2026-09-13 — Local server port fixed, `repository` field added, CI build workflow added
+
+Per explicit user instruction ("configure system port as 86903 ... configure in
+package.json [the git repo URL] ... configure build with github and create github action
+workflow build and release"), on a fresh `feature/electron-fixed-port-and-ci` branch cut
+from `main`. `86903` is above the valid TCP port range (max 65535); clarified with the
+user via a scoping question, who chose "use a valid fixed port instead" — implemented as
+`8903`.
+
+`electron/get-free-port.ts` gained `getAvailablePort(preferredPort)`: tries binding the
+preferred port first, falling back to `getFreePort()`'s existing random-free-port logic
+only if that port is already taken (e.g. a second instance of the app already running).
+`electron/server.ts`'s `startNextServer` now calls `getAvailablePort(DEFAULT_SERVER_PORT)`
+(`8903`) instead of always picking a fresh random port every launch. `package.json`
+gained a standard `repository` field pointing at
+`https://github.com/premgiribooks/premgiri-books.git` (`build.publish`'s `owner`/`repo`
+already targeted this same repo for electron-builder's GitHub release publishing, from
+the prior desktop-packaging phase — no change needed there). Added
+`.github/workflows/build.yml`: typecheck/lint/test/build on every push and PR, deliberately
+separate from `release.yml` (which only packages/publishes on a version tag push).
+
+`npx tsc --noEmit` (both `tsconfig.json` and `tsconfig.electron.json`), `npx eslint src
+electron prisma scripts` (0 errors, same 2 pre-existing unrelated warnings), and `npx
+vitest run` (2034/2034, +2 new — `getAvailablePort`'s preferred-port and
+port-already-taken-fallback cases, the latter verified against a real bound `net.Server`,
+not a mock) all pass.
+
+Committed as `72b10c3` on `feature/electron-fixed-port-and-ci`, pushed to `origin`. Per
+this project's established pattern for this session, a direct merge into `main` was not
+attempted (merging without review is blocked at the harness level for this session) — a
+PR can be opened at
+https://github.com/premgiribooks/premgiri-books/pull/new/feature/electron-fixed-port-and-ci
+for the user to review and merge. **`main` does not yet have this change.**
