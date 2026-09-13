@@ -1,7 +1,15 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import type { Logger } from "./logger";
-import { getFreePort } from "./get-free-port";
+import { getAvailablePort } from "./get-free-port";
+
+/**
+ * The local server's preferred port. Kept fixed (rather than always picking
+ * a fresh free port) so the app listens on a predictable local address
+ * across launches; getAvailablePort still falls back to a free port if this
+ * one is already taken.
+ */
+export const DEFAULT_SERVER_PORT = 8903;
 
 export interface StandaloneServerLocation {
   isPackaged: boolean;
@@ -70,7 +78,7 @@ export async function startNextServer(
   logger: Logger,
 ): Promise<RunningServer> {
   const entry = resolveStandaloneServerEntry(location);
-  const port = await getFreePort();
+  const port = await getAvailablePort(DEFAULT_SERVER_PORT);
   const hostname = "127.0.0.1";
   const url = `http://${hostname}:${port}`;
 

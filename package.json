@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "main": "dist-electron/main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/premgiribooks/premgiri-books.git"
+  },
   "scripts": {
     "dev": "concurrently -k -n next,electron \"pnpm:dev:next\" \"pnpm:dev:electron\"",
     "dev:next": "next dev",
