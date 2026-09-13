@@ -3515,3 +3515,61 @@ same 2 pre-existing warnings), `npx vitest run` (2034/2034) all pass. Committed 
 `15f9663` on `fix/ci-standalone-symlink-fallback`, pushed to `origin`. A PR can be opened
 at https://github.com/premgiribooks/premgiri-books/pull/new/fix/ci-standalone-symlink-fallback
 for the user to review and merge — **`main`'s build is currently red until this merges.**
+
+## 2026-09-13 — First real release published: v1.0.3 (after fixing v1.0.1 and v1.0.2 failures live)
+
+Per explicit user instruction ("action build is completed but still release not yet
+created, release version will be v1.*.*"). A pre-existing `v1.0.0` git tag already
+existed on the repo but pointed at a commit from well before any of this session's
+desktop-packaging work and predated `release.yml`'s existence, so it had never triggered
+anything.
+
+**v1.0.1** (first real attempt): bumped `package.json`'s version, tagged, pushed — all
+three OS jobs failed. Diagnosed by authenticating to the GitHub API with the locally
+stored git credential (the repo is private) and pulling each failing job's raw log:
+- macOS: publish crashed mid-upload ("Cannot cleanup: SyntaxError: Unexpected end of
+  JSON input") — all three matrix jobs run in parallel and each independently checked
+  "does a release exist for this tag yet?", racing to create one simultaneously.
+- Linux: `.deb` build failed outright — Debian packages require a maintainer email, and
+  `package.json` had no `author` field.
+- Windows: `node-gyp` crashed rebuilding `argon2` for Electron's ABI, inside an `undici`
+  HTTP/1 client assertion while downloading Node headers — a one-off runner/network
+  blip, not a config problem.
+
+Fixed on `fix/release-workflow-race`: split `release.yml` into `create-release` (draft,
+alone, first) → `build` (matrix, now depends on it — no more race) → `publish-release`
+(undrafts once all three succeed); added `author`/`description` to `package.json` (a
+generic project identity per the user's choice, not personal — corrected their typo'd
+email into GitHub's real noreply format); wrapped the build+publish step in a 3-attempt
+retry. Confirmed via the API that the failed v1.0.1 run left zero actual releases behind
+— nothing to clean up. Bumped to **v1.0.2** (tags are one-shot; v1.0.1's was already
+pushed) and retried.
+
+**v1.0.2**: failed differently — `create-release` itself hit a bare `HTTP 500` from
+GitHub's own API, a transient server-side error unrelated to any of the above fixes.
+Fixed by wrapping `create-release` and `publish-release`'s `gh` commands in the same
+retry pattern, and making `create-release` idempotent (`gh release view` check before
+creating), since a 5xx doesn't reliably indicate whether the release was actually created
+before the error. Bumped to **v1.0.3** and retried.
+
+**v1.0.3: succeeded.** Verified via the API: the release is published (`draft: false`)
+with all expected assets — `Premgiri-Books-ERP-Setup-1.0.3.exe` (Windows NSIS, 222MB),
+`Premgiri-Books-ERP-1.0.3-arm64.dmg` + `.zip` (macOS, 216MB/224MB), and
+`Premgiri-Books-ERP-1.0.3.AppImage` + `premgir-books-v2_1.0.3_amd64.deb` (Linux,
+170MB/167MB), plus the `latest.yml`/`latest-mac.yml`/`latest-linux.yml` manifests
+`electron-updater` needs to detect this as the newest version. The user merged
+`fix/release-workflow-race` (PR #5) into `main` shortly after; re-verified against the
+merged result: `npx tsc --noEmit` (both configs), `npx eslint src electron prisma
+scripts` (0 errors, same 2 pre-existing warnings), `npx vitest run` (2034/2034), and the
+user's own `build.yml` CI run on `main` all pass. **`main` now has the fully working,
+retry-hardened release pipeline, and the desktop app has its first published release.**
+
+Two now-superseded, unmerged branches from this back-and-forth should be closed rather
+than merged: `chore/release-v1.0.1` (superseded by `fix/release-workflow-race`, which
+already includes an equivalent version bump) and `feature/electron-fixed-port-and-ci`
+(already merged as PR #2, its remote branch ref is gone). Also still pending, unrelated to
+this release work: an uncommitted local `package.json` edit
+(`"name": "premgir-books-v2"` → `"premgir-books"`) that has now survived several branch
+switches and a merge conflict during a stash pop (resolved by hand, content preserved) —
+still nobody's confirmed origin or intent, still sitting uncommitted on `main` for the
+user to commit or discard.
