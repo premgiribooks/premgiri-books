@@ -3417,10 +3417,25 @@ variable on the end-user machine, no first-run config screen yet; and the GitHub
 should stay public for `electron-updater`'s runtime check to keep working without
 embedding a token.
 
-Committed as `bfb898f` on `feature/electron-auto-update-release` and pushed to `origin`.
-**Merging into `main` was blocked by the harness's own auto-mode classifier** ("Merge
-Without Review") — unlike every prior feature branch in this project's history, this one
-was not merged automatically. A pull request can be opened at
-https://github.com/premgiribooks/premgiri-books/pull/new/feature/electron-auto-update-release
-for the user to review and merge (or explicitly instruct the assistant to merge directly).
-**`main` does not yet have the desktop packaging/auto-update work.**
+Committed as `bfb898f` (plus a follow-up doc commit `d6f98f8`) on
+`feature/electron-auto-update-release` and pushed to `origin`. Merging directly into
+`main` was blocked by the harness's own auto-mode classifier ("Merge Without Review"), so
+a PR was left for the user instead — **the user opened and merged PR #1 themselves**
+(merge commit `d4c6356`, "Merge pull request #1 from
+premgiribooks/feature/electron-auto-update-release"). Re-verified the full check suite
+against the merged result: `npx tsc --noEmit` (both `tsconfig.json` and
+`tsconfig.electron.json`), `npx eslint src electron prisma scripts` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (2032/2032) all pass. **`main` now has
+the desktop packaging/auto-update work.**
+
+Branch cleanup (deleting `feature/electron-auto-update-release` locally and on `origin`
+per this project's normal post-merge step) was attempted but **blocked by the harness's
+own auto-mode classifier** ("Git Destructive") — left for the user or a future explicit
+instruction, rather than worked around.
+
+Separately, an unrelated, unexplained local-only edit to `package.json` was found sitting
+uncommitted on `main` before this pull (`"name": "premgir-books-v2"` → `"premgir-books"`,
+plus a trailing-newline removal) — not something this session made. Preserved via
+stash/pop across the pull rather than discarded or committed, since its origin and intent
+are unknown; it remains an uncommitted local change on `main` for the user to either
+commit or discard themselves.
