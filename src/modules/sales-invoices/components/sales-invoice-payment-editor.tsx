@@ -7,8 +7,10 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding-balance";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { numericFieldWidth } from "@/lib/utils";
+import { getLedgerOutstandingBalanceAction } from "@/modules/sales-invoices/actions/sales-invoice-actions";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import type { CreateSalesInvoiceInput } from "@/modules/sales-invoices/validation/sales-invoice-schema";
 import type { SalesInvoicePaymentLedgerOption } from "@/types/sales-invoice";
@@ -70,6 +72,10 @@ export function SalesInvoicePaymentEditor({ paymentLedgers, grandTotal }: SalesI
                             placeholder="Select a ledger"
                           />
                         </FormControl>
+                        <LedgerOutstandingBalance
+                          ledgerId={ledgerField.value || undefined}
+                          fetchBalance={getLedgerOutstandingBalanceAction}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}

@@ -426,6 +426,19 @@ all pass; `/accounting/journal-vouchers*` appears in the build route table. Not 
 browser-verified (no browser tool available this session). Committed (`68042e8`) — see
 `context/progress-tracker.md`'s Current Phase entry for the full implementation record.
 
+**Outstanding-balance display added to Payment Voucher and Receipt Voucher, 2026-09-13**
+(cross-phase enhancement, not a new tracker item — also touches Sales Invoice/Phase 3
+and Purchase Invoice/Phase 4's own forms; full record in
+`context/progress-tracker.md`'s "Outstanding-balance display" dated entry). Per explicit
+user request, selecting any ledger on either form's ledger picker now shows an inline
+"Outstanding: 1,234.56 Dr/Cr" hint, backed by the pre-existing
+`voucherQueries.getLedgerBalance` primitive via a new `paymentVoucherService.
+getLedgerOutstandingBalance` (shared by both forms) and a new shared
+`src/components/common/ledger-outstanding-balance.tsx` component. Browser-verified live
+(Payment Voucher's "Paid From"/"Paid To" and Receipt Voucher's "Received In"/"Received
+From" all confirmed, zero console errors); not yet committed pending code/security
+review.
+
 ---
 
 # Phase 8 — GST

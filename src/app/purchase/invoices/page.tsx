@@ -87,6 +87,7 @@ export default async function PurchaseInvoiceListPage({ searchParams }: Purchase
             name: supplier.ledger.name,
             isActive: supplier.isActive,
             creditDays: supplier.creditDays,
+            ledgerId: supplier.ledgerId,
           }))}
         />
 

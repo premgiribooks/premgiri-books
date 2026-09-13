@@ -19,7 +19,7 @@ type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
 const SUPPLIER_INCLUDE = {
   supplier: {
-    select: { id: true, isActive: true, creditDays: true, ledger: { select: { name: true } } },
+    select: { id: true, isActive: true, creditDays: true, ledgerId: true, ledger: { select: { name: true } } },
   },
 } as const;
 
@@ -94,9 +94,15 @@ const PURCHASE_INVOICE_DECIMAL_FIELDS = [
 // sales-invoice-repository.ts convention, extended with a second pass for
 // the nullable overridden* item columns (null stays null).
 function toSupplierOption(
-  raw: { id: string; isActive: boolean; creditDays: number | null; ledger: { name: string } }
+  raw: { id: string; isActive: boolean; creditDays: number | null; ledgerId: string; ledger: { name: string } }
 ): PurchaseInvoiceSupplierOption {
-  return { id: raw.id, name: raw.ledger.name, isActive: raw.isActive, creditDays: raw.creditDays };
+  return {
+    id: raw.id,
+    name: raw.ledger.name,
+    isActive: raw.isActive,
+    creditDays: raw.creditDays,
+    ledgerId: raw.ledgerId,
+  };
 }
 
 function toPurchaseInvoiceListRow(raw: PurchaseInvoiceListRowRaw): PurchaseInvoiceListRow {

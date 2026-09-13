@@ -5,8 +5,9 @@ import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
+import { voucherQueries } from "@/engines/voucher/voucher-queries";
 import { toPaise } from "@/engines/voucher/voucher-validation";
-import type { PostedVoucher, VoucherListFilters } from "@/engines/voucher/types";
+import type { LedgerBalanceResult, PostedVoucher, VoucherListFilters } from "@/engines/voucher/types";
 import { CASH_IN_HAND_GROUP_NAME } from "@/modules/ledger-groups/constants/default-groups";
 import { ledgerGroupRepository } from "@/modules/ledger-groups/repositories/ledger-group-repository";
 import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
@@ -96,6 +97,21 @@ export const paymentVoucherService = {
       name: ledger.name,
       isCashOrBank: cashGroupIds.has(ledger.ledgerGroupId) || ledger.bankAccount !== null,
     }));
+  },
+
+  /**
+   * The Create form's inline "outstanding balance" display, called whenever
+   * the user selects any ledger — a thin pass-through to
+   * `voucherQueries.getLedgerBalance` (already company-scoped: it throws
+   * for a ledger id belonging to another company). Shared by both Payment
+   * Voucher and Receipt Voucher's forms, exactly like `listLedgerOptions`
+   * above already is (see `receipt-vouchers/new/page.tsx`'s own reuse of
+   * this service).
+   */
+  async getLedgerOutstandingBalance(ledgerId: string): Promise<LedgerBalanceResult> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, MODULE, "view");
+    return voucherQueries.getLedgerBalance(user.companyId, ledgerId);
   },
 
   /**

@@ -13,6 +13,8 @@ import { gstEngine } from "@/engines/gst/gst-engine";
 import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engines/gst/types";
 import { inventoryEngine } from "@/engines/inventory/inventory-engine";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
+import { voucherQueries } from "@/engines/voucher/voucher-queries";
+import type { LedgerBalanceResult } from "@/engines/voucher/types";
 import type { VoucherEntryLineInput } from "@/engines/voucher/voucher-validation";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { CASH_IN_HAND_GROUP_NAME } from "@/modules/ledger-groups/constants/default-groups";
@@ -687,6 +689,30 @@ export const purchaseInvoiceService = {
     return invoice;
   },
 
+  /**
+   * The Create/Edit form's inline "outstanding balance" display, called
+   * whenever the user selects a Supplier or a payment ledger — a thin
+   * pass-through to `voucherQueries.getLedgerBalance` (already
+   * company-scoped: it throws for a ledger id belonging to another
+   * company). Gated on `purchase`/`view` **and** `accounting`/`view` —
+   * mirrors sales-invoice-service.ts's identical fix: a plain
+   * `purchase`/`view` check alone would let any Purchase-scoped role read
+   * the real-time balance of an arbitrary ledger id in the company, not
+   * just this form's own Supplier/payment-ledger candidates, contradicting
+   * this codebase's posture that a ledger's financial balance is
+   * Accounting-only data. Costs nothing in practice: this form's own
+   * payment-ledger options already come from a query gated on
+   * `accounting`/`view`. Found and fixed per security review (HIGH —
+   * object-level authorization gap on the new ledgerId-scoped Server
+   * Action).
+   */
+  async getLedgerOutstandingBalance(ledgerId: string): Promise<LedgerBalanceResult> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "purchase", "view");
+    await assertPermission(user, "accounting", "view");
+    return voucherQueries.getLedgerBalance(user.companyId, ledgerId);
+  },
+
   async listPurchaseInvoiceFormOptions(): Promise<PurchaseInvoiceFormOptions> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "purchase", "view");
@@ -696,7 +722,7 @@ export const purchaseInvoiceService = {
     const [suppliers, products, warehouses, groups, paymentLedgerCandidates, companyStateCode, settings, preview] = await Promise.all([
       prisma.supplier.findMany({
         where: { companyId: user.companyId, isActive: true },
-        select: { id: true, isActive: true, creditDays: true, ledger: { select: { name: true } } },
+        select: { id: true, isActive: true, creditDays: true, ledgerId: true, ledger: { select: { name: true } } },
         orderBy: { ledger: { name: "asc" } },
       }),
       purchaseInvoiceRepository.findInvoiceableProducts(user.companyId),
@@ -723,6 +749,7 @@ export const purchaseInvoiceService = {
         name: supplier.ledger.name,
         isActive: supplier.isActive,
         creditDays: supplier.creditDays,
+        ledgerId: supplier.ledgerId,
       })),
       products,
       warehouses,

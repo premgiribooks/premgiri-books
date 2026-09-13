@@ -13,6 +13,8 @@ import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engi
 import { inventoryEngine } from "@/engines/inventory/inventory-engine";
 import { pricingEngine } from "@/engines/pricing/pricing-engine";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
+import { voucherQueries } from "@/engines/voucher/voucher-queries";
+import type { LedgerBalanceResult } from "@/engines/voucher/types";
 import type { VoucherEntryLineInput } from "@/engines/voucher/voucher-validation";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import {
@@ -742,6 +744,33 @@ export const salesInvoiceService = {
     return invoice;
   },
 
+  /**
+   * The Create/Edit form's inline "outstanding balance" display, called
+   * whenever the user selects a Customer or a payment ledger — a thin
+   * pass-through to `voucherQueries.getLedgerBalance` (already
+   * company-scoped: it throws for a ledger id belonging to another
+   * company). Gated on `sales`/`view` **and** `accounting`/`view` — a plain
+   * `sales`/`view` check alone would let any Sales-scoped role read the
+   * real-time balance of an arbitrary ledger id in the company (any Bank,
+   * Capital, or Expense ledger, not just this form's own Customer/payment-
+   * ledger candidates), which contradicts this codebase's own posture that
+   * a ledger's financial balance is Accounting-only data (every other
+   * ledger-balance read — Ledger Master, Trial Balance,
+   * `ledgerService.listSelectableLedgers` itself — gates on
+   * `accounting`/`view`). In practice this costs nothing: this form's own
+   * payment-ledger options already come from `listSelectableLedgers`, which
+   * already requires `accounting`/`view` to load at all, so a caller who
+   * can reach this form already holds both permissions. Found and fixed
+   * per security review (HIGH — object-level authorization gap on the new
+   * ledgerId-scoped Server Action).
+   */
+  async getLedgerOutstandingBalance(ledgerId: string): Promise<LedgerBalanceResult> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+    await assertPermission(user, "accounting", "view");
+    return voucherQueries.getLedgerBalance(user.companyId, ledgerId);
+  },
+
   async listSalesInvoiceFormOptions(): Promise<SalesInvoiceFormOptions> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "sales", "view");
@@ -768,6 +797,7 @@ export const salesInvoiceService = {
         name: customer.ledger.name,
         isActive: customer.isActive,
         creditLimit: customer.creditLimit,
+        ledgerId: customer.ledgerId,
       })),
       products,
       warehouses,

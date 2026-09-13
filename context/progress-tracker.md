@@ -3228,3 +3228,96 @@ Payment Mode Master (#83).** Not yet manually clicked-through by the user (only
 Playwright-automated browser verification has happened so far). **Next Up: begin
 drafting spec 88 (#84, Payment Mode Integration — Sales Documents), or await the user's
 next instruction**, per `ai-workflow-rules.md`'s one-feature-at-a-time rule.
+
+## 2026-09-13 — Outstanding-balance display added to Payment/Receipt Voucher and Sales/Purchase Invoice
+
+Per explicit user request ("do some changes in payment show outstanding amount also when
+i select any ledger or customer"), clarified via a scoping question to
+`"Payment Voucher & Receipt Voucher"` + `"Sales Invoice & Purchase Invoice"` (the
+Recommended "both" option). Not tied to any feature-spec number — a UI enhancement
+layered on top of already-implemented specs 52 (Payment Voucher), 53 (Receipt Voucher),
+38 (Sales Invoice), and 44 (Purchase Invoice), on branch
+`feature/outstanding-balance-display` (cut from `main` after the Payment Mode Master
+merge above — a process slip: the first few edits were made directly on `main` before
+this branch was cut, corrected by `git checkout -b` before anything was committed, so
+`main` itself was never touched).
+
+**What it does**: whenever a ledger, Customer, or Supplier is selected on one of these
+four forms, an inline "Outstanding: 1,234.56 Dr/Cr" (or "Outstanding Receivable"/
+"Outstanding Payable" for the Customer/Supplier picker specifically) hint appears below
+the picker — read-only, display-only, never blocking submission.
+
+**Implementation**: a single shared primitive, `voucherQueries.getLedgerBalance`
+(already existed, previously only consumed by Trial Balance and the ERP Dashboard's Cash
+& Bank tile) — Customer/Supplier are each a strict 1:1 Ledger extension
+(`customer.ledgerId`/`supplier.ledgerId`), so "a customer's outstanding balance" and "a
+ledger's outstanding balance" are literally the same query, no new business logic
+needed. Added `getLedgerOutstandingBalance(ledgerId)` to `paymentVoucherService`
+(shared by both Payment and Receipt Voucher's forms, exactly like `listLedgerOptions`
+already is), `salesInvoiceService`, and `purchaseInvoiceService` — each a thin,
+permission-gated pass-through (`accounting:view`/`sales:view`/`purchase:view`
+respectively, matching whichever module's permission the calling form already requires,
+deliberately not `accounting:view` uniformly, so a sales- or purchase-only role isn't
+newly blocked from a feature their own document-creation screen now shows). A new shared
+client component, `src/components/common/ledger-outstanding-balance.tsx`, renders the
+hint given a `ledgerId` and the caller's own Server Action; wired into six places:
+Payment Voucher's "Paid From"/"Paid To" lines, Receipt Voucher's "Received In"/"Received
+From" lines, Sales Invoice's Customer picker + payment lines, and Purchase Invoice's
+Supplier picker + payment lines. `SalesInvoiceCustomerOption`/`PurchaseInvoiceSupplierOption`
+gained a `ledgerId` field (additive, non-breaking) so the Customer/Supplier picker can
+resolve to a ledger id without a second lookup; every existing construction site of
+either type (the Create/Edit form options, the list-page filter bars, the repository's
+detail-view builder) was updated to populate it, since it's a required field.
+
+One React lint fix during implementation: the shared component's polling effect
+originally called `setState` synchronously in two branches (`react-hooks/set-state-in-effect`)
+— fixed by deriving the "no ledger selected" case from a render-time `!ledgerId` check
+instead of an effect-driven reset, and deferring the "loading" `setState` via
+`setTimeout(..., 0)`, mirroring `batch-selector.tsx`'s identical existing convention.
+
+`npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2 pre-existing unrelated
+warnings), `npx vitest run` (2001/2001, +3 new: one `getLedgerOutstandingBalance` test
+per service, asserting the correct permission module and the company-scoped
+pass-through), and `next build` all pass.
+
+**Browser-verified live (Playwright) for Payment Voucher and Receipt Voucher only** —
+confirmed the outstanding balance renders correctly for both the Cash/Bank picker and
+each payment line, with the correct Dr/Cr sign, zero console errors. **Sales Invoice and
+Purchase Invoice's own New-document pages could not be live-verified this session**: this
+local dev database holds the user's real company data (two real companies, "Baba
+Premgiri Paints" and "BABA PREMGIRI WORKSHOP" — not seed/test fixtures), and neither has
+a Financial Year currently marked `isCurrent` (required by `requireFinancialYear()` for
+these two document types specifically, unrelated to this change), which 500s their
+New-document pages before this feature's own code ever runs. Deliberately did **not**
+mutate `FinancialYear.isCurrent` to work around this, since that's a real business-state
+change to the user's own data, not something to flip as a side effect of a UI
+verification pass. The identical component/wiring pattern is already proven live on
+Payment/Receipt Voucher; Sales/Purchase Invoice's own service-level tests (permission
+gate + pass-through) pass, but the actual rendered form has not been clicked through.
+**Flagging for the user**: select (or ask to have selected) a current Financial Year for
+whichever company should be used for testing, then this can be verified end-to-end.
+
+Committed as `737a21d` on `feature/outstanding-balance-display`. **Code review + security
+review (parallel subagents) both independently found the same HIGH finding**: the new
+Sales/Purchase Invoice `getLedgerOutstandingBalance` methods, gated only on
+`sales:view`/`purchase:view` respectively, let any Sales- or Purchase-scoped role read
+the real-time balance of an *arbitrary* ledger id in the company via the Server Action —
+not just the invoice's own Customer/Supplier or payment-ledger candidates — contradicting
+this codebase's own posture that ledger-balance data is Accounting-only (every other
+ledger-balance read path gates on `accounting:view`; the reserved `Sales`/`Purchase` roles
+deliberately exclude it). **Fixed**: both methods now additionally require
+`accounting:view` (paired with the module's own `view`, mirroring the ERP Dashboard's
+existing Cash & Bank tile precedent of pairing permissions for a sensitive cross-module
+read) — costs nothing in practice, since each form's own payment-ledger options already
+require `accounting:view` to load. Two new denial tests added (one per service). Code
+review also found a **MEDIUM**: the shared `LedgerOutstandingBalance` component's state
+wasn't tagged with the `ledgerId` it was fetched for, so switching between two
+already-resolved ledgers could briefly paint the *previous* ledger's balance under the
+newly-selected one. **Fixed**: every non-idle `BalanceState` variant now carries its own
+`ledgerId`, and the render guard requires `state.ledgerId === ledgerId` before treating
+it as current. Re-verified: `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`
+(2003/2003, +2 from the new denial tests), and `next build` all pass; re-verified live
+(Playwright) on Payment Voucher's "Paid To" line — switching between two ledgers shows
+no stale/duplicate balance, zero console errors. Sales/Purchase Invoice's own forms still
+await live verification (same Financial Year precondition as above) — the fix is
+covered by the two new unit tests but not yet clicked through in a browser.

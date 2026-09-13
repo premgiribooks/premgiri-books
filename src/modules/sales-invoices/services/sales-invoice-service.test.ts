@@ -37,6 +37,7 @@ const {
   cancelVoucherMock,
   recordMovementsMock,
   resolvePriceMock,
+  getLedgerBalanceMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -71,6 +72,7 @@ const {
   cancelVoucherMock: vi.fn(),
   recordMovementsMock: vi.fn(),
   resolvePriceMock: vi.fn(),
+  getLedgerBalanceMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -108,6 +110,9 @@ vi.mock("@/engines/document-number/document-number-engine", () => ({
 vi.mock("@/engines/pricing/pricing-engine", () => ({ pricingEngine: { resolvePrice: resolvePriceMock } }));
 vi.mock("@/engines/voucher/voucher-engine", () => ({
   voucherEngine: { postVoucher: postVoucherMock, cancelVoucher: cancelVoucherMock },
+}));
+vi.mock("@/engines/voucher/voucher-queries", () => ({
+  voucherQueries: { getLedgerBalance: getLedgerBalanceMock },
 }));
 vi.mock("@/engines/inventory/inventory-engine", () => ({
   inventoryEngine: { recordMovements: recordMovementsMock },
@@ -297,6 +302,7 @@ beforeEach(() => {
   cancelVoucherMock.mockReset();
   recordMovementsMock.mockReset();
   resolvePriceMock.mockReset();
+  getLedgerBalanceMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
@@ -788,5 +794,46 @@ describe("getDeliveryChallanPrefill", () => {
       expect.objectContaining({ deliveryChallanId: DELIVERY_CHALLAN_ID, customerId: CUSTOMER_ID })
     );
     expect(result?.lines[0]).toEqual(expect.objectContaining({ productId: PRODUCT_ID, quantity: 2 }));
+  });
+});
+
+// The Create/Edit form's inline outstanding-balance display, called for both
+// the selected Customer's own ledger and any payment-line ledger. Gated on
+// BOTH sales/view and accounting/view — a plain sales/view check alone would
+// let a sales-only role read any same-company ledger's balance via a
+// crafted ledgerId, not just this form's own Customer/payment-ledger
+// candidates (security review HIGH finding, fixed here).
+describe("getLedgerOutstandingBalance", () => {
+  it("asserts BOTH sales/view and accounting/view, then delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
+    const balance = {
+      ledgerId: CUSTOMER_LEDGER_ID,
+      openingBalance: 0,
+      openingBalanceType: "DEBIT" as const,
+      totalDebit: 236,
+      totalCredit: 0,
+      netMovement: 236,
+      closingBalance: 236,
+    };
+    getLedgerBalanceMock.mockResolvedValue(balance);
+
+    const result = await salesInvoiceService.getLedgerOutstandingBalance(CUSTOMER_LEDGER_ID);
+
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "sales", "view");
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "accounting", "view");
+    expect(getLedgerBalanceMock).toHaveBeenCalledWith(COMPANY_ID, CUSTOMER_LEDGER_ID);
+    expect(result).toEqual(balance);
+  });
+
+  it("rejects when the caller has sales/view but not accounting/view", async () => {
+    assertPermissionMock.mockImplementation(async (_user, mod, action) => {
+      if (mod === "accounting" && action === "view") {
+        throw new AppError("You do not have permission to view accounting.");
+      }
+    });
+
+    await expect(salesInvoiceService.getLedgerOutstandingBalance(CUSTOMER_LEDGER_ID)).rejects.toThrow(
+      "You do not have permission to view accounting."
+    );
+    expect(getLedgerBalanceMock).not.toHaveBeenCalled();
   });
 });

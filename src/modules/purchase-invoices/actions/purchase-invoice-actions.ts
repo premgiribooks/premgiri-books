@@ -7,6 +7,7 @@ import type {
   PreviewPurchaseInvoiceInput,
   UpdatePurchaseInvoiceInput,
 } from "@/modules/purchase-invoices/validation/purchase-invoice-schema";
+import type { LedgerBalanceResult } from "@/engines/voucher/types";
 import type { ActionResult } from "@/types/api";
 import type { GoodsReceiptNotePrefill, PurchaseInvoiceDetail, PurchaseInvoicePreview } from "@/types/purchase-invoice";
 
@@ -63,4 +64,12 @@ export async function previewPurchaseInvoiceAction(
   input: PreviewPurchaseInvoiceInput
 ): Promise<ActionResult<PurchaseInvoicePreview>> {
   return runAction(() => purchaseInvoiceService.previewPurchaseInvoice(input), []);
+}
+
+// Read-only — no revalidation. Backs the Create/Edit form's inline
+// outstanding-balance display for the selected Supplier/payment ledger.
+export async function getLedgerOutstandingBalanceAction(
+  ledgerId: string
+): Promise<ActionResult<LedgerBalanceResult>> {
+  return runAction(() => purchaseInvoiceService.getLedgerOutstandingBalance(ledgerId), []);
 }

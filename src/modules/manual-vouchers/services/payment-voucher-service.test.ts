@@ -14,6 +14,7 @@ const {
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
   assertPermissionMock,
+  getLedgerBalanceMock,
 } = vi.hoisted(() => ({
   postVoucherMock: vi.fn(),
   cancelVoucherMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
   assertPermissionMock: vi.fn(),
+  getLedgerBalanceMock: vi.fn(),
 }));
 
 vi.mock("@/engines/voucher/voucher-engine", () => ({
@@ -34,6 +36,9 @@ vi.mock("@/engines/voucher/voucher-engine", () => ({
     getVoucher: getVoucherMock,
     listVouchers: listVouchersMock,
   },
+}));
+vi.mock("@/engines/voucher/voucher-queries", () => ({
+  voucherQueries: { getLedgerBalance: getLedgerBalanceMock },
 }));
 vi.mock("@/lib/ledger-class", () => ({ assertLedgersAreCashOrBank: assertLedgersAreCashOrBankMock }));
 vi.mock("@/lib/current-user", () => ({ getCurrentCompanyUser: getCurrentCompanyUserMock }));
@@ -79,6 +84,7 @@ beforeEach(() => {
   getCurrentCompanyUserMock.mockReset().mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockReset().mockResolvedValue({ id: FY_ID });
   assertPermissionMock.mockReset().mockResolvedValue(undefined);
+  getLedgerBalanceMock.mockReset();
 });
 
 describe("postPaymentVoucher — entry shape", () => {
@@ -245,5 +251,28 @@ describe("listPaymentVouchers", () => {
       COMPANY_ID,
       expect.objectContaining({ voucherType: "PAYMENT", financialYearId: FY_ID })
     );
+  });
+});
+
+// Shared by both Payment Voucher and Receipt Voucher's forms — see
+// receipt-vouchers/new/page.tsx's own reuse of listLedgerOptions.
+describe("getLedgerOutstandingBalance", () => {
+  it("asserts accounting/view and delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
+    const balance = {
+      ledgerId: CASH_LEDGER_ID,
+      openingBalance: 0,
+      openingBalanceType: "DEBIT" as const,
+      totalDebit: 500,
+      totalCredit: 200,
+      netMovement: 300,
+      closingBalance: 300,
+    };
+    getLedgerBalanceMock.mockResolvedValue(balance);
+
+    const result = await paymentVoucherService.getLedgerOutstandingBalance(CASH_LEDGER_ID);
+
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "accounting", "view");
+    expect(getLedgerBalanceMock).toHaveBeenCalledWith(COMPANY_ID, CASH_LEDGER_ID);
+    expect(result).toEqual(balance);
   });
 });
