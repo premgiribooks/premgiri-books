@@ -3473,3 +3473,45 @@ attempted (merging without review is blocked at the harness level for this sessi
 PR can be opened at
 https://github.com/premgiribooks/premgiri-books/pull/new/feature/electron-fixed-port-and-ci
 for the user to review and merge. **`main` does not yet have this change.**
+
+**Update, same day**: the user merged this as PR #2 (`0dce37c`) before the CI fix below
+landed — see the next entry.
+
+## 2026-09-13 — CI build failure fixed: dangling pnpm virtual-store symlink in standalone output
+
+The user's own `.github/workflows/build.yml` (added above) caught a real bug within
+minutes of being merged: both the PR's own `pull_request`-triggered run and the
+post-merge `push`-to-`main` run failed at the `pnpm run build` step. Diagnosed by
+authenticating to the GitHub API with the locally stored git credential (the repo is
+**private** — confirmed via `GET /repos/premgiribooks/premgiri-books`, relevant to the
+existing `docs/release-process.md` note about `electron-updater` needing a token for
+private-repo runtime update checks) and pulling the failing job's raw log, since the log
+the user pasted into chat was truncated to just the setup/teardown boilerplate and didn't
+include the actual error.
+
+Real error: `Error: ENOENT: no such file or directory, realpath
+'.../.next/standalone/node_modules/.pnpm/node_modules/semver'` — thrown by
+`scripts/prepare-standalone.mjs`'s `dereferenceSymlinkedPackages`, which had assumed every
+symlink Next's tracer left behind would resolve via `realpath()`. That held on this
+project's Windows dev machine (where the desktop-packaging phase's own testing happened)
+but not on CI's fresh Linux `pnpm install`: `node_modules/.pnpm/node_modules/<pkg>` is
+pnpm's own internal flat-resolution compatibility layer (not any package's real install
+location), and it can be dangling depending on the pnpm store's state.
+
+Fixed on a fresh `fix/ci-standalone-symlink-fallback` branch (cut from `main` after the
+PR #2 merge, cherry-picking just this one commit rather than re-including already-merged
+work): `dereferenceSymlinkedPackages` now falls back to resolving the same package name
+from this project's own node_modules (the same `require.resolve`-based approach already
+used for patching next's own runtime dependencies) when `realpath()` fails, only dropping
+the link with a logged warning if that also fails. Verified locally with a full clean
+`next build` + `prepare-standalone.mjs` run (0 symlinks remaining, standalone server
+boots and serves the login page on the new fixed port 8903) — the exact dangling-symlink
+scenario itself couldn't be reproduced locally (this sandboxed shell can't create
+symlinks at all, `ln -s` fails with ENOENT even for a trivial self-test), so the real
+proof is the next CI run against this fix.
+
+`npx tsc --noEmit` (both configs), `npx eslint src electron prisma scripts` (0 errors,
+same 2 pre-existing warnings), `npx vitest run` (2034/2034) all pass. Committed as
+`15f9663` on `fix/ci-standalone-symlink-fallback`, pushed to `origin`. A PR can be opened
+at https://github.com/premgiribooks/premgiri-books/pull/new/fix/ci-standalone-symlink-fallback
+for the user to review and merge — **`main`'s build is currently red until this merges.**
