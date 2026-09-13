@@ -3321,3 +3321,11 @@ it as current. Re-verified: `npx tsc --noEmit`, `npx eslint src prisma`, `npx vi
 no stale/duplicate balance, zero console errors. Sales/Purchase Invoice's own forms still
 await live verification (same Financial Year precondition as above) — the fix is
 covered by the two new unit tests but not yet clicked through in a browser.
+
+Pushed `feature/outstanding-balance-display` to `origin`, merged `--no-ff` into `main`
+(clean merge, no conflicts; re-ran `npx tsc --noEmit` / `npx eslint src prisma` / `npx
+vitest run` 2003/2003 / `next build` against the merged result, all pass — one stale
+`.next/dev/types/*` artifact from an earlier killed dev server caused a spurious `tsc`
+failure, resolved by deleting `.next` and regenerating), pushed `main` (`70d0db0..1fa9b9b`),
+and deleted the branch locally and on `origin`. **`main` now has the outstanding-balance
+feature.**
