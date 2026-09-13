@@ -1889,8 +1889,19 @@ is rejected with the friendly per-company error toast, edited it (name → "Cash
 ledgerClass `CASH` → `ANY`) and confirmed the change persisted, toggled Deactivate/
 Activate and confirmed the status badge flipped both ways, and confirmed the Accounting
 hub's new Payment Modes card links correctly — zero console errors throughout. Test rows
-created during verification were deleted afterward; no code review/security review has
-been requested yet for this feature.
+created during verification were deleted afterward.
+
+**Code review: APPROVE, 0 CRITICAL/HIGH/MEDIUM, 1 LOW (cosmetic).** The one LOW —
+`CreditCard` inserted out of alphabetical order in `navigation.ts`'s lucide-react import
+block — was fixed immediately. Review confirmed the "delete" vs "edit" permission-gate
+deviation is applied uniformly across service/tests/UI, and cross-tenant scoping matches
+`unit-repository.ts`'s identical pattern exactly, with test coverage matching every
+bullet in the spec's Code Standards section. **Security review: 0 CRITICAL/HIGH/MEDIUM/
+LOW across every category checked** (cross-tenant isolation, authorization, input
+validation, Server Action trust boundary, error-message sanitization, injection) — no
+findings at all. Both reviews ran in parallel against commit `cd3a619`.
+Re-verified after the LOW fix: `npx tsc --noEmit` and `npx eslint src/config/navigation.ts`
+both clean.
 
 | Tracker # | Feature                                        | Depends On                                              | Status |
 | --------- | ----------------------------------------------- | -------------------------------------------------------- | ------ |

@@ -3212,13 +3212,16 @@ module layout, the resolved Bank-Management-gating discrepancy, test coverage, a
 browser verification — is in `context/Phases/phase-tracker.md`'s Phase 11 section
 (search "Payment Mode Master (#83, spec 86) implemented"); not duplicated here.
 
-**Not yet committed to git** (this entry itself records the implementation, matching
-this file's "record the moment a feature is implemented, not only once fully shipped"
-rule) — no code review or security review has been run yet either. **Next Up: commit
-this feature, then decide with the user whether to request code-reviewer/
-security-reviewer passes before merging** (the Payment Mode module writes company-scoped
-master data only — no payment-capturing document is touched by this spec — but it does
-add a new company-scoped table and permission-gated mutations, so a security pass is
-still worth doing before merge per this project's own Security Review Triggers), **or to
-continue straight to drafting spec 88 (#84, Payment Mode Integration — Sales Documents)**,
-per `ai-workflow-rules.md`'s one-feature-at-a-time rule.
+Committed as `cd3a619` on `feature/payment-mode-master`. **Code review (parallel
+subagent): APPROVE, 0 CRITICAL/HIGH/MEDIUM, 1 LOW** (a cosmetic import-ordering nit in
+`navigation.ts` — fixed immediately, re-verified clean). **Security review (parallel
+subagent): 0 findings across every category** (cross-tenant isolation, authorization,
+input validation, Server Action trust boundary, error sanitization, injection) — both
+reviews explicitly confirmed the "delete"-not-"edit" permission-gate deviation is applied
+consistently and is not a vulnerability.
+
+**Not yet pushed, merged into `main`, or manually clicked-through by the user** (only
+Playwright-automated browser verification has happened so far). **Next Up: push this
+branch, merge into `main` per the one-branch-at-a-time git workflow, then either begin
+drafting spec 88 (#84, Payment Mode Integration — Sales Documents) or await the user's
+next instruction**, per `ai-workflow-rules.md`'s one-feature-at-a-time rule.
