@@ -7,11 +7,14 @@
     "dev": "concurrently -k -n next,electron \"pnpm:dev:next\" \"pnpm:dev:electron\"",
     "dev:next": "next dev",
     "dev:electron": "tsc -p tsconfig.electron.json && wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .",
-    "build": "next build && tsc -p tsconfig.electron.json",
+    "build": "next build && node scripts/prepare-standalone.mjs && node scripts/build-electron.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dist:dir": "pnpm build && electron-builder --dir",
+    "dist": "pnpm build && electron-builder",
+    "release": "pnpm build && electron-builder --publish always"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -24,6 +27,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.12",
+    "electron-updater": "^6.8.9",
     "jsdom": "^29.1.1",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
@@ -53,6 +57,7 @@
     "dotenv": "^17.4.2",
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "prisma": "^7.8.0",
@@ -62,5 +67,57 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.10",
     "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.premgiribooks.books-erp",
+    "productName": "Premgiri Books ERP",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/standalone",
+        "to": "standalone",
+        "filter": ["**/*", "!.env", "!.env.*", "!**/.env"]
+      },
+      {
+        "from": ".next/standalone/node_modules",
+        "to": "standalone/node_modules",
+        "filter": ["**/*"]
+      }
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "premgiribooks",
+      "repo": "premgiri-books"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office"
+    }
   }
 }

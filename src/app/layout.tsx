@@ -9,6 +9,7 @@ import { BranchProvider } from "@/components/providers/branch-provider";
 import { NavPermissionsProvider } from "@/components/providers/nav-permissions-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { UpdateNotification } from "@/components/common/update-notification";
 import { getCurrentUserOrNull } from "@/lib/current-user";
 import { getCurrentCompany } from "@/lib/current-company";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
@@ -56,6 +57,7 @@ export default async function RootLayout({
                   <BranchProvider initialBranch={currentBranch}>
                     <TooltipProvider>{children}</TooltipProvider>
                     <Toaster />
+                    <UpdateNotification />
                   </BranchProvider>
                 </FinancialYearProvider>
               </CompanyProvider>

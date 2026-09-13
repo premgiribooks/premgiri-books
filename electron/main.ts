@@ -1,12 +1,43 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import { installApplicationMenu } from "./menu";
+import { createElectronLogger, type Logger } from "./logger";
+import { startNextServer, type RunningServer } from "./server";
+import { checkForUpdatesOnStartup, initializeAutoUpdater } from "./updater";
 
 const DEV_SERVER_URL = "http://localhost:3000";
 
 const isDev = !app.isPackaged;
 
-function createMainWindow(): BrowserWindow {
+let logger: Logger;
+let runningServer: RunningServer | null = null;
+
+/**
+ * In dev, Electron loads the separately-running `next dev` server. In a
+ * packaged build there is no dev server — the bundled Next.js standalone
+ * server (see ./server.ts) is spawned once and reused across window
+ * recreations (e.g. the macOS dock "activate" flow below).
+ */
+async function resolveAppUrl(): Promise<string> {
+  if (isDev) {
+    return DEV_SERVER_URL;
+  }
+
+  if (!runningServer) {
+    runningServer = await startNextServer(
+      {
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        projectRoot: app.getAppPath(),
+      },
+      logger,
+    );
+  }
+
+  return runningServer.url;
+}
+
+async function createMainWindow(): Promise<BrowserWindow> {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -18,13 +49,12 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  if (isDev) {
-    void mainWindow.loadURL(DEV_SERVER_URL);
-  } else {
-    void mainWindow.loadFile(path.join(__dirname, "../out/index.html"));
-  }
+  const url = await resolveAppUrl();
+  await mainWindow.loadURL(url);
 
   registerBackForwardNavigation(mainWindow);
+  initializeAutoUpdater(mainWindow, logger);
+  checkForUpdatesOnStartup();
 
   return mainWindow;
 }
@@ -69,13 +99,23 @@ function registerBackForwardNavigation(window: BrowserWindow): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  logger = createElectronLogger(app.getPath("userData"));
   installApplicationMenu();
-  createMainWindow();
+
+  try {
+    await createMainWindow();
+  } catch (error) {
+    logger.error({ error }, "Failed to start the local application server");
+    app.quit();
+    return;
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+      createMainWindow().catch((error: unknown) => {
+        logger.error({ error }, "Failed to recreate the main window on activate");
+      });
     }
   });
 });
@@ -84,4 +124,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  runningServer?.stop();
 });

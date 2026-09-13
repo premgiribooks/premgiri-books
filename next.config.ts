@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Electron packages the app as a standalone Node server (see electron/server.ts)
+  // instead of running `next start` against a full node_modules install.
+  output: "standalone",
+  // Output file tracing missed @prisma/adapter-pg entirely (confirmed by
+  // inspecting .next/standalone/node_modules after a real build — Prisma's
+  // generated client requires it in a way static analysis doesn't follow).
+  // Without this, the packaged server throws "Cannot find module
+  // '@prisma/adapter-pg'" the first time it touches the database.
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/@prisma/client/**/*", "./node_modules/@prisma/adapter-pg/**/*"],
+  },
   async headers() {
     return [
       {

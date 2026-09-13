@@ -1,4 +1,5 @@
 import { app, Menu, shell, type MenuItemConstructorOptions } from "electron";
+import { checkForUpdatesManually } from "./updater";
 
 const isMac = process.platform === "darwin";
 
@@ -6,6 +7,13 @@ function buildHelpMenu(): MenuItemConstructorOptions {
   return {
     label: "Help",
     submenu: [
+      {
+        label: "Check for Updates…",
+        click: () => {
+          void checkForUpdatesManually();
+        },
+      },
+      { type: "separator" },
       {
         label: "Toggle Developer Tools",
         role: "toggleDevTools",

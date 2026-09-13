@@ -1,0 +1,48 @@
+name: Release desktop app
+
+# Builds and publishes unsigned installers (see docs/release-process.md) for
+# Windows, macOS, and Linux to GitHub Releases whenever a `v*.*.*` tag is
+# pushed. Each OS builds on its own native runner so macOS's .dmg step
+# (which needs a real macOS host) and Windows' NSIS step both work without
+# cross-compilation.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec prisma generate
+
+      # `next build` only needs DATABASE_URL to satisfy Prisma Client
+      # construction at import time — it does not connect to a live
+      # database during a production build of this app's routes.
+      - run: pnpm run build
+        env:
+          DATABASE_URL: "postgresql://user:password@localhost:5432/premgiri_books?schema=public"
+
+      - run: pnpm exec electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

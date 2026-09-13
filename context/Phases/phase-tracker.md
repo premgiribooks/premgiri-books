@@ -2696,6 +2696,117 @@ branch; still not pushed/merged.
 
 ---
 
+# Desktop Packaging & Auto-Update (2026-09-13)
+
+Per explicit user instruction ("add electron-updater then electron-builder to create
+binary installers and then create GitHub publishing add updater to Electron and also
+make more interactive push notification for update"), on a fresh
+`feature/electron-auto-update-release` branch cut from `main`. Not tied to a numbered
+feature spec — desktop packaging/release infrastructure, not an ERP business module.
+
+**Scope delivered**: `electron-updater` wired into the main process; `electron-builder`
+configured to produce Windows (NSIS), macOS (dmg/zip), and Linux (AppImage/deb)
+installers; a GitHub Actions release workflow (`.github/workflows/release.yml`, one job
+per native OS runner, triggered on `v*.*.*` tags, publishing via
+`electron-builder --publish always`); and an interactive update flow — a native OS
+notification plus an in-app `sonner` toast with "Restart & Install"/"Later" actions when a
+download completes, `autoInstallOnAppQuit` left `true` so "Later" still installs on next
+quit, and a Help-menu "Check for Updates…" item that always answers explicitly (dialog)
+versus the silent startup check that only surfaces toasts for "available"/"downloading"/
+"downloaded" (never nags with "no update"/"error" — this app is offline-first and
+background checks fail routinely when the user has no internet).
+
+**The much bigger, undocumented prerequisite this actually required**: `electron/main.ts`
+had never had a working production code path — it loaded `../out/index.html`, a static
+export that was never generated and can't be for an app built on Server Actions + a live
+Postgres connection. Resolved (confirmed with the user via the recommended option) by
+building `next.config.ts` with `output: "standalone"` and having `electron/server.ts`
+spawn the generated `.next/standalone/server.js` as a child process on a free local port,
+waited on via polling (`waitForServerReady`) before `loadURL`.
+
+**Bugs found only by actually building and launching the packaged app** (not by
+inspection — each of these would have shipped silently otherwise):
+1. `spawn(process.execPath, [entry], ...)` in `electron/server.ts` — inside Electron's
+   main process, `process.execPath` is the Electron binary itself, not a system Node.
+   Without `ELECTRON_RUN_AS_NODE: "1"` in the child's env, the "child process" was a
+   second full Electron app instance, which re-ran `main.ts`, which spawned another
+   "server," recursively — a real fork bomb, caught by watching the process count explode
+   past 30 or so within seconds of the first launch attempt.
+2. electron-builder's default `files`/dependency-walking pulled the *entire* project's
+   devDependency tree (babel, vitest, jsdom's own deps, ...) into `app.asar`, because
+   `next build`'s standalone output needs `output: "standalone"`'s own `node_modules` to
+   ship separately anyway. Fixed by bundling `electron/main.ts` and `electron/preload.ts`
+   with esbuild (`scripts/build-electron.mjs`) into two dependency-free files, then
+   excluding `node_modules` from `files` entirely (`"!node_modules/**/*"`).
+3. electron-builder's `extraResources` copy silently drops any top-level `node_modules`
+   folder from the source path by default — `.next/standalone`'s own `node_modules`
+   (containing `next`, `@prisma/adapter-pg`, `argon2`, etc.) never made it into the
+   packaged app until it was declared as its *own* separate `extraResources` entry
+   (`{"from": ".next/standalone/node_modules", "to": "standalone/node_modules"}`).
+4. Under pnpm, Next's own output-file tracer leaves `.next/standalone/node_modules`'s
+   package directories (at every depth, not just the top level) as symlinks pointing back
+   at *this dev machine's absolute path* — harmless for running the standalone server in
+   place, useless once copied anywhere else. `scripts/prepare-standalone.mjs` now
+   recursively walks and dereferences every symlink into a real copy.
+5. Next's tracer still misses several of `next`'s *own* runtime dependencies entirely
+   under pnpm (`@swc/helpers`, then `@next/env` once the first was patched) — not
+   symlinks, genuinely absent. Rather than patch these one at a time as each surfaced,
+   `prepare-standalone.mjs` now reads `next/package.json`'s own `dependencies` and copies
+   every one of them into `next`'s nested `node_modules`, resolved the same way Node
+   would resolve them at runtime (walking up from the resolved entry file to its nearest
+   `package.json`, since some of these packages restrict their own `package.json` via an
+   `exports` map).
+6. `next build` with `output: "standalone"` copies whichever `.env` exists on the build
+   machine into `.next/standalone/.env` on its own (to replicate `next start`'s env
+   loading) — confirmed by inspecting a real build's output. Since `.env` is gitignored
+   and this would mean every installer embeds whatever's in the build machine's `.env`,
+   `prepare-standalone.mjs` deletes it again before packaging, and the electron-builder
+   `extraResources` filter excludes it a second time as a backstop.
+7. (Code review, pre-merge) `initializeAutoUpdater` re-ran its one-time
+   `ipcMain.handle`/`autoUpdater.on(...)` registration on every `createMainWindow()` call
+   — harmless on Windows/Linux (one window, one call) but on macOS, closing all windows
+   doesn't quit the app, and the dock's "activate" flow creates a *new* window, which
+   would throw on the second `ipcMain.handle` registration for the same channel and
+   duplicate every update-event broadcast/notification on each reactivate. Fixed with a
+   one-time-init guard; `mainWindow` reference still updates on every call so
+   notifications/broadcasts always reach the current window.
+
+**Verification**: `npx tsc --noEmit` (both `tsconfig.json` and `tsconfig.electron.json`),
+`npx eslint src electron prisma scripts` (0 errors, same 2 pre-existing unrelated
+warnings), `npx vitest run` (2032/2032, +6 new — `electron/get-free-port.test.ts`,
+`electron/server.test.ts`, `src/lib/update-notification.test.ts` — all real assertions
+against actual Node `net`/`http` behavior or pure logic, no mocking of the thing under
+test), and `next build` all pass. Beyond the automated suite, this phase's actual
+correctness signal came from repeatedly building `.next/standalone`, packaging with
+`electron-builder --dir --win`, and launching the real packaged `.exe` (via PowerShell
+with `Start-Process`/`-RedirectStandardOutput`, checking process counts and the pino log
+at `%APPDATA%\premgir-books-v2\logs\main.log`) until it ran clean for 20+ seconds with a
+sane process count and the login page serving real Postgres-backed content — the class of
+bug here (packaging/tracing gaps) is invisible to `tsc`/`eslint`/unit tests entirely.
+
+**Code review (parallel subagent): 1 HIGH** (the macOS reactivate double-init above,
+fixed) **and one previously-self-fixed issue re-confirmed clean** (the
+`process.execPath`/`ELECTRON_RUN_AS_NODE` fork-bomb fix — reviewer grepped the whole tree
+and confirmed it's the only `process.execPath` use and nothing else assumes it's a plain
+Node binary). **Security review (parallel subagent): 0 CRITICAL/HIGH, 1 MEDIUM** (the
+electron-builder `extraResources` filter had no explicit `.env` exclusion as a
+defense-in-depth backstop — fixed, and this MEDIUM is what led to discovering bug #6
+above was a live, reproducing issue rather than a hypothetical one) **and 1 LOW** (GitHub
+Actions pinned to mutable version tags rather than commit SHAs — accepted as-is; all three
+actions are from well-known trusted publishers and this is a personal/small-team project,
+not something warranting SHA-pinning overhead right now).
+
+**Known, documented limitations** (see `docs/release-process.md`): builds are unsigned (no
+certificate yet — Windows SmartScreen will warn, macOS is unnotarized); full silent
+auto-update is only reliable on Windows/Linux until macOS builds are signed
+(Squirrel.Mac's own constraint); runtime config (`DATABASE_URL` etc.) must be set as real
+OS environment variables on the end-user machine — no first-run configuration screen
+exists yet; and if the GitHub repo is ever made private, `electron-updater`'s runtime
+update check would need a token, which hasn't been set up (embedding one in a shipped app
+is a real exposure risk) — releases should stay on a public repo.
+
+---
+
 # Notes
 
 - Complete one feature at a time.
