@@ -84,6 +84,7 @@ model Company {
   ledgerGroups          LedgerGroup[]
   ledgers               Ledger[]
   bankAccounts          BankAccount[]
+  paymentModes          PaymentMode[]
   units                 Unit[]
   categories            Category[]
   brands                Brand[]
@@ -489,6 +490,40 @@ model BankAccount {
   updatedAt         DateTime        @updatedAt
 
   @@unique([companyId, accountNumber])
+  @@index([companyId])
+}
+
+enum PaymentModeLedgerClass {
+  CASH // valid only against a Cash-in-Hand-subtree ledger
+  BANK // valid only against a ledger carrying a BankAccount
+  ANY // valid against either CASH or BANK (never a non-cash/bank ledger)
+}
+
+// Payment Mode master (86-payment-mode-master.md) — master data only, no
+// foreign key from any payment-capturing document yet (that's specs 88-90).
+// `ledgerClass` is deliberately NOT a foreign key to LedgerGroup — a coarse,
+// fixed three-value classification, mirroring architecture-context.md's
+// posture toward AccountNature/BalanceType (a small fixed enum describing a
+// kind, not a relation into the chart of accounts). `isSystemDefined` marks
+// the five seeded defaults (Cash/Bank Transfer/UPI/Card/Cheque), for the same
+// reason Ledger.isSystemDefined/Role.isSystemDefined exist — so a later spec
+// or UI can distinguish "came with the company" from "a user added this,"
+// without special-casing by name string. Unlike Ledger, editing name/
+// ledgerClass is allowed on any row including seeded ones — this master has
+// no downstream foreign key yet, so there is nothing to retroactively
+// invalidate.
+model PaymentMode {
+  id              String                 @id @default(uuid())
+  companyId       String
+  company         Company                @relation(fields: [companyId], references: [id])
+  name            String
+  ledgerClass     PaymentModeLedgerClass
+  isSystemDefined Boolean                @default(false)
+  isActive        Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@unique([companyId, name])
   @@index([companyId])
 }
 
