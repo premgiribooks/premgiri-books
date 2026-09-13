@@ -26,7 +26,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: gh release create "${{ github.ref_name }}" --draft --title "${{ github.ref_name }}" --generate-notes
+      # Retried and made idempotent: a real v1.0.2 run failed here on a
+      # transient "HTTP 500" from GitHub's own API (nothing wrong with this
+      # command), and a 5xx response doesn't reliably tell you whether the
+      # release was actually created server-side before the error — check
+      # first so a retry after a false-negative failure doesn't try (and
+      # fail) to create a release that already exists.
+      - name: Create draft release
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+              echo "Release ${{ github.ref_name }} already exists"
+              exit 0
+            fi
+            if gh release create "${{ github.ref_name }}" --draft --title "${{ github.ref_name }}" --generate-notes; then
+              exit 0
+            fi
+            echo "create-release attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -83,6 +103,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: gh release edit "${{ github.ref_name }}" --draft=false
+      - name: Undraft release
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if gh release edit "${{ github.ref_name }}" --draft=false; then
+              exit 0
+            fi
+            echo "publish-release attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
