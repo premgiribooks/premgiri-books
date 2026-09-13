@@ -389,40 +389,44 @@ export const stockTransactionRepository = {
   ): Promise<TransferStockResult> {
     const transferGroupId = randomUUID();
 
-    const [outRow, inRow] = await Promise.all([
-      tx.stockTransaction.create({
-        data: {
-          companyId,
-          productId: input.productId,
-          warehouseId: input.sourceWarehouseId,
-          transactionType: "TRANSFER",
-          direction: "OUT",
-          quantity: input.quantity,
-          unitCost: null,
-          transactionDate: input.transactionDate,
-          transferGroupId,
-          batchId: input.batchId,
-          serialId: input.serialId,
-          narration: input.narration,
-        },
-      }),
-      tx.stockTransaction.create({
-        data: {
-          companyId,
-          productId: input.productId,
-          warehouseId: input.destinationWarehouseId,
-          transactionType: "TRANSFER",
-          direction: "IN",
-          quantity: input.quantity,
-          unitCost: null,
-          transactionDate: input.transactionDate,
-          transferGroupId,
-          batchId: input.batchId,
-          serialId: input.serialId,
-          narration: input.narration,
-        },
-      }),
-    ]);
+    // Sequential, not Promise.all: `tx` is a single pg PoolClient for the
+    // whole transaction, and pg only supports one in-flight query per client
+    // — running these concurrently triggered "Calling client.query() when
+    // the client is already executing a query is deprecated" in a real
+    // installed build, which pg's own docs say becomes a hard failure in
+    // pg@9 rather than a warning.
+    const outRow = await tx.stockTransaction.create({
+      data: {
+        companyId,
+        productId: input.productId,
+        warehouseId: input.sourceWarehouseId,
+        transactionType: "TRANSFER",
+        direction: "OUT",
+        quantity: input.quantity,
+        unitCost: null,
+        transactionDate: input.transactionDate,
+        transferGroupId,
+        batchId: input.batchId,
+        serialId: input.serialId,
+        narration: input.narration,
+      },
+    });
+    const inRow = await tx.stockTransaction.create({
+      data: {
+        companyId,
+        productId: input.productId,
+        warehouseId: input.destinationWarehouseId,
+        transactionType: "TRANSFER",
+        direction: "IN",
+        quantity: input.quantity,
+        unitCost: null,
+        transactionDate: input.transactionDate,
+        transferGroupId,
+        batchId: input.batchId,
+        serialId: input.serialId,
+        narration: input.narration,
+      },
+    });
 
     return {
       outTransaction: toRecordedStockTransaction(outRow),
