@@ -3573,3 +3573,31 @@ this release work: an uncommitted local `package.json` edit
 switches and a merge conflict during a stash pop (resolved by hand, content preserved) —
 still nobody's confirmed origin or intent, still sitting uncommitted on `main` for the
 user to commit or discard.
+
+## 2026-09-13 — v1.0.4: fixed the real crash (Turbopack externals were dangling symlinks)
+
+User reported the installed v1.0.3 Windows app opened a window then closed within
+seconds every launch. Their log
+(`%APPDATA%\premgir-books-v2\logs\main.log`) showed every request failing with
+"Cannot find module '.prisma/client/default'" — not the DATABASE_URL issue initially
+suspected.
+
+Traced via Node's own module resolution (monkey-patching `Module._resolveFilename`):
+Turbopack (Next 16's bundler) externalizes `pg`, `pino`, `argon2`, `@prisma/client` into
+proxy directories under a **second, separate** `.next/node_modules` tree that this
+session's earlier symlink-dereferencing fix never touched — those proxies were symlinks
+straight to the dev machine's absolute pnpm path, dangling on any other machine
+(including the CI runner that built the actual v1.0.1–v1.0.3 releases). Every request
+touching the DB, password hashing, or logging failed.
+
+Fixed in `scripts/prepare-standalone.mjs`: dereference `.next/node_modules`'s own
+symlinks; generalized the "ensure a package's own nested deps exist" fix (previously
+`next`/`@prisma/client`-only) to run recursively for every root dependency; replace
+Turbopack's proxies with fresh copies of the now-fixed top-level packages; ensure
+`@prisma/client`'s `.prisma` sibling exists in both node_modules trees. Verified via a
+full clean rebuild: zero symlinks anywhere, `pg`/`pino`/`argon2`/`@prisma/client` all
+resolve, and the standalone server serves `/`, `/favicon.ico`, `/login` with real
+200s/307 and no errors.
+
+Released as **v1.0.4** (all assets published, `draft: false`), merged into `main` by the
+user. Re-verified: `tsc` clean.
