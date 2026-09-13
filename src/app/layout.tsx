@@ -6,12 +6,14 @@ import { AuthProvider } from "@/components/providers/auth-provider";
 import { CompanyProvider } from "@/components/providers/company-provider";
 import { FinancialYearProvider } from "@/components/providers/financial-year-provider";
 import { BranchProvider } from "@/components/providers/branch-provider";
+import { NavPermissionsProvider } from "@/components/providers/nav-permissions-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { getCurrentUserOrNull } from "@/lib/current-user";
 import { getCurrentCompany } from "@/lib/current-company";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentBranch } from "@/lib/current-branch";
+import { getNavPermissions } from "@/lib/permissions";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +39,7 @@ export default async function RootLayout({
   const currentCompany = await getCurrentCompany();
   const currentFinancialYear = await getCurrentFinancialYear();
   const currentBranch = await getCurrentBranch();
+  const navPermissions = await getNavPermissions(currentUser);
 
   return (
     <html
@@ -47,14 +50,16 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <AuthProvider initialUser={currentUser}>
-            <CompanyProvider initialCompany={currentCompany}>
-              <FinancialYearProvider initialFinancialYear={currentFinancialYear}>
-                <BranchProvider initialBranch={currentBranch}>
-                  <TooltipProvider>{children}</TooltipProvider>
-                  <Toaster />
-                </BranchProvider>
-              </FinancialYearProvider>
-            </CompanyProvider>
+            <NavPermissionsProvider initialPermissions={navPermissions}>
+              <CompanyProvider initialCompany={currentCompany}>
+                <FinancialYearProvider initialFinancialYear={currentFinancialYear}>
+                  <BranchProvider initialBranch={currentBranch}>
+                    <TooltipProvider>{children}</TooltipProvider>
+                    <Toaster />
+                  </BranchProvider>
+                </FinancialYearProvider>
+              </CompanyProvider>
+            </NavPermissionsProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
