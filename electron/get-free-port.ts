@@ -32,3 +32,30 @@ export function getFreePort(): Promise<number> {
     });
   });
 }
+
+/**
+ * Tries to bind the app's configured port first (see DEFAULT_SERVER_PORT in
+ * server.ts) so the local server listens on a predictable address across
+ * launches. Falls back to any free port if that one is already taken (e.g.
+ * another instance of the app, or an unrelated local service already using
+ * it) rather than failing to start at all.
+ */
+export function getAvailablePort(preferredPort: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+
+    server.once("error", () => {
+      getFreePort().then(resolve, reject);
+    });
+
+    server.listen(preferredPort, "127.0.0.1", () => {
+      server.close((closeError) => {
+        if (closeError) {
+          reject(closeError);
+        } else {
+          resolve(preferredPort);
+        }
+      });
+    });
+  });
+}

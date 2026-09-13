@@ -1,0 +1,41 @@
+name: Build
+
+# Continuous validation on every push/PR: typecheck, lint, test, and confirm
+# the app (including the Electron main process and the standalone server
+# output) actually builds. Does not package or publish anything — that's
+# release.yml's job, triggered separately by a version tag.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec prisma generate
+
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm exec tsc --noEmit -p tsconfig.electron.json
+      - run: pnpm lint
+      - run: pnpm test
+
+      # Same DATABASE_URL caveat as release.yml: only needed to satisfy
+      # Prisma Client construction at import time, not a live connection.
+      - run: pnpm run build
+        env:
+          DATABASE_URL: "postgresql://user:password@localhost:5432/premgiri_books?schema=public"
