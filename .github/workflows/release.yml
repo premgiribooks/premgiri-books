@@ -5,6 +5,14 @@ name: Release desktop app
 # pushed. Each OS builds on its own native runner so macOS's .dmg step
 # (which needs a real macOS host) and Windows' NSIS step both work without
 # cross-compilation.
+#
+# The GitHub release itself is created as a draft by its own job *before*
+# the OS matrix runs, and only published (undrafted) after every OS build
+# succeeds. Without this, all three matrix jobs independently see "no
+# release for this tag yet" and race to create one at roughly the same
+# time — confirmed by an actual v1.0.1 run, where the macOS job's publish
+# step failed with "Cannot cleanup: SyntaxError: Unexpected end of JSON
+# input" while uploading, from exactly that race.
 on:
   push:
     tags:
@@ -14,7 +22,36 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Retried and made idempotent: a real v1.0.2 run failed here on a
+      # transient "HTTP 500" from GitHub's own API (nothing wrong with this
+      # command), and a 5xx response doesn't reliably tell you whether the
+      # release was actually created server-side before the error — check
+      # first so a retry after a false-negative failure doesn't try (and
+      # fail) to create a release that already exists.
+      - name: Create draft release
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+              echo "Release ${{ github.ref_name }} already exists"
+              exit 0
+            fi
+            if gh release create "${{ github.ref_name }}" --draft --title "${{ github.ref_name }}" --generate-notes; then
+              exit 0
+            fi
+            echo "create-release attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +80,39 @@ jobs:
         env:
           DATABASE_URL: "postgresql://user:password@localhost:5432/premgiri_books?schema=public"
 
-      - run: pnpm exec electron-builder --publish always
+      # Retried: a real v1.0.1 run hit a one-off crash rebuilding argon2 for
+      # Electron's ABI on windows-latest (an assertion failure inside
+      # undici's HTTP/1 client while node-gyp downloaded Node headers) —
+      # nothing in this repo's config, a transient runner/network blip.
+      - name: Build and publish
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec electron-builder --publish always; then
+              exit 0
+            fi
+            echo "electron-builder attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Undraft release
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if gh release edit "${{ github.ref_name }}" --draft=false; then
+              exit 0
+            fi
+            echo "publish-release attempt $attempt failed, retrying in 10s..."
+            sleep 10
+          done
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
