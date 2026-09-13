@@ -246,7 +246,32 @@ async function replaceTurbopackExternalsWithFixedCopies() {
       const realName = scopePrefix ? `${scopePrefix}/${match[1]}` : match[1];
       const source = path.join(topLevelNodeModules, ...realName.split("/"));
       if (existsSync(source)) {
+        // The top-level copy already had its own runtime dependencies
+        // resolved by ensurePackageRuntimeDependencies below — reuse it
+        // verbatim rather than re-running that resolution a second time.
         await copyInto(source, entryPath);
+        continue;
+      }
+
+      // No top-level standalone/node_modules copy exists for this package
+      // (confirmed by a real installed app: "jsdom" is only ever reachable
+      // through this Turbopack externals proxy, never the top-level tree,
+      // because Turbopack fully externalizes it out of the bundle graph —
+      // the main dependency-fixing loop below skips packages like this
+      // entirely, since it only walks the top-level tree). Fix this proxy's
+      // OWN dependencies (whatwg-url, and transitively tr46) directly,
+      // resolving from the real pnpm store the same way the top-level loop
+      // does — resolving from entryPath itself would fail, since a copied
+      // proxy directory sits outside the pnpm store's own node_modules
+      // chain and can't see colocated sibling dependencies from there.
+      try {
+        const realSourceDir = resolvePackageDir(realName, path.join(projectRoot, "package.json"));
+        await ensurePackageRuntimeDependencies(
+          path.join(realSourceDir, "package.json"),
+          path.join(entryPath, "node_modules"),
+        );
+      } catch (error) {
+        console.warn(`Skipping runtime dependency scan for Turbopack external "${realName}": ${error.message}`);
       }
     }
   }

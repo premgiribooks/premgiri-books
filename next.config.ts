@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": ["./node_modules/@prisma/client/**/*", "./node_modules/@prisma/adapter-pg/**/*"],
   },
+  // This app has no CDN or remote image host to optimize for — every image
+  // (company logos) is a local upload served straight off disk — so Next's
+  // sharp-based optimization pipeline buys nothing here, while shipping
+  // sharp's native binary would add a whole new cross-platform packaging
+  // problem for electron-builder (confirmed by a real installed build
+  // logging "Module `sharp` not found" the moment next/image rendered).
+  images: {
+    unoptimized: true,
+  },
   async headers() {
     return [
       {

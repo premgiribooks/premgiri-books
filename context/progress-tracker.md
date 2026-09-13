@@ -3601,3 +3601,39 @@ resolve, and the standalone server serves `/`, `/favicon.ico`, `/login` with rea
 
 Released as **v1.0.4** (all assets published, `draft: false`), merged into `main` by the
 user. Re-verified: `tsc` clean.
+
+## 2026-09-13 — v1.0.5: fixed jsdom's missing `tr46` dep, and dropped `sharp` entirely
+
+After the user set `DATABASE_URL` as a real Windows env var, the packaged v1.0.4 app's
+server started successfully (`✓ Ready in 0ms`) — the Turbopack-externals fix held. Two
+new, non-fatal errors then surfaced in the log:
+
+1. `Cannot find module 'tr46'` loading the Turbopack external `jsdom-<hash>` proxy
+   (used by `src/modules/company/services/svg-sanitizer.ts` for company-logo SVG
+   sanitization). Root cause: `prepare-standalone.mjs`'s main dependency-fixing loop
+   only walks root dependencies that already have a copy in the **top-level**
+   `standalone/node_modules` tree — it skips (by design, to avoid choking on
+   browser-only deps) any package missing there. `jsdom`'s Turbopack proxy had no such
+   top-level counterpart to draw from, so its own nested deps (`whatwg-url` → `tr46`)
+   never got resolved. Fixed by having `replaceTurbopackExternalsWithFixedCopies` fall
+   back to running `ensurePackageRuntimeDependencies` directly against a proxy when no
+   top-level copy exists, resolving from the real pnpm store the same way the main loop
+   does.
+2. `Module 'sharp' not found` from Next's image optimizer (used by `next/image` in the
+   company logo upload/display components). This app has no CDN — every image is a
+   local file on the user's own machine — so the optimization pipeline buys nothing
+   and would otherwise mean bundling a native binary per OS/arch. Set
+   `images: { unoptimized: true }` in `next.config.ts` instead of installing `sharp`.
+
+Verified via a full clean rebuild + direct standalone server boot: `tr46` now present
+in both the top-level and Turbopack-proxy `jsdom` copies (traced to the exact
+`jsdom-0a58932632f2bc2c` hash from the user's log), and `/login` returns `200` with a
+clean log (no `sharp`/`jsdom` errors).
+
+Separately noted (not fixed): the packaged app's auto-update check logs a 404 fetching
+`releases.atom` — expected, since `premgiribooks/premgiri-books` is a private repo and
+electron-updater's GitHub provider needs either a public repo or an auth token to read
+releases. Non-blocking (`checkForUpdatesOnStartup` fails silently by design), but
+auto-update won't actually work until the repo is made public or a token is wired in.
+
+Bumped to **v1.0.5**.
