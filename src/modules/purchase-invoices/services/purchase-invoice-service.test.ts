@@ -965,8 +965,12 @@ describe("getGoodsReceiptNotePrefill", () => {
 // The Create/Edit form's inline outstanding-balance display, called for both
 // the selected Supplier's own ledger and any payment-line ledger. Mirrors
 // sales-invoice-service.test.ts's identical getLedgerOutstandingBalance test.
+// Gated on BOTH purchase/view and accounting/view — a plain purchase/view
+// check alone would let a purchase-only role read any same-company ledger's
+// balance via a crafted ledgerId, not just this form's own Supplier/
+// payment-ledger candidates (security review HIGH finding, fixed here).
 describe("getLedgerOutstandingBalance", () => {
-  it("asserts purchase/view (not accounting/view) and delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
+  it("asserts BOTH purchase/view and accounting/view, then delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
     const balance = {
       ledgerId: SUPPLIER_LEDGER_ID,
       openingBalance: 0,
@@ -981,7 +985,21 @@ describe("getLedgerOutstandingBalance", () => {
     const result = await purchaseInvoiceService.getLedgerOutstandingBalance(SUPPLIER_LEDGER_ID);
 
     expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "purchase", "view");
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "accounting", "view");
     expect(getLedgerBalanceMock).toHaveBeenCalledWith(COMPANY_ID, SUPPLIER_LEDGER_ID);
     expect(result).toEqual(balance);
+  });
+
+  it("rejects when the caller has purchase/view but not accounting/view", async () => {
+    assertPermissionMock.mockImplementation(async (_user, mod, action) => {
+      if (mod === "accounting" && action === "view") {
+        throw new AppError("You do not have permission to view accounting.");
+      }
+    });
+
+    await expect(purchaseInvoiceService.getLedgerOutstandingBalance(SUPPLIER_LEDGER_ID)).rejects.toThrow(
+      "You do not have permission to view accounting."
+    );
+    expect(getLedgerBalanceMock).not.toHaveBeenCalled();
   });
 });

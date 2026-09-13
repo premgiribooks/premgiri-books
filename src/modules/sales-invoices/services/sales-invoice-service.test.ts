@@ -798,9 +798,13 @@ describe("getDeliveryChallanPrefill", () => {
 });
 
 // The Create/Edit form's inline outstanding-balance display, called for both
-// the selected Customer's own ledger and any payment-line ledger.
+// the selected Customer's own ledger and any payment-line ledger. Gated on
+// BOTH sales/view and accounting/view — a plain sales/view check alone would
+// let a sales-only role read any same-company ledger's balance via a
+// crafted ledgerId, not just this form's own Customer/payment-ledger
+// candidates (security review HIGH finding, fixed here).
 describe("getLedgerOutstandingBalance", () => {
-  it("asserts sales/view (not accounting/view) and delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
+  it("asserts BOTH sales/view and accounting/view, then delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
     const balance = {
       ledgerId: CUSTOMER_LEDGER_ID,
       openingBalance: 0,
@@ -815,7 +819,21 @@ describe("getLedgerOutstandingBalance", () => {
     const result = await salesInvoiceService.getLedgerOutstandingBalance(CUSTOMER_LEDGER_ID);
 
     expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "sales", "view");
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "accounting", "view");
     expect(getLedgerBalanceMock).toHaveBeenCalledWith(COMPANY_ID, CUSTOMER_LEDGER_ID);
     expect(result).toEqual(balance);
+  });
+
+  it("rejects when the caller has sales/view but not accounting/view", async () => {
+    assertPermissionMock.mockImplementation(async (_user, mod, action) => {
+      if (mod === "accounting" && action === "view") {
+        throw new AppError("You do not have permission to view accounting.");
+      }
+    });
+
+    await expect(salesInvoiceService.getLedgerOutstandingBalance(CUSTOMER_LEDGER_ID)).rejects.toThrow(
+      "You do not have permission to view accounting."
+    );
+    expect(getLedgerBalanceMock).not.toHaveBeenCalled();
   });
 });

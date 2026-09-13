@@ -5,11 +5,17 @@ import * as React from "react";
 import type { LedgerBalanceResult } from "@/engines/voucher/types";
 import type { ActionResult } from "@/types/api";
 
+// Every non-idle variant carries the `ledgerId` it was fetched for, so a
+// switch between two already-resolved ledgers can never paint the previous
+// ledger's figure under the newly-selected one during the render before the
+// new effect's deferred fetch resolves (found in code review — the render
+// guard below now checks `state.ledgerId === ledgerId` before treating
+// `state` as current).
 type BalanceState =
   | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ok"; closingBalance: number }
-  | { status: "error" };
+  | { status: "loading"; ledgerId: string }
+  | { status: "ok"; ledgerId: string; closingBalance: number }
+  | { status: "error"; ledgerId: string };
 
 interface LedgerOutstandingBalanceProps {
   /** The ledger to show the current balance for; `undefined`/empty renders nothing. */
@@ -49,16 +55,16 @@ export function LedgerOutstandingBalance({ ledgerId, fetchBalance, label = "Outs
     // the "loading" flag is set from a callback, not synchronously in the
     // effect body (react-hooks/set-state-in-effect).
     const handle = setTimeout(() => {
-      setState({ status: "loading" });
+      setState({ status: "loading", ledgerId });
 
       fetchBalance(ledgerId).then((result) => {
         if (cancelled) {
           return;
         }
         if (result.success && result.data) {
-          setState({ status: "ok", closingBalance: result.data.closingBalance });
+          setState({ status: "ok", ledgerId, closingBalance: result.data.closingBalance });
         } else {
-          setState({ status: "error" });
+          setState({ status: "error", ledgerId });
         }
       });
     }, 0);
@@ -69,7 +75,11 @@ export function LedgerOutstandingBalance({ ledgerId, fetchBalance, label = "Outs
     };
   }, [ledgerId, fetchBalance]);
 
-  if (!ledgerId || state.status === "idle" || state.status === "error") {
+  // The `state.ledgerId === ledgerId` check is what actually prevents a
+  // stale figure — without it, selecting ledger B while `state` still holds
+  // ledger A's resolved balance would render A's amount under B's picker
+  // until the new effect's deferred fetch resolves.
+  if (!ledgerId || state.status === "idle" || state.status === "error" || state.ledgerId !== ledgerId) {
     return null;
   }
 

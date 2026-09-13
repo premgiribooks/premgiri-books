@@ -3295,6 +3295,29 @@ verification pass. The identical component/wiring pattern is already proven live
 Payment/Receipt Voucher; Sales/Purchase Invoice's own service-level tests (permission
 gate + pass-through) pass, but the actual rendered form has not been clicked through.
 **Flagging for the user**: select (or ask to have selected) a current Financial Year for
-whichever company should be used for testing, then this can be verified end-to-end; not
-yet committed to git pending that decision, and no code review/security review requested
-yet either.
+whichever company should be used for testing, then this can be verified end-to-end.
+
+Committed as `737a21d` on `feature/outstanding-balance-display`. **Code review + security
+review (parallel subagents) both independently found the same HIGH finding**: the new
+Sales/Purchase Invoice `getLedgerOutstandingBalance` methods, gated only on
+`sales:view`/`purchase:view` respectively, let any Sales- or Purchase-scoped role read
+the real-time balance of an *arbitrary* ledger id in the company via the Server Action —
+not just the invoice's own Customer/Supplier or payment-ledger candidates — contradicting
+this codebase's own posture that ledger-balance data is Accounting-only (every other
+ledger-balance read path gates on `accounting:view`; the reserved `Sales`/`Purchase` roles
+deliberately exclude it). **Fixed**: both methods now additionally require
+`accounting:view` (paired with the module's own `view`, mirroring the ERP Dashboard's
+existing Cash & Bank tile precedent of pairing permissions for a sensitive cross-module
+read) — costs nothing in practice, since each form's own payment-ledger options already
+require `accounting:view` to load. Two new denial tests added (one per service). Code
+review also found a **MEDIUM**: the shared `LedgerOutstandingBalance` component's state
+wasn't tagged with the `ledgerId` it was fetched for, so switching between two
+already-resolved ledgers could briefly paint the *previous* ledger's balance under the
+newly-selected one. **Fixed**: every non-idle `BalanceState` variant now carries its own
+`ledgerId`, and the render guard requires `state.ledgerId === ledgerId` before treating
+it as current. Re-verified: `npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`
+(2003/2003, +2 from the new denial tests), and `next build` all pass; re-verified live
+(Playwright) on Payment Voucher's "Paid To" line — switching between two ledgers shows
+no stale/duplicate balance, zero console errors. Sales/Purchase Invoice's own forms still
+await live verification (same Financial Year precondition as above) — the fix is
+covered by the two new unit tests but not yet clicked through in a browser.

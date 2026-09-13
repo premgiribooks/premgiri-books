@@ -749,14 +749,25 @@ export const salesInvoiceService = {
    * whenever the user selects a Customer or a payment ledger — a thin
    * pass-through to `voucherQueries.getLedgerBalance` (already
    * company-scoped: it throws for a ledger id belonging to another
-   * company). Gated on `sales`/`view` rather than `accounting`/`view` since
-   * every caller of this form already needs `sales`/`view` just to load it;
-   * requiring an additional module's permission here would break the
-   * feature for a sales-only role.
+   * company). Gated on `sales`/`view` **and** `accounting`/`view` — a plain
+   * `sales`/`view` check alone would let any Sales-scoped role read the
+   * real-time balance of an arbitrary ledger id in the company (any Bank,
+   * Capital, or Expense ledger, not just this form's own Customer/payment-
+   * ledger candidates), which contradicts this codebase's own posture that
+   * a ledger's financial balance is Accounting-only data (every other
+   * ledger-balance read — Ledger Master, Trial Balance,
+   * `ledgerService.listSelectableLedgers` itself — gates on
+   * `accounting`/`view`). In practice this costs nothing: this form's own
+   * payment-ledger options already come from `listSelectableLedgers`, which
+   * already requires `accounting`/`view` to load at all, so a caller who
+   * can reach this form already holds both permissions. Found and fixed
+   * per security review (HIGH — object-level authorization gap on the new
+   * ledgerId-scoped Server Action).
    */
   async getLedgerOutstandingBalance(ledgerId: string): Promise<LedgerBalanceResult> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "sales", "view");
+    await assertPermission(user, "accounting", "view");
     return voucherQueries.getLedgerBalance(user.companyId, ledgerId);
   },
 

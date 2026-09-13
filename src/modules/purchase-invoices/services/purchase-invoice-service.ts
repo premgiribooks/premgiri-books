@@ -694,15 +694,22 @@ export const purchaseInvoiceService = {
    * whenever the user selects a Supplier or a payment ledger — a thin
    * pass-through to `voucherQueries.getLedgerBalance` (already
    * company-scoped: it throws for a ledger id belonging to another
-   * company). Gated on `purchase`/`view` rather than `accounting`/`view`
-   * since every caller of this form already needs `purchase`/`view` just to
-   * load it; requiring an additional module's permission here would break
-   * the feature for a purchase-only role. Mirrors
-   * sales-invoice-service.ts's identical `getLedgerOutstandingBalance`.
+   * company). Gated on `purchase`/`view` **and** `accounting`/`view` —
+   * mirrors sales-invoice-service.ts's identical fix: a plain
+   * `purchase`/`view` check alone would let any Purchase-scoped role read
+   * the real-time balance of an arbitrary ledger id in the company, not
+   * just this form's own Supplier/payment-ledger candidates, contradicting
+   * this codebase's posture that a ledger's financial balance is
+   * Accounting-only data. Costs nothing in practice: this form's own
+   * payment-ledger options already come from a query gated on
+   * `accounting`/`view`. Found and fixed per security review (HIGH —
+   * object-level authorization gap on the new ledgerId-scoped Server
+   * Action).
    */
   async getLedgerOutstandingBalance(ledgerId: string): Promise<LedgerBalanceResult> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "purchase", "view");
+    await assertPermission(user, "accounting", "view");
     return voucherQueries.getLedgerBalance(user.companyId, ledgerId);
   },
 
