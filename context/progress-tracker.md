@@ -89,16 +89,19 @@ Mapping so far:
 | 72           | Supplier Reports (`72-supplier-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#70) — **implemented 2026-09-12**; mirrors spec 71, with no "Over Limit" flag since `Supplier` has no `creditLimit` field |
 | 73           | Employee Reports (`73-employee-reports.md`)                                    | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#71) — **spec drafted 2026-09-11, not implemented**; reads Payroll's exact posted snapshot shape, adds one new bulk `getAttendanceSummaryBulk` method |
 | 74           | GST Reports (`74-gst-reports.md`)                                               | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#72) — **spec drafted 2026-09-11, not implemented**; last item in Phase 10, closing it; an analytical dashboard over specs 57/60's data, explicitly distinct from Phase 8's statutory filing screens, gated by both `reports:view` and `gst:view` |
-| 75           | Global Search (`75-global-search.md`)                                          | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#73) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers/Ledgers, wired into the shell's existing Top Navbar search placeholder as a `Ctrl+K` overlay |
-| 76           | Excel Import (`76-excel-import.md`)                                            | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#74) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers, row-by-row partial-success handling with a dry-run preview and downloadable error report |
-| 77           | Excel Export (`77-excel-export.md`)                                            | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#75) — **spec drafted 2026-09-11, not implemented**; introduces a shared `src/lib/excel-export.ts` utility (new `exceljs` dependency) around a new `ReportExportTable[]` contract, with Trial Balance as the required reference implementation |
-| 78           | PDF Generation (`78-pdf-generation.md`)                                        | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#76) — **spec drafted 2026-09-11, not implemented**; a shared Puppeteer-based `renderHtmlToPdf` core serving both document printing and spec 77's report-export contract |
-| 79           | Barcode Billing (`79-barcode-billing.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#77) — **spec drafted 2026-09-11, not implemented**; UI-only over the existing `Product.barcode` field, added as a toggle-able entry mode in place on the existing Sales Invoice line-entry screen |
-| 80           | Audit Logs (`80-audit-logs.md`)                                                | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#78) — **spec drafted 2026-09-11, not implemented**; retrofits the existing generic `AuditLog` model to financial-transaction events only, under a new `audit` permission module at a new `/settings/audit-logs` route, explicitly distinct from the existing Super-Admin `/administration/audit` stub |
-| 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 11 — Productivity Features (#79) — **spec drafted 2026-09-11, not implemented**; last item in Phase 11, closing the drafting of Phases 8–11 in full; introduces a new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one |
+| 75           | Global Search (`75-global-search.md`)                                          | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (renumbered from Phase 11 2026-09-13) (#73) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers/Ledgers, wired into the shell's existing Top Navbar search placeholder as a `Ctrl+K` overlay |
+| 76           | Excel Import (`76-excel-import.md`)                                            | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#74) — **spec drafted 2026-09-11, not implemented**; v1 scoped to Products/Customers/Suppliers, row-by-row partial-success handling with a dry-run preview and downloadable error report |
+| 77           | Excel Export (`77-excel-export.md`)                                            | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#75) — **spec drafted 2026-09-11, not implemented**; introduces a shared `src/lib/excel-export.ts` utility (new `exceljs` dependency) around a new `ReportExportTable[]` contract, with Trial Balance as the required reference implementation |
+| 78           | PDF Generation (`78-pdf-generation.md`)                                        | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#76) — **spec drafted 2026-09-11, not implemented**; a shared Puppeteer-based `renderHtmlToPdf` core serving both document printing and spec 77's report-export contract |
+| 79           | Barcode Billing (`79-barcode-billing.md`)                                      | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#77) — **spec drafted 2026-09-11, not implemented**; UI-only over the existing `Product.barcode` field, added as a toggle-able entry mode in place on the existing Sales Invoice line-entry screen |
+| 80           | Audit Logs (`80-audit-logs.md`)                                                | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#78) — **spec drafted 2026-09-11, not implemented**; retrofits the existing generic `AuditLog` model to financial-transaction events only, under a new `audit` permission module at a new `/settings/audit-logs` route, explicitly distinct from the existing Super-Admin `/administration/audit` stub |
+| 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#79) — **spec drafted 2026-09-11, not implemented**; last item in Phase 12, closing the drafting of Phases 8–10/12 in full; introduces a new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one |
 | 82           | GSTR-2 (`82-gstr-2.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#80) — **spec drafted 2026-09-11, not implemented**; added to Phase 8 after its original batch (specs 57–60) was already implemented/drafted, per explicit user request — read-only inward-supply reporting view in the original (suspended) GSTR-2 form's shape, no `GstFilingRecord`/filing workflow, no new schema |
 | 83           | ITC Register (`83-itc-register.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#81) — **spec drafted 2026-09-11, not implemented**; second item added to Phase 8 alongside spec 82 — rate/party/HSN breakdown of GSTR-3B's (#57/spec 59) Table 4(A)(5) lump ITC figure, report-only, explicitly not a full Electronic Credit Ledger, no new schema |
 | 84           | Navigation & Information Architecture Overhaul (`84-navigation-ia-overhaul.md`) | Not a `phase-tracker.md` item (cross-cutting, touches every module's navigation rather than one business feature) — **retrospective spec, implemented 2026-09-12/13** on branch `feature/navigation-ia-overhaul`; hierarchical permission-aware Sidebar, Ctrl+K Command Palette, favorites/recents, mobile drawer, third-level Reports sub-menus, scrollable/scrollbar-less rail, unified collapsed-icon tooltips; substantially (not formally) implements spec 75's PAGES+3-entity-DATA scope |
+| 85           | ERP Dashboard (`85-dashboard.md`)                                              | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#82) — **implemented, reviewed, and fixed 2026-09-13** (see this file's own entry the same date); permission-aware home screen composing existing Phase 10 report services/engines, zero new business calculations |
+| 86           | Payment Mode Master (`86-payment-mode-master.md`)                             | `context/Phases/phase-tracker.md` **Phase 11 — Payment & Collections Management** (#83) — **spec drafted 2026-09-13, not implemented**; first item of the newly-inserted Phase 11 — a company-scoped Payment Mode lookup (Cash/Bank Transfer/UPI/Card/Cheque), each row carrying a `ledgerClass` (CASH/BANK/ANY) that specs 88–90 (#84–#86, not yet drafted) will validate a payment line's chosen ledger against; no cross-module validation helper built yet, per YAGNI — deferred to the first real consumer |
+| 87           | Liability Settlement (`87-liability-settlement.md`)                          | `context/Phases/phase-tracker.md` Phase 11 — Payment & Collections Management (#87) — **spec drafted 2026-09-13, not implemented**; added to the phase after its initial reservation, per explicit user request — a read+navigate wrapper over `64-trial-balance.md`'s `getTrialBalance` (lists every `LIABILITY`-nature ledger with an outstanding balance) and `52-payment-voucher.md`'s existing New-voucher screen (pre-filled "Settle" action), no new Prisma model, no invoice-wise/bill-wise allocation |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
@@ -713,7 +716,9 @@ Mapping so far:
   #57/spec 59, HSN Summary #58/spec 60), Phase 9 — Employee Management
   (Employee Master #59/spec 61, Attendance #60/spec 62, Payroll #61/spec
   63), Phase 10 — Reporting (Trial Balance through GST Reports, #62–#72/
-  specs 64–74), and Phase 11 — Productivity Features (Global Search
+  specs 64–74), and Phase 12 — Productivity Features (renumbered from Phase 11
+  2026-09-13 to make room for the inserted Phase 11 — Payment & Collections
+  Management; Global Search
   through Backup & Restore, #73–#79/specs 75–81). Drafted in four parallel
   batches (GST; Employee Management; Reporting split into
   financial/operational halves; Productivity Features split into
@@ -2767,7 +2772,7 @@ Mapping so far:
   route table. **`feature/gst-reports` merged into `main`** (`--no-ff` merged `f686c74`,
   no conflicts, checks re-verified green), branch deleted both locally and on origin.
   **This closes Phase 10 — Reporting in full** — all eleven items (#62–#72) are now
-  implemented, reviewed, and merged. Phase 11 (Productivity Features, #73–#79) remains
+  implemented, reviewed, and merged. Phase 12 (Productivity Features, #73–#79) remains
   entirely spec-drafted-but-not-implemented; per `ai-workflow-rules.md`'s one-feature-at-
   a-time rule, the next feature awaits explicit instruction.
 - Per the closure notes' Recommended Phase 02 Order, Document Numbering Engine, Audit Log Engine, File Manager, Import/Export Frameworks, Backup & Restore, and Notification System remain undrafted Phase 02 items. Separately, Phase 3's remaining three documents (specs 39–41 — Sales Return, Credit Note, Debit Note, all reusing Feature-spec 38's Company Settings ledger mapping and posting conventions) and all of Phase 4 (Purchase Management, specs 42–45) are already spec-drafted and awaiting an explicit go-ahead to implement. Per `ai-workflow-rules.md`, only one feature/subsystem should be worked on at a time — awaiting explicit instruction before starting the next one.
@@ -2912,3 +2917,266 @@ No other environment variables are consumed by the codebase as of the Super Admi
 - **Company**: seeded alongside it — "Default Company" (rename/replace via Company Management once logged in; there is no delete endpoint for companies, per feature-spec 08).
 
 Both are local-development bootstrap credentials, not a production secret rotation mechanism — there is currently no forced password change after first login (self-service password change exists at `/profile`, per the Phase 01 closure cleanup Completed entry, but nothing forces it on first login). Do not reuse either default password outside local dev; set `SEED_SUPER_ADMIN_PASSWORD`/`SEED_ADMIN_PASSWORD` before seeding any shared or production database — `prisma/seed.ts` throws rather than falling back to a default for either account when `NODE_ENV === "production"`.
+
+## 2026-09-13 — ERP Dashboard feature-spec drafted (not implemented)
+
+Per explicit user request ("Implement a complete, functional, interactive ERP Dashboard
+... create a feature document for this before starting"), drafted
+`context/feature-specs/85-dashboard.md` — documentation only, no code changed.
+
+**Discrepancy recorded, not silently fixed** (per `ai-workflow-rules.md`'s precedence
+rule): `context/Phases/phases.md` has always listed "Dashboard Reports" as the first
+module under Phase 10 — Reports, but `context/Phases/phase-tracker.md`'s own Phase 10
+breakdown (drafted 2026-09-11) enumerated exactly eleven items (`#62`–`#72`, Trial
+Balance through GST Reports) and the phase was marked fully complete without a twelfth
+"Dashboard" item ever existing. Resolved by assigning tracker `#82` (continuing the
+sequence after Phase 8's `#80`/`#81` GSTR-2/ITC Register extension) and adding it to
+Phase 10 as a twelfth item — see `context/Phases/phase-tracker.md`'s Phase 10 section for
+the full entry, mirroring that same "add a recognized-late item to an already-complete
+phase" precedent.
+
+**What the spec covers**: replaces `src/app/page.tsx`'s current placeholder
+(`"Premgiri Books ERP — application shell ready."`) with a permission-aware home screen —
+KPI tiles (Sales/Purchase Today &amp; MTD, Cash &amp; Bank Balance, Receivables, Payables),
+Alerts &amp; Exceptions (low stock, overdue receivables, GST filing due, pending approvals),
+Monthly Sales/Purchase/Profit trends, an embedded GST Summary, Top Performers (customers/
+products/suppliers), a permission-gated Quick Actions grid linking to existing create
+routes, and a Recent Activity feed built from existing documents' `createdAt` (explicitly
+**not** `AuditLog`-backed — `architecture-context.md`'s Known Implementation Gaps item 3
+still applies unchanged; AuditLog remains narrow to its original 5+2 Administration/Bank
+events). Every widget reuses an existing Phase 10 report service/Reporting Engine
+function (Trial Balance/P&amp;L/Balance Sheet, Sales/Purchase/Inventory/Customer/Supplier
+Reports, GST Reports/`gst-dashboard.ts`) — **zero new business calculations, zero new
+Prisma schema** (one narrow exception explicitly deferred: no per-user dismiss/snooze
+preference row in this version). Permission-based personalization only (a widget is
+omitted entirely when the user lacks its source module's `view` permission, mirroring
+`74-gst-reports.md`'s double-gate precedent) — explicit Do Not on Phase 12's (renumbered
+from Phase 11 the same day) "Dashboard Customization" (drag-drop layout/persistence),
+which stays a separate future spec.
+
+Two items flagged for verification at Analysis/implementation time, not resolved by the
+spec itself: (1) whether Trial Balance/Balance Sheet's existing ledger-balance
+computation is already a reusable function or needs extracting to a shared helper for the
+Cash &amp; Bank Balance tile; (2) whether `SalesInvoice` carries an explicit due-date field
+for the overdue-receivables alert, or whether `invoiceDate + Customer.creditDays` is the
+correct derived formula (confirmed via schema research: no due-date field is known to
+exist as of this drafting session — treat as unconfirmed until Analysis re-checks).
+
+**Not yet implemented.** Next Up: implement feature-spec 85 (ERP Dashboard, tracker
+`#82`) per the standard Requirement → Analysis → Business Rules → Database → Backend →
+Repository → Service → Business Engine → API → UI → Testing → Documentation → Progress
+Update sequence, starting with the Analysis step's two open verification items above.
+
+## 2026-09-13 — ERP Dashboard (#82, spec 85) implemented
+
+Both Analysis verification items resolved: (1) Trial Balance's ledger-balance computation
+did **not** need extracting — `getCashAndBankLedgerIds` (`src/lib/ledger-class.ts`, added
+by Payment Voucher/`52-payment-voucher.md`) already exposes the Cash-in-Hand-or-bank-linked
+id set, paired with `voucherQueries.getLedgerBalance` exactly like
+`cash-flow-service.ts`'s own precedent — no new helper. (2) `SalesInvoice` has no due-date
+field; `SalesInvoiceCustomerOption` also doesn't carry `creditDays` (only `creditLimit`),
+so the overdue-receivables alert needed one extra `Customer.creditDays` lookup beyond
+Recent Activity's own new query — recorded as a spec-vs-code drift note in
+`85-dashboard.md`'s new Implementation Note section, along with four other confirmed
+deviations (no branch scoping anywhere in this schema; "Pending Approvals" shipped as
+"Pending Documents," DRAFT-only, no accounting count since Voucher has no DRAFT state;
+Receivables/Payables have no aging data to show; the "Trend Chart" is a proportional-bar
+`<table>`, matching `74-gst-reports.md`'s own `gst-trend-table.tsx`, since this codebase
+has no charting library and the spec's Do Not forbids adding one).
+
+Implemented on branch `feature/navigation-ia-overhaul`. `src/app/page.tsx` rewritten in
+full below its preserved Company → Financial Year → Branch resolution, gated on a new
+`dashboard:view` check (in-page message on failure, not a redirect — every other gated
+page's "redirect to `/`" fallback doesn't apply to `/` itself). New
+`src/modules/dashboard/` module: `services/dashboard-service.ts`
+(`dashboardService.getDashboard()`, the only new I/O — every widget's fetch gated via
+`hasPermission` on both `reports:view` and its own source module's `view`, wrapped in a
+`settle()` helper so one widget's thrown error becomes an isolated `unavailable` slot
+rather than failing the page), `components/*.tsx` (kpi-tile, outstanding-tile,
+alert-list, gst-summary-tile, pending-documents-tile, quick-actions-grid,
+recent-activity-feed, top-performers-table, sales-purchase-trend-table,
+dashboard-empty-state — all presentational, no data-fetching of their own), and
+`src/types/dashboard.ts` (a `DashboardWidget<T>` discriminated union —
+`ok`/`empty`/`no-permission`/`unavailable` — so "no data yet" is never confused with "the
+caller can't see this" or "the query failed," per the spec's "no misleading zeroes" rule).
+New `src/engines/reporting/dashboard-summary.ts` (`bucketByMonth`/`topN`, pure, no I/O —
+deliberately not a refactor of `gst-dashboard.ts`'s own private, differently-shaped
+bucketing helper). `src/config/navigation.ts`'s `DASHBOARD_ITEM` now carries the
+`"dashboard"` `permissionModule`.
+
+The only genuinely new queries: Recent Documents (7 small `companyId`-scoped `findMany`s
+across SalesInvoice/PurchaseInvoice/Voucher/SalesReturn/PurchaseReturn/CreditNote/
+DebitNote, each gated on its own source module's `view` permission before the query runs)
+and the `Customer.creditDays` lookup above. Every other widget is a thin composition of an
+already-shipped Phase 10 report/engine function — zero new financial/GST/inventory
+calculation, zero new Prisma schema/migration.
+
+`npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx vitest run` (1964/1964, +33
+new — 10 pure `bucketByMonth`/`topN` cases, 30 `dashboard-service.test.ts` cases covering
+no-FY handling, widget omission per permission across a representative sample of widgets,
+parallel-fetch failure isolation, cross-company scoping, no-data-vs-zero distinction,
+the payables sign-flip, quick-action gating including Journal Voucher's stricter
+`accounting:approve` gate, and alert edge cases for overdue-receivables/negative-stock/
+GST-filing-due/pending-documents), and `next build` all pass; `/` continues to appear in
+the build route table rendering real content, not the placeholder.
+
+**Browser-verified live** (Playwright, headless Chromium, no dedicated E2E tool available
+this session) against the seeded `admin` user (Company: Baba Premgiri Paints, FY
+2026-2027) with real seeded transactional data: KPI tiles, low-stock alerts, the
+Sales/Purchase trend table, Monthly Profit, GST Summary, Top Customers/Products/Suppliers,
+Pending Documents ("No documents are currently in draft"), Quick Actions, and Recent
+Documents all rendered correct real figures with zero browser console errors, at both
+desktop and 390px-mobile viewports (no horizontal overflow at mobile width, KPI row
+collapses to a single column).
+
+Code review and security review dispatched in parallel immediately after implementation,
+per `code-review.md`'s mandatory-review trigger for permission-gated code touching
+multi-tenant data.
+
+**Both reviews came back: 0 CRITICAL either pass.** Code review: 2 HIGH, 2 MEDIUM, 1 LOW,
+all fixed. Security review: 0 HIGH, 1 MEDIUM, 2 LOW, all fixed. Full detail (each finding,
+its fix, and the re-verification results) is recorded in
+`context/Phases/phase-tracker.md`'s Phase 10 section under this feature's entry — summary:
+- Recent Activity's "Voucher" source was fetching every `VoucherType` (not just manual
+  Payment/Receipt/Contra/Journal) and hardcoding every row to the Payment Voucher detail
+  route, so any Receipt/Contra/Journal voucher — or any auto-posted SALES/PURCHASE/etc.
+  voucher — either 404'd or duplicated its own source document's row. Fixed by filtering
+  the query to manual types only and routing each by its actual `voucherType`.
+- `pendingDocuments` could never report `no-permission`, and `negativeStockRisk` was
+  single-gated (`inventory:view` only) unlike every sibling widget's double gate. Fixed:
+  dedicated draft-count queries gated purely on their own module, decoupled from the
+  reports-gated KPI row fetch; `negativeStockRisk` (and Cash & Bank, a security-review LOW)
+  now also require `reports:view`, since their own drill-down links need it.
+- Every Top Performer/Outstanding row linked to one static aggregate-report URL regardless
+  of which row it was. Fixed: Top Products → the real per-product detail page; Top
+  Customers/Receivables and Top Suppliers/Payables → the customer/supplier statement pages'
+  own `customerId`/`supplierId` query-param pre-select.
+- The combined Sales/Purchase trend table rendered a fabricated `0.00` for whichever series
+  the caller lacked permission for, instead of omitting that column — fixed.
+- `settle()` silently swallowed every widget error with no server-side visibility — now
+  logged via the shared `pino` logger before returning the generic `unavailable` state
+  (still nothing exposed to the client).
+- `dashboard-service.test.ts` had zero coverage of Recent Activity (the one place this
+  spec composes a genuinely new query) — added permission-omission, voucherType-routing,
+  and cross-company tests for it; also added tests for every fix above.
+
+Re-verified after fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx
+vitest run` (1973/1973, +9), `next build` all pass. Re-verified live (Playwright,
+headless Chromium): the stale "Voucher SV-0001/SV-0002" rows are gone from Recent
+Activity; clicked through Top Products/Receivables/Payables links to confirm each lands
+on a real 200-status page showing the correct entity — zero console errors. Tracker `#82`
+moved to ✅ in `context/Phases/phase-tracker.md`'s Phase 10 section.
+
+## 2026-09-13 — New Phase inserted: Phase 11 — Payment & Collections Management
+
+User asked, before moving on to Phase 11 (as it stood — Productivity Features), to insert
+a new phase for managing payments, after noticing that Sales Invoice posts an unpaid
+remainder as a Debit to the customer's own Sundry Debtors ledger, and asked for the
+current payment flow to be explained along with how Bank/UPI and other modes fit into the
+ledger model. Explained: Sales Invoice's `payments[]` array posts each captured line as a
+Debit against whatever ledger is picked (any active ledger — a deliberate, documented
+`38-sales-invoice.md` decision, unlike Purchase Invoice which restricts this to
+Cash-in-Hand-or-Bank via `assertLedgersAreCashOrBank`), the remainder debits the
+customer's Sundry Debtors ledger, and collecting that outstanding balance later is a
+*separate*, unrelated step done via Receipt Voucher (Phase 7) — a generic ledger
+Debit(Cash/Bank)/Credit(any ledger) posting with no link back to the originating
+invoice(s). Bank accounts already exist as Ledgers via Bank Management (Phase 2 #14);
+there is no first-class UPI/Cheque concept anywhere — both would today just be a Bank
+ledger selection plus a free-text `reference` string.
+
+Three scoping questions put to the user, answers recorded here since they gate what the
+eventual feature-spec(s) may assume:
+1. **Invoice-wise payment allocation** (linking a receipt/payment to specific open
+   invoices) — **declined**. Keep today's generic ledger-only posting; no per-invoice
+   settlement/allocation in this phase.
+2. **Cheque management** (cheque number/bank/due-date/cleared-bounced lifecycle) —
+   **declined**. Cheque stays a plain Payment Mode label with no register, until specced
+   separately.
+3. **Phase placement** — **new Phase 11**, pushing the existing Phase 11 (Productivity
+   Features, #73–#79/specs 75–81) down to Phase 12. Per this project's established
+   never-renumber-assigned-numbers convention (the Phase 8 GSTR-2/ITC Register
+   precedent), Phase 12's own tracker numbers (#73–#79) and spec-file numbers (75–81)
+   are unchanged — only the phase heading number moved. Every other doc's cross-reference
+   to the old "Phase 11 — Productivity Features" (this file's Feature-Spec Mapping table
+   rows 75–81, two Next-Up-era notes, and `85-dashboard.md`'s own Do Not section) was
+   updated to "Phase 12" in the same pass — except `85-dashboard.md`'s three references to
+   `phases.md`'s own (separately-numbered, static) "Phase 11 — Performance & UX" /
+   "Dashboard Customization" item, which is a different document on a different numbering
+   axis (per this file's own Feature-Spec Numbering note above) and was correctly left
+   untouched.
+
+**Phase 11 — Payment & Collections Management reserved in
+`context/Phases/phase-tracker.md`**, tracker numbers #83–#86 (continuing from the highest
+existing, #82/ERP Dashboard, per the same never-renumber convention — not yet mapped to
+spec-file numbers, which will continue from 85/ERP Dashboard once each spec is drafted):
+
+- **#83 Payment Mode Master** — a new lookup (Cash/Bank Transfer/UPI/Card/Cheque/etc.),
+  each row carrying a ledger-class restriction (Cash-only vs. Bank-only) analogous to the
+  existing `assertLedgersAreCashOrBank` check.
+- **#84 Payment Mode Integration — Sales Documents** — wires Payment Mode into Sales
+  Invoice's payment lines and Sales Return's refund line.
+- **#85 Payment Mode Integration — Purchase Documents** — the mirror for Purchase
+  Invoice's payment lines and Purchase Return's refund line.
+- **#86 Payment Mode Integration — Manual Vouchers** — wires Payment Mode into the
+  Cash/Bank-restricted side of Receipt Voucher, Payment Voucher, and Contra Voucher.
+
+**Not yet spec-drafted, not implemented.** This is a placement/scope decision only —
+per `ai-workflow-rules.md`'s Specification-Driven workflow, drafting the actual
+feature-spec document (Requirement → Analysis → Business Rules → ...) is the next step,
+one item at a time, starting with #83 (Payment Mode Master), once the in-flight ERP
+Dashboard (#82) work on `feature/navigation-ia-overhaul` is committed. **Next Up: draft
+feature-spec 86 (Payment Mode Master, tracker #83)**, unless the user redirects first.
+
+## 2026-09-13 — Feature-specs 86 (Payment Mode Master) and 87 (Liability Settlement) drafted
+
+User asked to start drafting the feature-spec for #83, then, mid-session, asked to also
+add a "Liability Settlement" feature-spec to the phase. Two scoping questions asked and
+answered before drafting either:
+1. **Liability Settlement's scope** — **all `LIABILITY`-nature ledgers** (Sundry
+   Creditors, Loans, Duties & Taxes, Provisions, any custom sub-group), not narrowed to
+   Suppliers/Sundry Creditors only.
+2. **Drafting order** — Payment Mode Master first (as already in progress), Liability
+   Settlement next, both in this same session.
+
+**Item #87 (Liability Settlement) added to `context/Phases/phase-tracker.md`'s Phase
+11** — depends on Trial Balance (#62) and Payment Voucher (#51), both already
+implemented; explicitly *not* dependent on #83/#86 (Payment Mode), since it composes
+those two existing primitives as-is and a Payment Mode field will simply appear on its
+pre-filled form whenever #86 eventually lands.
+
+**`context/feature-specs/86-payment-mode-master.md` drafted** — new `PaymentMode`
+model (`name`, `ledgerClass: CASH | BANK | ANY`, `isSystemDefined`, `isActive`,
+`@@unique([companyId, name])`), seeded at company creation (`TenantBootstrapService`,
+alongside the existing default Ledger Groups/Roles/Financial Year seeding) with five
+defaults — Cash (CASH), Bank Transfer (BANK), UPI (BANK), Card (BANK), Cheque (BANK) —
+company-extensible beyond those five. Gated on the existing `accounting` permission
+module (`view`/`create`/`edit`/`delete` — no delete, activate/deactivate only, matching
+every other master in this codebase), under `/accounting/payment-modes`. **Deliberately
+does not build the ledger-class-matching validator** (which payment line's ledger must
+satisfy which mode's `ledgerClass`) in this spec — per YAGNI, that cross-module check has
+no consumer yet and is deferred to spec 88 (#84, the first real consumer), which will
+extract it from `src/lib/ledger-class.ts`'s existing (currently private)
+`isCashOrBankClass` rather than re-deriving the Cash-in-Hand-subtree-or-BankAccount test a
+third way.
+
+**`context/feature-specs/87-liability-settlement.md` drafted** — **zero new Prisma
+schema.** A read+navigate screen at `/accounting/liability-settlement`: calls
+`voucherQueries.getTrialBalance(companyId, financialYearId, asOfDate)` (spec 64's own
+primitive, exactly as `66-balance-sheet.md` already consumes it), filters to
+`LIABILITY`-nature ledgers (via `LedgerGroup.natureType`, `ledgerGroupRepository.findMany`)
+with a non-zero sign-flipped outstanding balance, and renders one row per ledger with a
+"Settle" action. Settle navigates to Payment Voucher's existing New screen
+(`/accounting/payment-vouchers/new?debitLedgerId=<id>&amount=<outstanding>`), a small,
+additive prefill extension to that page/form only — `paymentVoucherService` itself is
+untouched, and posting still goes through its existing, unmodified
+`postPaymentVoucher`. No auto-posting: the user always lands on the real Payment Voucher
+form to confirm the Credit (Cash/Bank) ledger and narration before submitting. Reflects
+the phase's own declined-invoice-allocation decision directly: settling a liability posts
+one lump Debit for (up to) its whole outstanding balance, never a bill-by-bill breakdown.
+
+Both specs are **documentation only, not implemented** — items #84–#86 (Payment Mode
+Integration into Sales/Purchase/Manual-Voucher documents) remain undrafted. **Next Up:
+either implement spec 86 (Payment Mode Master, tracker #83) and/or spec 87 (Liability
+Settlement, tracker #87), or continue drafting #84–#86**, per explicit user instruction —
+`ai-workflow-rules.md`'s one-feature-at-a-time rule means only one of these should be
+implemented next, not several at once.

@@ -118,7 +118,7 @@ function group(label: string, icon: LucideIcon, permissionModule: PermissionModu
   return { type: "group", label, icon, permissionModule, children };
 }
 
-export const DASHBOARD_ITEM: NavLeaf = leaf("Dashboard", "/", LayoutDashboard);
+export const DASHBOARD_ITEM: NavLeaf = leaf("Dashboard", "/", LayoutDashboard, "dashboard");
 
 export const NAVIGATION: NavItem[] = [
   DASHBOARD_ITEM,

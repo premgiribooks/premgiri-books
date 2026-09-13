@@ -980,6 +980,151 @@ own card). Spec-file numbers are sequential and diverge from tracker numbers as 
 | 71  | Employee Reports  | Employees      | ✅     |
 | 72  | GST Reports       | GST            | ✅     |
 
+**A twelfth item, ERP Dashboard (`#82`, spec-file 85), was added 2026-09-13**, per
+explicit user request ("implement a complete ERP Dashboard ... create a feature document
+for this before starting"). `phases.md`'s own Phase 10 module list has always named
+"Dashboard Reports" first, but it was never assigned a tracker number when this phase's
+eleven-item breakdown above was drafted (2026-09-11) — a documentation gap, recorded here
+rather than silently patched, per `ai-workflow-rules.md`'s discrepancy-recording rule.
+Numbered `#82` (continuing the sequence after Phase 8's `#80`/`#81` GSTR-2/ITC Register
+extension — the highest tracker number in use), mirroring that same precedent of adding a
+recognized-late item to an already-"complete" phase rather than renumbering anything:
+
+| Tracker # | Feature       | Spec file                                  |
+| --------- | ------------- | ------------------------------------------- |
+| 82        | ERP Dashboard | `context/feature-specs/85-dashboard.md`     |
+
+| #   | Feature       | Depends On                                    | Status |
+| --- | ------------- | ---------------------------------------------- | ------ |
+| 82  | ERP Dashboard | Every Phase 10 report (#62–72) + GST (#55–58) + Role & Permission Management | ✅     |
+
+**Feature-spec 85 (ERP Dashboard) drafted 2026-09-13** (documentation only, not
+implemented) — replaces `src/app/page.tsx`'s current placeholder (`"Premgiri Books ERP —
+application shell ready."`) with a permission-aware home screen composing KPI tiles,
+alerts/exceptions, trends, a GST summary, top performers, quick actions, and a recent-
+activity feed, entirely by reusing existing Phase 10 report services/engines (Trial
+Balance, P&L, Balance Sheet, Sales/Purchase/Inventory/Customer/Supplier Reports, GST
+Reports) plus the existing permission system — **zero new business calculations, zero
+new Prisma schema, no new GST/pricing/inventory logic**. See the spec's own header note
+for the tracker-numbering resolution and its Do Not section for what is deliberately
+excluded (Dashboard Customization/Phase 12 — Productivity Features, renumbered from Phase
+11 the same day this insertion note was added, any AuditLog extension, real-time
+infrastructure).
+
+**ERP Dashboard (#82, spec 85) implemented 2026-09-13** on branch
+`feature/navigation-ia-overhaul`. `src/app/page.tsx` rewritten: the existing Company →
+Financial Year → Branch resolution/redirect logic is preserved verbatim, with a new
+`dashboard:view` page-level gate added below it (already seeded on every default role);
+a user lacking it sees an in-page message rather than a redirect loop, since every other
+gated page's "redirect to `/` on failure" fallback doesn't apply to `/` itself. New
+`src/modules/dashboard/services/dashboard-service.ts` (`dashboardService.getDashboard()`,
+no argument — resolves its own `CompanyCurrentUser`/`FinancialYear` via the standard
+`cache()`-deduped helpers, per a documented deviation from the spec's proposed
+`getDashboard(systemContext)` signature, since `resolveSystemContext()` hardcodes
+`branch: null` and isn't shaped for per-widget permission checks). Every widget's fetch is
+independently gated via `hasPermission` (never `assertPermission` — a missing permission
+means "omit this widget," not "throw the whole page"): both `reports:view` **and** that
+widget's own source module's `view` (e.g. `sales:view` for the Sales KPI, mirroring
+`74-gst-reports.md`'s own double-gate precedent), and each fetch is wrapped in a `settle()`
+helper so one widget's thrown error becomes an `unavailable` slot instead of failing the
+whole page. A `DashboardWidget<T>` discriminated union (`ok` / `empty` / `no-permission` /
+`unavailable`) keeps "no data exists yet" distinct from "the caller can't see this" and from
+"the query failed," per the spec's own "no misleading zeroes" and permission-personalization
+rules.
+
+Five confirmed deviations from the spec's literal prose, each verified against the live
+schema/codebase before implementation rather than assumed from the spec text alone: (1) no
+branch-level scoping anywhere — the schema has no `branchId` on `SalesInvoice`/
+`PurchaseInvoice`/`Voucher` at all (Phase 2's Shared ERP Engines section already recorded
+this gap); (2) the spec's "Pending Approvals" widget is implemented as "Pending Documents,"
+counting DRAFT rows only — this schema has no approval workflow or `SAVED` status anywhere
+(every relevant enum is `DRAFT`/`POSTED`/`CANCELLED`), and Voucher itself has no DRAFT state
+at all (a manual voucher posts immediately), so there is no "pending accounting document" to
+count; (3) Receivables/Payables show a grand total + top-N by amount with **no aging
+buckets** — `CustomerOutstandingReport`/`SupplierOutstandingReport` carry no aging data, and
+adding it would be new business logic the spec forbids; (4) the "Monthly Sales/Purchase
+Trend" widget is a proportional-bar `<table>` (`sales-purchase-trend-table.tsx`, mirroring
+`gst-trend-table.tsx`'s own established pattern), not a chart — this codebase has no
+charting library and the spec's own Do Not forbids adding one; (5) types live in
+`src/types/dashboard.ts`, not `src/modules/dashboard/types/`, matching this codebase's real
+convention (no module anywhere has its own `types/` folder).
+
+New `src/engines/reporting/dashboard-summary.ts` (`bucketByMonth`/`topN`, pure, no I/O) —
+deliberately not a refactor of `gst-dashboard.ts`'s own private, differently-typed
+month-bucketing helper (touching a shipped, tested, unrelated module for zero behavioral
+gain); the resulting small duplication matches this codebase's own precedent
+(`financial-report-filters-schema.ts`'s documented `isValidCalendarDate`/`toUtcDate`
+duplication). The one genuinely new query beyond a thin composition layer is Recent
+Documents (7 small `companyId`-scoped `findMany`s across SalesInvoice/PurchaseInvoice/
+Voucher/SalesReturn/PurchaseReturn/CreditNote/DebitNote, gated per source module before the
+query runs, never fetched-then-discarded) plus one `Customer.creditDays` lookup for the
+overdue-receivables alert (Sales Invoice's own customer snapshot carries `creditLimit`, not
+`creditDays`).
+
+`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run` (1964/1964, +33 new), and
+`next build` all pass; `/` continues to appear in the build route table. Browser-verified
+live against the seeded `admin` user and real seeded company data (desktop and 390px mobile
+viewports, zero console errors) — real KPI/trend/GST/top-performer/recent-activity figures
+rendered correctly, mobile layout collapses to single-column with no horizontal overflow.
+**Code review + security review (run in parallel) found 0 CRITICAL. Code review: 2 HIGH,
+2 MEDIUM, 1 LOW — all fixed. Security review: 0 HIGH, 1 MEDIUM, 2 LOW — all fixed.** No
+finding from either review was a cross-tenant data leak; every one was either a dead
+drill-down link, an inconsistent permission gate, a fabricated zero for an unauthorized
+series, or a test-coverage gap:
+- **HIGH (code)**: the Recent Activity "Voucher" source fetched every `VoucherType`
+  (including auto-posted SALES/PURCHASE/SALES_RETURN/etc., which have no dedicated detail
+  page) and hardcoded every row to `/accounting/payment-vouchers/{id}` — any non-Payment
+  manual voucher 404'd. Fixed by filtering the query to manual types only
+  (`PAYMENT`/`RECEIPT`/`CONTRA`/`JOURNAL` — every other type is already represented by its
+  own source document, e.g. a SALES voucher by its Sales Invoice row) and routing each by
+  its own `voucherType`.
+- **HIGH (code)**: `pendingDocuments` was always fetched with `permitted: true`, so it
+  could never return `no-permission` for a caller with none of sales/purchase/inventory
+  view; `negativeStockRisk` was gated on `inventory:view` alone, inconsistent with every
+  sibling widget's `reports:view` + source-module double gate. Fixed: pending-document
+  counts now come from dedicated `prisma.salesInvoice.count`/`purchaseInvoice.count`
+  queries gated purely on their own module's `view` (decoupled from the reports-gated bulk
+  row fetch, which also fixes a related MEDIUM security finding below), the widget itself
+  is `no-permission` only when all three source permissions are absent; `negativeStockRisk`
+  now requires `reports:view` too (its drill-down link needs it, matching Cash & Bank's own
+  fix below).
+- **MEDIUM (code)**: Top Products/Customers/Suppliers and Receivables/Payables top-N rows
+  all linked to one static aggregate-report URL regardless of which row was rendered.
+  Fixed: Top Products → `/masters/products/{id}` (a real per-product detail page, Phase 6);
+  Top Customers/Receivables → `/reports/customers/statement?customerId={id}`; Top
+  Suppliers/Payables → `/reports/suppliers/statement?supplierId={id}` (both statement pages
+  already accept a pre-selecting query param).
+- **MEDIUM (code)**: `dashboard-service.test.ts` had zero assertions on `recentActivity`
+  despite it being the spec's one genuinely new query — exactly why the Voucher dead-link
+  bug shipped undetected. Fixed: added permission-omission, voucherType-routing, and
+  cross-company-scoping tests for it.
+- **LOW (code)**: the page-level "does the caller see any widget at all" heuristic checked
+  only 12 of 16 widgets, so a custom role permitted on only `pendingDocuments`/
+  `negativeStockRisk`/`overdueReceivables`/`gstFilingDue` would have the whole page
+  suppressed. Fixed: the check now covers every widget.
+- **MEDIUM (security)**: `SalesPurchaseTrendTable` rendered a fabricated `0.00` column for
+  whichever of Sales/Purchase the caller lacked permission for, instead of omitting that
+  series — a direct violation of this feature's own "omitted entirely, never rendered"
+  rule. Fixed: the table now drops the unauthorized series' column entirely.
+- **LOW (security)**: `settle()`'s catch block silently swallowed every widget error with
+  no server-side logging. Fixed: logs via the shared `pino` `logger` (`@/lib/logger`)
+  before returning the `unavailable` state, still with no detail exposed to the client.
+- **LOW (security)**: Cash & Bank Balance's tile linked to `/reports/cash-flow`
+  (`reports:view`-gated) while the widget itself was gated on `accounting:view` alone — an
+  accounting-only role would see a tile whose own link redirected home. Fixed: paired with
+  `reports:view`, matching Monthly Profit's own gate (same fix applied to
+  `negativeStockRisk` above, whose link has the identical issue).
+
+Re-verified after all fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors), `npx
+vitest run` (1973/1973, +9 from the review-driven test additions), and `next build` all
+pass. Re-verified live (Playwright): the Voucher recent-activity rows that previously said
+"Voucher SV-0001"/"Voucher SV-0002" (auto-posted Sales vouchers, wrongly exposed as generic
+manual-voucher rows) are correctly gone from the feed now that it's filtered to manual
+types only; Top Products/Receivables/Payables links click through to real 200-status pages
+showing the correct entity (confirmed for `/masters/products/{id}`,
+`/reports/customers/statement?customerId=...`, `/reports/suppliers/statement?supplierId=...`)
+— zero console errors throughout.
+
 **Trial Balance (#62, spec 64) implemented 2026-09-12** on branch `feature/trial-balance`,
 per explicit user instruction ("start Trial Balance") ahead of Payroll (#61, Phase 9) —
 see the deferral note at the end of Phase 9's section above. The first tenant of the
@@ -1651,7 +1796,77 @@ security review outcome (both findings were on this feature's own
 
 ---
 
-# Phase 11 — Productivity Features
+# Phase 11 — Payment & Collections Management
+
+Inserted 2026-09-13, ahead of Phase 12 — Productivity Features (renumbered from Phase 11
+to make room for this insertion — its own tracker numbers #73–#79 and spec-file numbers
+75–81 are unchanged, only the phase heading number moved, per this project's established
+convention of never renumbering an already-assigned tracker/spec-file number; see the
+Phase 8 GSTR-2/ITC Register note for the precedent), per explicit user request after
+observing that Sales Invoice's payment lines post an unpaid remainder as a Debit straight
+to the customer's own Sundry Debtors ledger (`38-sales-invoice.md`'s Ledger Posting rule)
+with no structured Payment Mode (Cash/Bank/UPI/Card/Cheque) anywhere in the app — every
+payment line today (Sales Invoice, Purchase Invoice, Receipt/Payment/Contra Voucher) is
+just "pick any active ledger + a free-text reference." Per the same convention Phase 8's
+GSTR-2/ITC Register addition established, tracker numbers here continue from the highest
+existing (#82, ERP Dashboard) rather than renumbering anything in a later phase; spec-file
+numbers (once specs are drafted) will likewise continue from the highest existing (85, ERP
+Dashboard).
+
+**Explicitly scoped out per user decision, 2026-09-13** (not silently deferred — recorded
+here so a later session doesn't reintroduce either as an assumed requirement):
+- **No invoice-wise payment allocation.** Receipts/payments continue to post as a generic
+  ledger Debit/Credit, exactly like today's Receipt Voucher/Payment Voucher
+  (`52-payment-voucher.md`/`53-receipt-voucher.md`) — not tied to settling specific open
+  Sales/Purchase Invoices. This also governs #87 below: settling a liability posts one
+  lump Payment Voucher Debit against the ledger's whole outstanding balance, never a
+  bill-by-bill/sub-ledger breakdown.
+- **No Cheque Register** (cheque number, bank, due/clearance date, bounced status). Cheque
+  remains a plain Payment Mode label with no lifecycle tracking, until specced separately.
+
+**Item #87 (Liability Settlement) added 2026-09-13, per explicit user request** — a
+consolidated screen over every `LIABILITY`-nature ledger (Sundry Creditors, Loans, Duties
+& Taxes, Provisions, and any custom sub-group, not suppliers only — an explicit "all
+Liability-nature ledgers" scope decision, not narrowed to Sundry Creditors) with an
+outstanding balance, each row's "Settle" action pre-filling the existing Payment
+Voucher's New screen. It does not depend on #83/#86 (Payment Mode) — it composes
+`64-trial-balance.md`'s `getTrialBalance` (read side) and `52-payment-voucher.md`'s
+`postPaymentVoucher` (write side) exactly as already built; a Payment Mode field simply
+appears on its pre-filled form once #86 lands, with no hard ordering between the two.
+
+Feature-specs 86 (Payment Mode Master, #83) and 87 (Liability Settlement, #87) were
+**drafted 2026-09-13** (documentation only, not implemented) — see
+`context/feature-specs/86-payment-mode-master.md` and
+`87-liability-settlement.md`. Items #84–#86 (the three Payment Mode Integration items)
+remain **not yet drafted** — this section reserves their phase placement and tracker
+slots, per the user's explicit "create a new phase" request. Per
+`ai-workflow-rules.md`'s Specification-Driven workflow, drafting each remaining
+feature-spec — one item at a time, Requirement → Analysis → Business Rules → ... — is
+the next step, after the in-flight ERP Dashboard (#82) work is committed.
+
+| Tracker # | Feature                                        | Depends On                                              | Status |
+| --------- | ----------------------------------------------- | -------------------------------------------------------- | ------ |
+| 83        | Payment Mode Master                              | Ledger Master                                             | ⬜     |
+| 84        | Payment Mode Integration — Sales Documents        | Payment Mode Master; Sales Invoice; Sales Return           | ⬜     |
+| 85        | Payment Mode Integration — Purchase Documents     | Payment Mode Master; Purchase Invoice; Purchase Return     | ⬜     |
+| 86        | Payment Mode Integration — Manual Vouchers        | Payment Mode Master; Payment/Receipt/Contra Voucher        | ⬜     |
+| 87        | Liability Settlement                             | Trial Balance; Payment Voucher                             | ⬜     |
+
+Phase Status
+
+⬜ Not Started — reserved ahead of Phase 12 (Productivity Features) per explicit user
+request 2026-09-13; specs 86/87 (#83/#87) drafted the same day, not yet implemented. See
+`context/progress-tracker.md`'s Next Up for what comes right after the in-flight ERP
+Dashboard (#82) work is committed.
+
+---
+
+# Phase 12 — Productivity Features
+
+> Renumbered from Phase 11 to Phase 12 on 2026-09-13, per explicit user instruction, to
+> insert Phase 11 — Payment & Collections Management ahead of it — before implementation
+> of any of this phase's seven items had begun. This phase's own tracker numbers (#73–#79)
+> and spec-file numbers (75–81) are unchanged; only the phase heading number moved.
 
 Feature-specs for all seven items were drafted 2026-09-11 (documentation only, not
 implemented), in two parallel batches (data/export: #73–76; operational: #77–79). Global
