@@ -12,3 +12,4 @@
  */
 import "@/modules/ledger-groups/events/register-bootstrap-handler";
 import "@/modules/ledgers/events/register-bootstrap-handler";
+import "@/modules/payment-modes/events/register-bootstrap-handler";

@@ -1839,14 +1839,73 @@ Feature-specs 86 (Payment Mode Master, #83) and 87 (Liability Settlement, #87) w
 `context/feature-specs/86-payment-mode-master.md` and
 `87-liability-settlement.md`. Items #84–#86 (the three Payment Mode Integration items)
 remain **not yet drafted** — this section reserves their phase placement and tracker
-slots, per the user's explicit "create a new phase" request. Per
-`ai-workflow-rules.md`'s Specification-Driven workflow, drafting each remaining
-feature-spec — one item at a time, Requirement → Analysis → Business Rules → ... — is
-the next step, after the in-flight ERP Dashboard (#82) work is committed.
+slots, per the user's explicit "create a new phase" request.
+
+**Payment Mode Master (#83, spec 86) implemented 2026-09-13** on branch
+`feature/payment-mode-master`, per explicit user instruction ("start
+86-payment-mode-master"), immediately after the in-flight ERP Dashboard (#82) work was
+committed, pushed, and merged into `main` (see progress-tracker.md's Merge Log for that
+close-out). New `prisma/schema.prisma` model `PaymentMode` (`name`, `ledgerClass`
+(`PaymentModeLedgerClass` enum: `CASH`/`BANK`/`ANY`), `isSystemDefined`, `isActive`,
+`@@unique([companyId, name])`) — migration `20260913041407_add_payment_mode`. Standard
+Repository → Service → Server Action → UI layering under
+`src/modules/payment-modes/`, mirroring `unit-repository.ts`/`unit-service.ts`'s exact
+shape (the closest existing analog: a simple company-scoped master with Activate/
+Deactivate and no linked entity) rather than Bank Management's Ledger-linked shape. Five
+defaults (Cash/CASH, Bank Transfer/BANK, UPI/BANK, Card/BANK, Cheque/BANK,
+`isSystemDefined: true`) seeded via a new `register-bootstrap-handler.ts` (order 30, no
+ordering dependency on ledger-groups/ledgers since `ledgerClass` is a fixed enum, not a
+ledger-group FK), registered in `tenant-bootstrap-events.ts`. UI:
+`/accounting/payment-modes` (list, search-free per spec), `/new`, `/[id]/edit`, a single
+`PaymentModeForm` serving both Create and Edit (name/ledgerClass are editable on every
+row, including seeded ones — no downstream FK exists yet to invalidate), a `Ledger Class`
+badge and a `System` badge alongside the standard Active/Inactive badge. Wired into the
+Accounting hub card grid, `navigation.ts`'s Accounting group, and `breadcrumbs.ts`.
+
+**One resolved spec/code discrepancy, recorded per `ai-workflow-rules.md`'s Documentation
+Rules**: 86-payment-mode-master.md's Security section claims Bank Management "gates
+status changes under edit, not a separate action" — this does not match
+`bank-account-service.ts`'s actual code (`LIFECYCLE_ACTION = "delete"`), nor any other
+master-data service in this codebase (`unitService`, `ledgerService`,
+`ledgerGroupService`, `gstRateService`, … all gate Activate/Deactivate on `"delete"`,
+per each one's identical comment: the permission catalog has no dedicated
+activate/deactivate action). Implemented Activate/Deactivate gated on `"delete"` here,
+matching the universal codebase convention over the spec's incorrect claim; a service
+test (`payment-mode-service.test.ts`) pins this down explicitly so a future edit can't
+silently regress it back to "edit".
+
+`npx tsc --noEmit`, `npx eslint src prisma` (0 errors, 2 pre-existing unrelated
+warnings), `npx vitest run` (1998/1998, +25 new: repository cross-company isolation/
+activate-deactivate-only-toggles-isActive/seedDefaults-shape, service translatePersistError
++ permission-gate + cross-company isolation, and validation-schema coverage of all three
+`ledgerClass` values), and `next build` all pass;
+`/accounting/payment-modes`, `/accounting/payment-modes/new`, and
+`/accounting/payment-modes/[id]/edit` all appear in the build route table.
+Browser-verified live (Playwright, headless Chromium) against the seeded `admin` user:
+logged in, confirmed the existing pre-migration seed company correctly shows an empty
+list (its bootstrap ran before this feature existed, so it was never retroactively
+seeded — expected, not a bug), created a "Cash" payment mode, confirmed a duplicate name
+is rejected with the friendly per-company error toast, edited it (name → "Cash Counter",
+ledgerClass `CASH` → `ANY`) and confirmed the change persisted, toggled Deactivate/
+Activate and confirmed the status badge flipped both ways, and confirmed the Accounting
+hub's new Payment Modes card links correctly — zero console errors throughout. Test rows
+created during verification were deleted afterward.
+
+**Code review: APPROVE, 0 CRITICAL/HIGH/MEDIUM, 1 LOW (cosmetic).** The one LOW —
+`CreditCard` inserted out of alphabetical order in `navigation.ts`'s lucide-react import
+block — was fixed immediately. Review confirmed the "delete" vs "edit" permission-gate
+deviation is applied uniformly across service/tests/UI, and cross-tenant scoping matches
+`unit-repository.ts`'s identical pattern exactly, with test coverage matching every
+bullet in the spec's Code Standards section. **Security review: 0 CRITICAL/HIGH/MEDIUM/
+LOW across every category checked** (cross-tenant isolation, authorization, input
+validation, Server Action trust boundary, error-message sanitization, injection) — no
+findings at all. Both reviews ran in parallel against commit `cd3a619`.
+Re-verified after the LOW fix: `npx tsc --noEmit` and `npx eslint src/config/navigation.ts`
+both clean.
 
 | Tracker # | Feature                                        | Depends On                                              | Status |
 | --------- | ----------------------------------------------- | -------------------------------------------------------- | ------ |
-| 83        | Payment Mode Master                              | Ledger Master                                             | ⬜     |
+| 83        | Payment Mode Master                              | Ledger Master                                             | ✅     |
 | 84        | Payment Mode Integration — Sales Documents        | Payment Mode Master; Sales Invoice; Sales Return           | ⬜     |
 | 85        | Payment Mode Integration — Purchase Documents     | Payment Mode Master; Purchase Invoice; Purchase Return     | ⬜     |
 | 86        | Payment Mode Integration — Manual Vouchers        | Payment Mode Master; Payment/Receipt/Contra Voucher        | ⬜     |
@@ -1854,10 +1913,9 @@ the next step, after the in-flight ERP Dashboard (#82) work is committed.
 
 Phase Status
 
-⬜ Not Started — reserved ahead of Phase 12 (Productivity Features) per explicit user
-request 2026-09-13; specs 86/87 (#83/#87) drafted the same day, not yet implemented. See
-`context/progress-tracker.md`'s Next Up for what comes right after the in-flight ERP
-Dashboard (#82) work is committed.
+🟡 In Progress — Payment Mode Master (#83) implemented 2026-09-13; items #84–#87 remain
+not yet drafted/implemented. See `context/progress-tracker.md`'s Next Up for what comes
+next (drafting spec 88, #84, the first real consumer of `ledgerClass`).
 
 ---
 

@@ -100,7 +100,7 @@ Mapping so far:
 | 83           | ITC Register (`83-itc-register.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#81) — **spec drafted 2026-09-11, not implemented**; second item added to Phase 8 alongside spec 82 — rate/party/HSN breakdown of GSTR-3B's (#57/spec 59) Table 4(A)(5) lump ITC figure, report-only, explicitly not a full Electronic Credit Ledger, no new schema |
 | 84           | Navigation & Information Architecture Overhaul (`84-navigation-ia-overhaul.md`) | Not a `phase-tracker.md` item (cross-cutting, touches every module's navigation rather than one business feature) — **retrospective spec, implemented 2026-09-12/13** on branch `feature/navigation-ia-overhaul`; hierarchical permission-aware Sidebar, Ctrl+K Command Palette, favorites/recents, mobile drawer, third-level Reports sub-menus, scrollable/scrollbar-less rail, unified collapsed-icon tooltips; substantially (not formally) implements spec 75's PAGES+3-entity-DATA scope |
 | 85           | ERP Dashboard (`85-dashboard.md`)                                              | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#82) — **implemented, reviewed, and fixed 2026-09-13** (see this file's own entry the same date); permission-aware home screen composing existing Phase 10 report services/engines, zero new business calculations |
-| 86           | Payment Mode Master (`86-payment-mode-master.md`)                             | `context/Phases/phase-tracker.md` **Phase 11 — Payment & Collections Management** (#83) — **spec drafted 2026-09-13, not implemented**; first item of the newly-inserted Phase 11 — a company-scoped Payment Mode lookup (Cash/Bank Transfer/UPI/Card/Cheque), each row carrying a `ledgerClass` (CASH/BANK/ANY) that specs 88–90 (#84–#86, not yet drafted) will validate a payment line's chosen ledger against; no cross-module validation helper built yet, per YAGNI — deferred to the first real consumer |
+| 86           | Payment Mode Master (`86-payment-mode-master.md`)                             | `context/Phases/phase-tracker.md` **Phase 11 — Payment & Collections Management** (#83) — **implemented 2026-09-13** on branch `feature/payment-mode-master`; first item of the newly-inserted Phase 11 — a company-scoped Payment Mode lookup (Cash/Bank Transfer/UPI/Card/Cheque), each row carrying a `ledgerClass` (CASH/BANK/ANY) that specs 88–90 (#84–#86, not yet drafted) will validate a payment line's chosen ledger against; no cross-module validation helper built yet, per YAGNI — deferred to the first real consumer |
 | 87           | Liability Settlement (`87-liability-settlement.md`)                          | `context/Phases/phase-tracker.md` Phase 11 — Payment & Collections Management (#87) — **spec drafted 2026-09-13, not implemented**; added to the phase after its initial reservation, per explicit user request — a read+navigate wrapper over `64-trial-balance.md`'s `getTrialBalance` (lists every `LIABILITY`-nature ledger with an outstanding balance) and `52-payment-voucher.md`'s existing New-voucher screen (pre-filled "Settle" action), no new Prisma model, no invoice-wise/bill-wise allocation |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
@@ -1861,12 +1861,17 @@ Mapping so far:
 
 ## In Progress
 
-- **Navigation & IA Overhaul** (see the Current Phase entry above for full detail) —
-  implemented, browser-verified with a scratchpad-only Playwright script, code-reviewed (2
-  HIGH found and fixed), and security-reviewed (APPROVE, 0 CRITICAL/HIGH/MEDIUM), all
-  committed on `feature/navigation-ia-overhaul` (two commits: `d9ac101` implementation,
-  `8e253f5` review fixes). **Not yet pushed or merged into `main`** — awaiting the user's
-  review before merge, per this project's one-branch-at-a-time git workflow.
+- ~~**Navigation & IA Overhaul** — implemented, browser-verified, code-reviewed, and
+  security-reviewed. Not yet pushed or merged into `main`.~~ **Resolved 2026-09-13**: the
+  branch had since grown a fifth commit (`8c874db`, the in-flight ERP Dashboard #82 work,
+  documentation-only until then) sitting uncommitted in the working tree. Before starting
+  Payment Mode Master (#83, spec 86), per this project's one-branch-at-a-time git workflow,
+  that work was verified (`npx tsc --noEmit`, `npx eslint src prisma`, `npx vitest run`
+  1973/1973, `next build` all pass), committed, pushed, and merged `--no-ff` into `main`
+  (merge commit, no conflicts; re-verified clean post-merge), then the branch was deleted
+  both locally and on `origin`. **Both Navigation & IA Overhaul and ERP Dashboard (#82) are
+  now on `main`.** See the new dated log entry at the end of this file for what came next
+  (Payment Mode Master, #83).
 
 - Feature-spec 38 (Sales Invoice) implemented 2026-09-10 on branch `36-sales-orders`. **Code review: 1 HIGH, 3 MEDIUM, all fixed. Security review: 1 HIGH, 2 MEDIUM/LOW, the HIGH and one MEDIUM fixed; the other MEDIUM/LOW accepted as-is.** Fixed:
   - **[HIGH, code review] Quick Customer auto-conversion silently required an unrelated `masters:create` permission** — `convertQuickCustomer` called the public `customerService.createCustomer`/`listSelectableLedgerGroupsForCustomer`, both gated on `masters:create`/`masters:view`. A cashier role with `sales:create` but no `masters` rights (a realistic, deliberate role split) would have the whole posting transaction abort on this internal side-effect. Fixed by adding `customerService.createCustomerFromSale`/`listSelectableLedgerGroupsForSale` — identical logic, gated on `sales:create` instead, since it's the authorized sale (not a standalone master-data action) that justifies creating the buyer's record. `createCustomer`/`listSelectableLedgerGroupsForCustomer` are untouched for their normal Customer Management callers.
@@ -3180,3 +3185,43 @@ either implement spec 86 (Payment Mode Master, tracker #83) and/or spec 87 (Liab
 Settlement, tracker #87), or continue drafting #84–#86**, per explicit user instruction —
 `ai-workflow-rules.md`'s one-feature-at-a-time rule means only one of these should be
 implemented next, not several at once.
+
+## 2026-09-13 — Branch close-out: ERP Dashboard (#82) committed, merged into `main`
+
+Per explicit user instruction ("start 86-payment-mode-master"), before starting a new
+feature branch, `ai-workflow-rules.md`'s Git Workflow ("one branch is worked on, merged,
+and closed out before the next branch is created") required closing out
+`feature/navigation-ia-overhaul` first — it carried a fifth, uncommitted piece of work
+(the ERP Dashboard, #82/spec 85, already documented above as "implemented 2026-09-13"
+but never actually committed to git).
+
+Sequence: re-verified `npx tsc --noEmit` / `npx eslint src prisma` (0 errors) / `npx
+vitest run` (1973/1973) / `next build` (all pass, `/` in the route table) against the
+dirty working tree; committed everything (dashboard module, `dashboard-summary` engine,
+`page.tsx` rewrite, specs 85–87, both trackers) as `8c874db`; pushed
+`feature/navigation-ia-overhaul` to `origin` for the first time; merged `--no-ff` into
+`main` (clean merge, no conflicts); re-ran the full check suite against the merged result
+(same four checks, all pass); pushed `main`; deleted the branch locally and on `origin`.
+**`main` now has both the Navigation & IA Overhaul and the ERP Dashboard (#82).**
+
+## 2026-09-13 — Payment Mode Master (#83, spec 86) implemented
+
+Implemented immediately after the close-out above, on a fresh `feature/payment-mode-master`
+branch cut from the just-updated `main`. Full technical record — schema, seeding,
+module layout, the resolved Bank-Management-gating discrepancy, test coverage, and
+browser verification — is in `context/Phases/phase-tracker.md`'s Phase 11 section
+(search "Payment Mode Master (#83, spec 86) implemented"); not duplicated here.
+
+Committed as `cd3a619` on `feature/payment-mode-master`. **Code review (parallel
+subagent): APPROVE, 0 CRITICAL/HIGH/MEDIUM, 1 LOW** (a cosmetic import-ordering nit in
+`navigation.ts` — fixed immediately, re-verified clean). **Security review (parallel
+subagent): 0 findings across every category** (cross-tenant isolation, authorization,
+input validation, Server Action trust boundary, error sanitization, injection) — both
+reviews explicitly confirmed the "delete"-not-"edit" permission-gate deviation is applied
+consistently and is not a vulnerability.
+
+**Not yet pushed, merged into `main`, or manually clicked-through by the user** (only
+Playwright-automated browser verification has happened so far). **Next Up: push this
+branch, merge into `main` per the one-branch-at-a-time git workflow, then either begin
+drafting spec 88 (#84, Payment Mode Integration — Sales Documents) or await the user's
+next instruction**, per `ai-workflow-rules.md`'s one-feature-at-a-time rule.
