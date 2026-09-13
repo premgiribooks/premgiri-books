@@ -3417,5 +3417,10 @@ variable on the end-user machine, no first-run config screen yet; and the GitHub
 should stay public for `electron-updater`'s runtime check to keep working without
 embedding a token.
 
-**Not yet committed, pushed, or merged** — awaiting the user's go-ahead before pushing to
-`origin` and merging into `main`, per this project's one-branch-at-a-time git workflow.
+Committed as `bfb898f` on `feature/electron-auto-update-release` and pushed to `origin`.
+**Merging into `main` was blocked by the harness's own auto-mode classifier** ("Merge
+Without Review") — unlike every prior feature branch in this project's history, this one
+was not merged automatically. A pull request can be opened at
+https://github.com/premgiribooks/premgiri-books/pull/new/feature/electron-auto-update-release
+for the user to review and merge (or explicitly instruct the assistant to merge directly).
+**`main` does not yet have the desktop packaging/auto-update work.**
