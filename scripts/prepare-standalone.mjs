@@ -25,6 +25,25 @@ async function copyInto(from, to) {
   await cp(from, to, { recursive: true, dereference: true });
 }
 
+// Some packages (e.g. next's own "baseline-browser-mapping" dependency)
+// restrict their own package.json via an "exports" map, so
+// require.resolve(`${pkg}/package.json`) throws ERR_PACKAGE_PATH_NOT_EXPORTED
+// for them even though the package itself resolves fine. Resolve the
+// package's real entry file instead (which exports maps do allow) and walk
+// up to the nearest package.json.
+function resolvePackageDir(packageName, fromFile) {
+  const entryFile = require.resolve(packageName, { paths: [fromFile] });
+  let dir = path.dirname(entryFile);
+  while (!existsSync(path.join(dir, "package.json"))) {
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      throw new Error(`Could not locate a package.json above ${entryFile}`);
+    }
+    dir = parent;
+  }
+  return dir;
+}
+
 await copyInto(path.join(projectRoot, "public"), path.join(standaloneDir, "public"));
 await copyInto(
   path.join(projectRoot, ".next", "static"),
@@ -52,9 +71,9 @@ async function dereferenceSymlinkedPackages(dir) {
     const info = await lstat(entryPath);
 
     if (info.isSymbolicLink()) {
-      const target = await realpath(entryPath);
-      await rm(entryPath, { recursive: true, force: true });
-      await cp(target, entryPath, { recursive: true, dereference: true });
+      const parentName = path.basename(dir);
+      const packageName = parentName.startsWith("@") ? `${parentName}/${entry}` : entry;
+      await dereferenceOneSymlink(entryPath, packageName);
       continue;
     }
 
@@ -62,6 +81,39 @@ async function dereferenceSymlinkedPackages(dir) {
       await dereferenceSymlinkedPackages(entryPath);
     }
   }
+}
+
+/**
+ * Confirmed by a real CI failure (a fresh `pnpm install` on Linux, unlike
+ * this project's Windows dev machine): pnpm's own internal
+ * node_modules/.pnpm/node_modules/<pkg> "virtual store" compatibility
+ * symlinks — not any specific package's real install location, just pnpm's
+ * own flat-resolution convenience layer — can be dangling depending on the
+ * pnpm store's state, throwing ENOENT from realpath(). Node's real module
+ * resolution for anything that matters walks the actual
+ * node_modules/.pnpm/<pkg>@<version>/node_modules/<pkg> chain, not this
+ * compatibility layer, so a broken link here isn't necessarily fatal — but
+ * rather than silently drop it, try resolving the same package name from
+ * this project's own node_modules first, and only give up and drop the
+ * link (with a clear warning) if that also fails.
+ */
+async function dereferenceOneSymlink(entryPath, packageName) {
+  let sourceDir;
+  try {
+    sourceDir = await realpath(entryPath);
+  } catch {
+    try {
+      sourceDir = resolvePackageDir(packageName, path.join(projectRoot, "package.json"));
+    } catch (resolveError) {
+      console.warn(
+        `Warning: could not resolve "${packageName}" for ${entryPath} (${resolveError.message}) — dropping the broken symlink.`,
+      );
+      await rm(entryPath, { recursive: true, force: true });
+      return;
+    }
+  }
+
+  await copyInto(sourceDir, entryPath);
 }
 
 await dereferenceSymlinkedPackages(path.join(standaloneDir, "node_modules"));
@@ -77,24 +129,6 @@ await dereferenceSymlinkedPackages(path.join(standaloneDir, "node_modules"));
  * own package.json declares is present, resolved the same way Node would
  * resolve it at runtime.
  */
-// Some of next's dependencies (e.g. baseline-browser-mapping) restrict their
-// own package.json via an "exports" map, so require.resolve(`${pkg}/package.json`)
-// throws ERR_PACKAGE_PATH_NOT_EXPORTED for them even though the package
-// itself resolves fine. Resolve the package's real entry file instead (which
-// exports maps do allow) and walk up to the nearest package.json.
-function resolvePackageDir(packageName, fromFile) {
-  const entryFile = require.resolve(packageName, { paths: [fromFile] });
-  let dir = path.dirname(entryFile);
-  while (!existsSync(path.join(dir, "package.json"))) {
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      throw new Error(`Could not locate a package.json above ${entryFile}`);
-    }
-    dir = parent;
-  }
-  return dir;
-}
-
 async function ensureNextRuntimeDependencies() {
   const nextPackageJsonPath = require.resolve("next/package.json");
   const nextPackageJson = JSON.parse(await readFile(nextPackageJsonPath, "utf8"));
