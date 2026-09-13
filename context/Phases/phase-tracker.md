@@ -1913,9 +1913,11 @@ both clean.
 
 Phase Status
 
-🟡 In Progress — Payment Mode Master (#83) implemented 2026-09-13; items #84–#87 remain
-not yet drafted/implemented. See `context/progress-tracker.md`'s Next Up for what comes
-next (drafting spec 88, #84, the first real consumer of `ledgerClass`).
+🟡 In Progress — Payment Mode Master (#83) implemented, reviewed, and merged into `main`
+2026-09-13 (`feature/payment-mode-master`, `--no-ff` merged, no conflicts, checks
+re-verified green); items #84–#87 remain not yet drafted/implemented. See
+`context/progress-tracker.md`'s Next Up for what comes next (drafting spec 88, #84, the
+first real consumer of `ledgerClass`).
 
 ---
 

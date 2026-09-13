@@ -3220,8 +3220,11 @@ input validation, Server Action trust boundary, error sanitization, injection) �
 reviews explicitly confirmed the "delete"-not-"edit" permission-gate deviation is applied
 consistently and is not a vulnerability.
 
-**Not yet pushed, merged into `main`, or manually clicked-through by the user** (only
-Playwright-automated browser verification has happened so far). **Next Up: push this
-branch, merge into `main` per the one-branch-at-a-time git workflow, then either begin
-drafting spec 88 (#84, Payment Mode Integration — Sales Documents) or await the user's
+Pushed `feature/payment-mode-master` to `origin`, merged `--no-ff` into `main` (clean
+merge, no conflicts; re-ran `npx tsc --noEmit` / `npx eslint src prisma` / `npx vitest
+run` 1998/1998 / `next build` against the merged result, all pass), pushed `main`
+(`9494a2f..027e99e`), and deleted the branch locally and on `origin`. **`main` now has
+Payment Mode Master (#83).** Not yet manually clicked-through by the user (only
+Playwright-automated browser verification has happened so far). **Next Up: begin
+drafting spec 88 (#84, Payment Mode Integration — Sales Documents), or await the user's
 next instruction**, per `ai-workflow-rules.md`'s one-feature-at-a-time rule.
