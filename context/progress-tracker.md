@@ -3329,3 +3329,43 @@ vitest run` 2003/2003 / `next build` against the merged result, all pass — one
 failure, resolved by deleting `.next` and regenerating), pushed `main` (`70d0db0..1fa9b9b`),
 and deleted the branch locally and on `origin`. **`main` now has the outstanding-balance
 feature.**
+
+## 2026-09-13 — Liability Settlement (#87, spec 87) implemented
+
+Per explicit user instruction ("start 87-liability-settlement"), on a fresh
+`feature/liability-settlement` branch cut from the just-updated `main`. Full technical
+record — module layout, the Settle-permission-gating fix, and both reviews' findings — is
+in `context/Phases/phase-tracker.md`'s Phase 11 section (search "Item #87 (Liability
+Settlement, spec 87) implemented"); not duplicated here.
+
+In short: a pure read+navigate screen over the already-implemented
+`voucherEngine.getTrialBalance` (spec 64) and Payment Voucher's existing
+`postPaymentVoucher` (spec 52) — zero new Prisma schema, zero new posting logic. Lists
+every `LIABILITY`-nature ledger with an outstanding balance and links each to Payment
+Voucher's New screen, prefilled via query params.
+
+**Code review (parallel subagent): APPROVE, 0 CRITICAL/HIGH/LOW, 1 MEDIUM** (the Settle
+link wasn't gated on the destination's `accounting:create` permission — fixed by
+resolving `canSettle` server-side and conditionally rendering the link/column, mirroring
+`goods-receipt-note-status-actions.tsx`'s existing `canCreateInvoice` precedent).
+**Security review (parallel subagent): 0 CRITICAL/HIGH/MEDIUM, 2 LOW** (both cosmetic —
+one fixed defensively with `URLSearchParams`, the other a UX-only note about the spec's
+own intended silent-drop behavior, requiring no code change). Both reviews explicitly
+confirmed tenant isolation and that the prefill mechanism has zero trust implications
+(Payment Voucher's own posting-time checks independently re-validate everything
+server-side regardless of the query string).
+
+Re-verified after both fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same
+2 pre-existing unrelated warnings), `npx vitest run` (2022/2022, +19 new), and `next
+build` (all pass; `/accounting/liability-settlement` in the route table).
+
+Committed on `feature/liability-settlement`, pushed to `origin`, merged `--no-ff` into
+`main` (re-verified the full check suite against the merged result), pushed `main`, and
+deleted the branch locally and on `origin` — see the commit immediately below this entry
+for the exact merge commit. **`main` now has Liability Settlement (#87).** Not yet
+browser-verified live (Playwright) or clicked through by the user.
+
+**Next Up**: items #84–#86 (Payment Mode Integration across Sales Documents, Purchase
+Documents, and Manual Vouchers) remain not yet drafted/implemented — no ordering
+dependency on #87, per that spec's own explicit note. Awaiting the user's next
+instruction on which to take up.

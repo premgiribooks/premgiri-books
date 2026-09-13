@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftRight, BookText, CreditCard, HandCoins, Landmark, ListTree, NotebookPen, PiggyBank, Receipt, Wallet } from "lucide-react";
+import { ArrowLeftRight, Banknote, BookText, CreditCard, HandCoins, Landmark, ListTree, NotebookPen, PiggyBank, Receipt, Wallet } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +67,12 @@ const ACCOUNTING_MODULES = [
     icon: NotebookPen,
     title: "Journal Vouchers",
     description: "Freeform Debit/Credit entries for corrections, accruals, and adjustments.",
+  },
+  {
+    href: "/accounting/liability-settlement",
+    icon: Banknote,
+    title: "Liability Settlement",
+    description: "See every outstanding liability balance and settle one straight into Payment Voucher.",
   },
 ] as const;
 

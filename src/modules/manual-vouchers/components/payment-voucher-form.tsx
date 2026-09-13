@@ -27,6 +27,8 @@ import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
 
 interface PaymentVoucherFormProps {
   ledgerOptions: ManualVoucherLedgerOption[];
+  /** 87-liability-settlement.md's own prefill — seeds the first Debit line's defaultValues when the New page resolved a valid `debitLedgerId`/`amount` query-param pair. */
+  prefill?: { ledgerId: string; amount: number };
 }
 
 function toNumberOrZero(value: number): number {
@@ -46,7 +48,7 @@ function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
  * user's own convenience; the server independently computes and validates
  * the actual balanced entry set.
  */
-export function PaymentVoucherForm({ ledgerOptions }: PaymentVoucherFormProps) {
+export function PaymentVoucherForm({ ledgerOptions, prefill }: PaymentVoucherFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -62,7 +64,7 @@ export function PaymentVoucherForm({ ledgerOptions }: PaymentVoucherFormProps) {
       voucherDate: new Date().toISOString().slice(0, 10),
       narration: "",
       creditLedgerId: "",
-      debitLines: [{ ledgerId: "", amount: 0 }],
+      debitLines: [{ ledgerId: prefill?.ledgerId ?? "", amount: prefill?.amount ?? 0 }],
     },
   });
   const { control } = form;

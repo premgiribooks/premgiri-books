@@ -1922,15 +1922,86 @@ both clean.
 | 84        | Payment Mode Integration — Sales Documents        | Payment Mode Master; Sales Invoice; Sales Return           | ⬜     |
 | 85        | Payment Mode Integration — Purchase Documents     | Payment Mode Master; Purchase Invoice; Purchase Return     | ⬜     |
 | 86        | Payment Mode Integration — Manual Vouchers        | Payment Mode Master; Payment/Receipt/Contra Voucher        | ⬜     |
-| 87        | Liability Settlement                             | Trial Balance; Payment Voucher                             | ⬜     |
+| 87        | Liability Settlement                             | Trial Balance; Payment Voucher                             | ✅     |
+
+## Item #87 (Liability Settlement, spec 87) implemented 2026-09-13
+
+On branch `feature/liability-settlement`, cut from the just-updated `main` (which already
+had Payment Mode Master #83 and the outstanding-balance display enhancement). Per spec
+87: **zero new Prisma schema/migration and zero new posting logic** — a pure read+navigate
+layer over the already-implemented `voucherEngine.getTrialBalance` (spec 64) and Payment
+Voucher's existing, unmodified `postPaymentVoucher` (spec 52).
+
+**What was built**:
+- `src/engines/reporting/liability-settlement.ts` — pure `buildLiabilitySettlementReport`
+  (no I/O), filtering Trial Balance rows to `LIABILITY`-nature ledgers with a positive
+  sign-flipped (`-closingBalance`) outstanding amount, sorted by Ledger Group then Ledger
+  Name — the identical sign-flip convention `66-balance-sheet.md`'s Liabilities side
+  already established, reused rather than re-derived.
+- `src/modules/liability-settlement/services/liability-settlement-service.ts` —
+  `getOutstandingLiabilities`, structurally a near-twin of `balance-sheet-service.ts`
+  (FY resolution + as-of-date range re-validation, parallel `getTrialBalance`/
+  `ledgerGroupRepository.findMany`, no repository of its own). Gated on
+  **`accounting`/`view`** (not `reports`) per spec, since this screen lives alongside
+  Ledger Groups/Ledger Master/Payment Vouchers in the Accounting hub, not the Reports hub.
+  Reuses `financial-report-filters-schema.ts`'s existing `trialBalanceFiltersSchema`
+  directly rather than adding a second copy of the same as-of-date filter shape.
+- `src/app/accounting/liability-settlement/page.tsx` + `liability-settlement-table.tsx` —
+  Financial Year + as-of-date filter bar (the shared component from spec 64/66), a table
+  with a grand-total row and a per-row **Settle** link into
+  `/accounting/payment-vouchers/new?debitLedgerId=<id>&amount=<amount>`, and an empty
+  state.
+- **One additive change to Payment Voucher's existing New page/form** (spec 52's own
+  files, not its service): the page now reads optional `debitLedgerId`/`amount` query
+  params via a new pure helper, `resolvePaymentVoucherPrefill` (in
+  `manual-vouchers/utils/`, unit-tested), which seeds the form's first Debit line only
+  when the ledger id is present in the caller's own already company-scoped, active-only
+  `listLedgerOptions()` result — a missing/malformed/inactive/cross-company id silently
+  falls back to the form's normal empty defaults, never a thrown page error. Extracted
+  into its own pure function specifically so this page-level prefill logic is
+  unit-testable (this codebase has no page-level test files anywhere; the underlying
+  resolution logic is what spec 87's Code Standards required coverage for).
+- Wired into the Accounting hub page, `navigation.ts`'s Accounting group (new `Banknote`
+  icon), and `breadcrumbs.ts`.
+
+**Code review (parallel subagent): APPROVE, 0 CRITICAL/HIGH/LOW, 1 MEDIUM.** The MEDIUM —
+the "Settle" link rendered unconditionally even for a `view`-only role, which would
+dead-end at Payment Voucher's own `redirect("/")` since that page is gated on
+`accounting`/`create` — was fixed immediately: the page now also resolves
+`canSettle = hasPermission(user, "accounting", "create")` and passes it to
+`LiabilitySettlementTable`, which hides the Settle column/link entirely when false,
+mirroring `goods-receipt-note-status-actions.tsx`'s existing `canCreateInvoice` precedent
+for the identical "read screen links into a create-gated destination" shape. **Security
+review (parallel subagent): 0 CRITICAL/HIGH/MEDIUM, 2 LOW.** Both LOWs were cosmetic/UX
+notes, not vulnerabilities — the review explicitly verified tenant isolation (every query
+scoped to `user.companyId`, re-validated at each I/O boundary), that
+`resolvePaymentVoucherPrefill`'s list-membership check closes the same class of gap the
+team fixed in the outstanding-balance IDOR fix (commit `54eafe8`), and that Payment
+Voucher's own posting-time `assertLedgersActiveAndOwned` + server-computed Credit amount
+make the query-string prefill a pure UI convenience with zero trust implications. One LOW
+(raw template-literal URL interpolation in the Settle link, not currently exploitable
+since both interpolated values are server-generated) was fixed defensively using
+`URLSearchParams`; the other (silent-drop UX note) required no code change — it's the
+spec's own explicitly intended behavior.
+
+Re-verified after both fixes: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0
+errors, same 2 pre-existing unrelated warnings), `npx vitest run` (2022/2022, +19 new:
+5 for the pure engine builder, 6 for the service, 7 for the prefill resolver
+helper), and `next build` (all pass; `/accounting/liability-settlement` appears in the
+route table).
+
+Not yet browser-verified live (Playwright) or clicked through by the user — only the
+automated check suite has run so far.
 
 Phase Status
 
 🟡 In Progress — Payment Mode Master (#83) implemented, reviewed, and merged into `main`
 2026-09-13 (`feature/payment-mode-master`, `--no-ff` merged, no conflicts, checks
-re-verified green); items #84–#87 remain not yet drafted/implemented. See
-`context/progress-tracker.md`'s Next Up for what comes next (drafting spec 88, #84, the
-first real consumer of `ledgerClass`).
+re-verified green). Liability Settlement (#87) implemented, reviewed, and merged into
+`main` 2026-09-13 (`feature/liability-settlement`, see above) — it has no ordering
+dependency on #84–#86, per spec 87's own explicit note. Items #84–#86 (Payment Mode
+Integration across Sales/Purchase/Manual Vouchers) remain not yet drafted/implemented.
+See `context/progress-tracker.md`'s Next Up for what comes next.
 
 ---
 

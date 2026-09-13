@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   ArrowLeftRight,
+  Banknote,
   BarChart3,
   BookOpenText,
   BookText,
@@ -172,6 +173,7 @@ export const NAVIGATION: NavItem[] = [
     leaf("Receipt Vouchers", "/accounting/receipt-vouchers", PiggyBank),
     leaf("Contra Vouchers", "/accounting/contra-vouchers", ArrowLeftRight),
     leaf("Journal Vouchers", "/accounting/journal-vouchers", NotebookPen),
+    leaf("Liability Settlement", "/accounting/liability-settlement", Banknote),
   ]),
   group("GST", Receipt, "gst", [
     leaf("GST Registers", "/gst/registers", BookOpenText),

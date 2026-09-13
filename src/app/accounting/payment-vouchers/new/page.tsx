@@ -5,8 +5,17 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { PaymentVoucherForm } from "@/modules/manual-vouchers/components/payment-voucher-form";
 import { paymentVoucherService } from "@/modules/manual-vouchers/services/payment-voucher-service";
+import { resolvePaymentVoucherPrefill } from "@/modules/manual-vouchers/utils/resolve-payment-voucher-prefill";
 
-export default async function NewPaymentVoucherPage() {
+interface NewPaymentVoucherPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function NewPaymentVoucherPage({ searchParams }: NewPaymentVoucherPageProps) {
   const user = await getCurrentCompanyUser();
   const canCreate = await hasPermission(user, "accounting", "create");
   if (!canCreate) {
@@ -18,6 +27,13 @@ export default async function NewPaymentVoucherPage() {
     isCurrentUserCompanyAdmin(),
   ]);
 
+  const resolvedParams = await searchParams;
+  const prefill = resolvePaymentVoucherPrefill(
+    ledgerOptions,
+    firstValue(resolvedParams.debitLedgerId),
+    firstValue(resolvedParams.amount)
+  );
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
@@ -28,7 +44,7 @@ export default async function NewPaymentVoucherPage() {
           </p>
         </div>
 
-        <PaymentVoucherForm ledgerOptions={ledgerOptions} />
+        <PaymentVoucherForm ledgerOptions={ledgerOptions} prefill={prefill} />
       </div>
     </AppShell>
   );
