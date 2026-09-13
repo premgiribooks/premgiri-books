@@ -3369,3 +3369,58 @@ browser-verified live (Playwright) or clicked through by the user.
 Documents, and Manual Vouchers) remain not yet drafted/implemented — no ordering
 dependency on #87, per that spec's own explicit note. Awaiting the user's next
 instruction on which to take up.
+
+## 2026-09-13 — Desktop Packaging & Auto-Update pipeline implemented
+
+Per explicit user instruction ("add electron-updater then electron-builder to create
+binary installers and then create GitHub publishing add updater to Electron and also
+make more interactive push notification for update"), on a fresh
+`feature/electron-auto-update-release` branch cut from `main`. Infrastructure work, not
+tied to a numbered feature spec. Full technical record — every bug found (and only
+discoverable) by actually building and launching the packaged app, both reviews' findings,
+and the documented known limitations — is in `context/Phases/phase-tracker.md`'s new
+"Desktop Packaging & Auto-Update" section; not duplicated here.
+
+In short: `electron-updater` + `electron-builder` (Windows NSIS, macOS dmg/zip, Linux
+AppImage/deb) + a per-OS GitHub Actions release workflow triggered on version tags, plus
+an interactive update flow (native OS notification + an in-app toast with "Restart &
+Install"/"Later"). This required first giving the packaged app a working production
+code path at all — `electron/main.ts` previously loaded a static `out/index.html` that
+was never generated and can't be for a Server-Actions-plus-Postgres app — solved by
+`output: "standalone"` and spawning the generated `.next/standalone/server.js` as a
+local child process. Getting a *working, launchable* packaged `.exe` surfaced a chain of
+packaging-only bugs invisible to `tsc`/`eslint`/`vitest` (a `process.execPath` fork bomb,
+electron-builder dropping `node_modules` from both the main bundle and `extraResources`,
+pnpm-symlink and Next-tracer gaps in `.next/standalone`, and `next build` silently
+copying the build machine's `.env` into the standalone output) — each confirmed and fixed
+by repeatedly packaging and actually launching the app, not by static inspection.
+
+**Code review (parallel subagent): 1 HIGH** (macOS dock-reactivate double-initializing
+the updater's IPC handlers — fixed with a one-time-init guard) — the earlier
+self-caught fork-bomb fix was independently re-verified clean. **Security review
+(parallel subagent): 0 CRITICAL/HIGH, 1 MEDIUM** (missing defense-in-depth `.env`
+exclusion in the packaging filter — fixed, and led directly to confirming the `.env`
+leak above was real and reproducing, not hypothetical) **and 1 LOW** (GitHub Actions
+pinned to version tags rather than SHAs — accepted as-is).
+
+Re-verified after all fixes: `npx tsc --noEmit` (both `tsconfig.json` and
+`tsconfig.electron.json`), `npx eslint src electron prisma scripts` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (2032/2032, +6 new), and `next build`
+all pass; the packaged app was relaunched end-to-end one final time (real Postgres
+connection, real login page served, updater firing its startup check without crashing or
+duplicating) after every fix.
+
+Known, documented limitations (`docs/release-process.md`): unsigned builds (no
+certificate yet); full silent auto-update reliable on Windows/Linux only until macOS
+builds are signed; runtime config (`DATABASE_URL` etc.) must be a real OS environment
+variable on the end-user machine, no first-run config screen yet; and the GitHub repo
+should stay public for `electron-updater`'s runtime check to keep working without
+embedding a token.
+
+Committed as `bfb898f` on `feature/electron-auto-update-release` and pushed to `origin`.
+**Merging into `main` was blocked by the harness's own auto-mode classifier** ("Merge
+Without Review") — unlike every prior feature branch in this project's history, this one
+was not merged automatically. A pull request can be opened at
+https://github.com/premgiribooks/premgiri-books/pull/new/feature/electron-auto-update-release
+for the user to review and merge (or explicitly instruct the assistant to merge directly).
+**`main` does not yet have the desktop packaging/auto-update work.**
