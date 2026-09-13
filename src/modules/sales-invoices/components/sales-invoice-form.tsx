@@ -9,12 +9,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
+import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding-balance";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import {
   createDraftAction,
+  getLedgerOutstandingBalanceAction,
   previewSalesInvoiceAction,
   updateDraftAction,
 } from "@/modules/sales-invoices/actions/sales-invoice-actions";
@@ -136,6 +138,10 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
   const payments = useWatch({ control: form.control, name: "payments" });
 
   const isIntraState = Boolean(options.companyStateCode && placeOfSupplyStateCode === options.companyStateCode);
+  const selectedCustomerLedgerId = React.useMemo(
+    () => options.customers.find((customer) => customer.id === customerId)?.ledgerId,
+    [options.customers, customerId]
+  );
 
   React.useEffect(() => {
     const validLines = (lines ?? []).filter(
@@ -259,6 +265,11 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
                       </SelectContent>
                     </Select>
                   </FormControl>
+                  <LedgerOutstandingBalance
+                    ledgerId={selectedCustomerLedgerId}
+                    fetchBalance={getLedgerOutstandingBalanceAction}
+                    label="Outstanding Receivable"
+                  />
                   <FormMessage />
                 </FormItem>
               )}

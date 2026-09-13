@@ -7,6 +7,7 @@ import type {
   PreviewSalesInvoiceInput,
   UpdateSalesInvoiceInput,
 } from "@/modules/sales-invoices/validation/sales-invoice-schema";
+import type { LedgerBalanceResult } from "@/engines/voucher/types";
 import type { ActionResult } from "@/types/api";
 import type {
   DeliveryChallanPrefill,
@@ -80,4 +81,12 @@ export async function previewSalesInvoiceAction(
   input: PreviewSalesInvoiceInput
 ): Promise<ActionResult<SalesInvoicePreview>> {
   return runAction(() => salesInvoiceService.previewSalesInvoice(input), []);
+}
+
+// Read-only — no revalidation. Backs the Create/Edit form's inline
+// outstanding-balance display for the selected Customer/payment ledger.
+export async function getLedgerOutstandingBalanceAction(
+  ledgerId: string
+): Promise<ActionResult<LedgerBalanceResult>> {
+  return runAction(() => salesInvoiceService.getLedgerOutstandingBalance(ledgerId), []);
 }

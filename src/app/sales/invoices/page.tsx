@@ -87,6 +87,7 @@ export default async function SalesInvoiceListPage({ searchParams }: SalesInvoic
             name: customer.ledger.name,
             isActive: customer.isActive,
             creditLimit: customer.creditLimit,
+            ledgerId: customer.ledgerId,
           }))}
         />
 

@@ -19,7 +19,7 @@ type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
 const CUSTOMER_INCLUDE = {
   customer: {
-    select: { id: true, isActive: true, creditLimit: true, ledger: { select: { name: true } } },
+    select: { id: true, isActive: true, creditLimit: true, ledgerId: true, ledger: { select: { name: true } } },
   },
 } as const;
 
@@ -94,7 +94,13 @@ const SALES_INVOICE_DECIMAL_FIELDS = [
 // sales-order-repository.ts convention, extended with a second pass for the
 // nullable overridden* item columns (null stays null).
 function toCustomerOption(
-  raw: { id: string; isActive: boolean; creditLimit: Prisma.Decimal | null; ledger: { name: string } } | null
+  raw: {
+    id: string;
+    isActive: boolean;
+    creditLimit: Prisma.Decimal | null;
+    ledgerId: string;
+    ledger: { name: string };
+  } | null
 ): SalesInvoiceCustomerOption | null {
   if (!raw) {
     return null;
@@ -104,6 +110,7 @@ function toCustomerOption(
     name: raw.ledger.name,
     isActive: raw.isActive,
     creditLimit: raw.creditLimit ? raw.creditLimit.toNumber() : null,
+    ledgerId: raw.ledgerId,
   };
 }
 

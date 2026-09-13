@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { numericFieldWidth } from "@/lib/utils";
+import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding-balance";
+import { getLedgerOutstandingBalanceAction } from "@/modules/manual-vouchers/actions/payment-voucher-actions";
 import { createReceiptVoucherAction } from "@/modules/manual-vouchers/actions/receipt-voucher-actions";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import {
@@ -119,6 +121,7 @@ export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
                     emptyLabel="No Cash-in-Hand or bank ledger found"
                   />
                 </FormControl>
+                <LedgerOutstandingBalance ledgerId={field.value || undefined} fetchBalance={getLedgerOutstandingBalanceAction} />
                 <FormMessage />
               </FormItem>
             )}
@@ -154,6 +157,7 @@ export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
                                 placeholder="Select a ledger"
                               />
                             </FormControl>
+                            <LedgerOutstandingBalance ledgerId={field.value || undefined} fetchBalance={getLedgerOutstandingBalanceAction} />
                             <FormMessage />
                           </FormItem>
                         )}

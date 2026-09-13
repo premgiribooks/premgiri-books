@@ -91,6 +91,10 @@ export interface SalesInvoiceCustomerOption {
   name: string;
   isActive: boolean;
   creditLimit: number | null;
+  /** The Customer's own 1:1 Ledger id — lets the Create/Edit form look up
+   * this customer's current outstanding balance (voucherQueries.getLedgerBalance)
+   * without a second customer-id-keyed lookup. */
+  ledgerId: string;
 }
 
 export interface SalesInvoiceSalesOrderSnapshot {

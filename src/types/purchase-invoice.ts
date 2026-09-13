@@ -88,6 +88,10 @@ export interface PurchaseInvoiceSupplierOption {
   name: string;
   isActive: boolean;
   creditDays: number | null;
+  /** The Supplier's own 1:1 Ledger id — lets the Create/Edit form look up
+   * this supplier's current outstanding balance (voucherQueries.getLedgerBalance)
+   * without a second supplier-id-keyed lookup. */
+  ledgerId: string;
 }
 
 export interface PurchaseInvoicePurchaseOrderSnapshot {

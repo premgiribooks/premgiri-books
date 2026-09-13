@@ -36,6 +36,7 @@ const {
   postVoucherMock,
   cancelVoucherMock,
   recordMovementsMock,
+  getLedgerBalanceMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -68,6 +69,7 @@ const {
   postVoucherMock: vi.fn(),
   cancelVoucherMock: vi.fn(),
   recordMovementsMock: vi.fn(),
+  getLedgerBalanceMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -105,6 +107,9 @@ vi.mock("@/engines/document-number/document-number-engine", () => ({
 
 vi.mock("@/engines/voucher/voucher-engine", () => ({
   voucherEngine: { postVoucher: postVoucherMock, cancelVoucher: cancelVoucherMock },
+}));
+vi.mock("@/engines/voucher/voucher-queries", () => ({
+  voucherQueries: { getLedgerBalance: getLedgerBalanceMock },
 }));
 vi.mock("@/engines/inventory/inventory-engine", () => ({
   inventoryEngine: { recordMovements: recordMovementsMock },
@@ -328,6 +333,7 @@ beforeEach(() => {
   postVoucherMock.mockReset();
   cancelVoucherMock.mockReset();
   recordMovementsMock.mockReset();
+  getLedgerBalanceMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
@@ -953,5 +959,29 @@ describe("getGoodsReceiptNotePrefill", () => {
     const result = await purchaseInvoiceService.getGoodsReceiptNotePrefill(GRN_ID);
     expect(result).toEqual(expect.objectContaining({ goodsReceiptNoteId: GRN_ID, supplierId: SUPPLIER_ID }));
     expect(result?.lines[0]).toEqual(expect.objectContaining({ productId: PRODUCT_ID, quantity: 2 }));
+  });
+});
+
+// The Create/Edit form's inline outstanding-balance display, called for both
+// the selected Supplier's own ledger and any payment-line ledger. Mirrors
+// sales-invoice-service.test.ts's identical getLedgerOutstandingBalance test.
+describe("getLedgerOutstandingBalance", () => {
+  it("asserts purchase/view (not accounting/view) and delegates to voucherQueries.getLedgerBalance, company-scoped", async () => {
+    const balance = {
+      ledgerId: SUPPLIER_LEDGER_ID,
+      openingBalance: 0,
+      openingBalanceType: "CREDIT" as const,
+      totalDebit: 0,
+      totalCredit: 500,
+      netMovement: -500,
+      closingBalance: -500,
+    };
+    getLedgerBalanceMock.mockResolvedValue(balance);
+
+    const result = await purchaseInvoiceService.getLedgerOutstandingBalance(SUPPLIER_LEDGER_ID);
+
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "purchase", "view");
+    expect(getLedgerBalanceMock).toHaveBeenCalledWith(COMPANY_ID, SUPPLIER_LEDGER_ID);
+    expect(result).toEqual(balance);
   });
 });
