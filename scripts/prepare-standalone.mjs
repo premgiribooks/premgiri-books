@@ -119,6 +119,24 @@ async function dereferenceOneSymlink(entryPath, packageName) {
 await dereferenceSymlinkedPackages(path.join(standaloneDir, "node_modules"));
 
 /**
+ * Turbopack (Next 16's default bundler) externalizes packages it can't/won't
+ * inline — argon2, jsdom, pg, pino, @prisma/client here — into their own
+ * proxy directories under .next/node_modules, *separate* from the top-level
+ * node_modules this script already dereferences above. Those proxies are
+ * themselves symlinks straight to this dev machine's absolute pnpm store
+ * path (confirmed by inspecting a real build), which is exactly the same
+ * "works here, dangling everywhere else" bug already fixed for top-level
+ * node_modules — just missed here because it's a second, separate
+ * node_modules tree. This is the actual root cause of a real installed
+ * Windows build failing every request with "Cannot find module
+ * '.prisma/client/default'": the pg/argon2/pino symlinks were equally
+ * broken, not just Prisma's.
+ */
+if (existsSync(path.join(standaloneDir, ".next", "node_modules"))) {
+  await dereferenceSymlinkedPackages(path.join(standaloneDir, ".next", "node_modules"));
+}
+
+/**
  * Next's own output file tracer has gaps beyond what outputFileTracingIncludes
  * can reach: under pnpm, `next`'s own runtime dependencies (@swc/helpers,
  * @next/env, ...) live only in next's own nested node_modules, and the
@@ -129,25 +147,161 @@ await dereferenceSymlinkedPackages(path.join(standaloneDir, "node_modules"));
  * own package.json declares is present, resolved the same way Node would
  * resolve it at runtime.
  */
-async function ensureNextRuntimeDependencies() {
-  const nextPackageJsonPath = require.resolve("next/package.json");
-  const nextPackageJson = JSON.parse(await readFile(nextPackageJsonPath, "utf8"));
-  const nextDependencyNames = Object.keys(nextPackageJson.dependencies ?? {});
+/**
+ * Recursively ensures every dependency a package declares in its own
+ * package.json is present in ITS OWN nested node_modules, however deep.
+ * Under pnpm, a package's dependencies are colocated in the pnpm store next
+ * to it, not hoisted to the project root — dereferenceSymlinkedPackages
+ * above only copies the *named* top-level package (pg, pino, argon2,
+ * @prisma/client, ...), not that package's own further dependencies, so a
+ * real installed app crashed with "Cannot find module 'pg-types'" /
+ * 'pino-std-serializers' / '@prisma/client-runtime-utils' the moment any
+ * of those packages actually ran. `visited` guards against dependency
+ * cycles (real in this ecosystem, e.g. some packages depend on themselves
+ * via peer chains).
+ */
+async function ensurePackageRuntimeDependencies(resolveFromPackageJson, destinationNodeModules, visited = new Set()) {
+  if (visited.has(resolveFromPackageJson)) {
+    return;
+  }
+  visited.add(resolveFromPackageJson);
 
-  for (const packageName of nextDependencyNames) {
-    const sourceDir = resolvePackageDir(packageName, nextPackageJsonPath);
-    const destination = path.join(
-      standaloneDir,
-      "node_modules",
-      "next",
-      "node_modules",
-      ...packageName.split("/"),
-    );
-    await copyInto(sourceDir, destination);
+  const packageJson = JSON.parse(await readFile(resolveFromPackageJson, "utf8"));
+  const dependencyNames = Object.keys(packageJson.dependencies ?? {});
+
+  for (const packageName of dependencyNames) {
+    try {
+      // Resolved from the REAL source location (which has full pnpm-store
+      // context), never from the standalone copy — the copy has no
+      // node_modules of its own yet to resolve anything from.
+      const sourceDir = resolvePackageDir(packageName, resolveFromPackageJson);
+      const destination = path.join(destinationNodeModules, ...packageName.split("/"));
+      await copyInto(sourceDir, destination);
+      await ensurePackageRuntimeDependencies(
+        path.join(sourceDir, "package.json"),
+        path.join(destination, "node_modules"),
+        visited,
+      );
+    } catch (error) {
+      // Not every declared "dependency" is actually require()-able —
+      // @types/node and similar type-only packages have no JS entry point
+      // to resolve at all. Skip rather than fail the whole build.
+      console.warn(`Skipping runtime dependency "${packageName}": ${error.message}`);
+    }
   }
 }
 
-await ensureNextRuntimeDependencies();
+const rootPackageJson = JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
+for (const packageName of Object.keys(rootPackageJson.dependencies ?? {})) {
+  const destination = path.join(standaloneDir, "node_modules", ...packageName.split("/"));
+  // Browser-only deps (e.g. @base-ui/react) never make it into the
+  // server-side standalone bundle at all — nothing to fix for those.
+  if (!existsSync(path.join(destination, "package.json"))) {
+    continue;
+  }
+  try {
+    const realSourceDir = resolvePackageDir(packageName, path.join(projectRoot, "package.json"));
+    const realPackageJsonPath = path.join(realSourceDir, "package.json");
+    await ensurePackageRuntimeDependencies(realPackageJsonPath, path.join(destination, "node_modules"));
+  } catch (error) {
+    console.warn(`Skipping runtime dependency scan for "${packageName}": ${error.message}`);
+  }
+}
+
+/**
+ * Turbopack's .next/node_modules externals proxies (pg-<hash>, pino-<hash>,
+ * argon2-<hash>, @prisma/client-<hash>, ...) were just dereferenced above
+ * from their original symlink targets, but that only copies the named
+ * package itself — not ITS OWN dependencies (pg needs pg-types, pino needs
+ * pino-std-serializers, ...), which is exactly the gap
+ * ensurePackageRuntimeDependencies just spent this whole script fixing for
+ * the top-level node_modules copies. Rather than re-run that whole
+ * resolution machinery a second time for a second tree, just replace each
+ * proxy with a fresh copy of its now-fully-fixed top-level equivalent —
+ * same content, guaranteed self-contained.
+ */
+async function replaceTurbopackExternalsWithFixedCopies() {
+  const turbopackNodeModules = path.join(standaloneDir, ".next", "node_modules");
+  const topLevelNodeModules = path.join(standaloneDir, "node_modules");
+  if (!existsSync(turbopackNodeModules)) {
+    return;
+  }
+
+  const hashSuffix = /^(.+)-[0-9a-f]{16}$/;
+
+  async function replaceIn(dir, scopePrefix) {
+    for (const entry of await readdir(dir)) {
+      if (entry === ".prisma") {
+        continue;
+      }
+      const entryPath = path.join(dir, entry);
+      if (entry.startsWith("@") && (await lstat(entryPath)).isDirectory()) {
+        await replaceIn(entryPath, entry);
+        continue;
+      }
+      const match = entry.match(hashSuffix);
+      if (!match) {
+        continue;
+      }
+      const realName = scopePrefix ? `${scopePrefix}/${match[1]}` : match[1];
+      const source = path.join(topLevelNodeModules, ...realName.split("/"));
+      if (existsSync(source)) {
+        await copyInto(source, entryPath);
+      }
+    }
+  }
+
+  await replaceIn(turbopackNodeModules, null);
+}
+
+await replaceTurbopackExternalsWithFixedCopies();
+
+/**
+ * Found by a real installed app crashing on the user's machine (every page
+ * request failed, logging "Cannot find module '.prisma/client/default'",
+ * which made the app quit ~15s after every launch since the health check
+ * in electron/server.ts never got a non-500 response). Root cause: Turbopack
+ * externalizes @prisma/client into its own proxy file at
+ * .next/node_modules/@prisma/client-<hash>/default.js, whose content is
+ * copied verbatim from the real @prisma/client/default.js — which does
+ * `require('.prisma/client/default')`, resolving via a plain Node lookup
+ * relative to *its own* directory. In the real pnpm store, that resolves
+ * fine because prisma generate writes the actual generated client to
+ * .prisma/client right next to @prisma/client itself (pnpm keeps them
+ * colocated, not hoisted to the project root — confirmed by finding it at
+ * node_modules/.pnpm/@prisma+client@<version>_.../node_modules/.prisma).
+ * Turbopack's synthetic proxy directory has no such sibling, so the same
+ * require that works from the real package's location fails from the
+ * proxy's. Copy the real .prisma alongside Turbopack's proxy so the
+ * resolution it depends on exists there too.
+ */
+async function fixPrismaDotPrismaSibling(destinationNodeModules) {
+  if (!existsSync(destinationNodeModules)) {
+    return;
+  }
+
+  const prismaClientDir = path.dirname(require.resolve("@prisma/client/package.json"));
+  const prismaStoreNodeModules = path.dirname(path.dirname(prismaClientDir));
+  const dotPrismaSource = path.join(prismaStoreNodeModules, ".prisma");
+
+  if (!existsSync(dotPrismaSource)) {
+    console.warn(
+      `Warning: expected a .prisma directory next to @prisma/client at ${dotPrismaSource} but it wasn't there — skipping the .prisma sibling fix for ${destinationNodeModules}. If Prisma is still broken in the packaged app, this is why.`,
+    );
+    return;
+  }
+
+  await copyInto(dotPrismaSource, path.join(destinationNodeModules, ".prisma"));
+}
+
+// Same "@prisma/client's own require('.prisma/client/default') needs a
+// real .prisma sibling, and pnpm never hoists it to the project root" gap
+// applies at BOTH the top-level standalone node_modules (where
+// ensurePackageRuntimeDependencies above made @prisma/client a real,
+// dereferenced copy) and Turbopack's separate .next/node_modules externals
+// proxy — fix both locations.
+await fixPrismaDotPrismaSibling(path.join(standaloneDir, "node_modules"));
+await fixPrismaDotPrismaSibling(path.join(standaloneDir, ".next", "node_modules"));
 
 /**
  * `next build` with output: "standalone" copies the project's own .env
@@ -171,5 +325,5 @@ async function removeLeakedEnvFiles() {
 await removeLeakedEnvFiles();
 
 console.log(
-  "Copied public/ and .next/static, dereferenced pnpm symlinks, patched next's own runtime dependencies, and stripped any leaked .env into .next/standalone",
+  "Copied public/ and .next/static, dereferenced pnpm symlinks, patched next's own runtime dependencies, fixed the Prisma Turbopack externals shim, and stripped any leaked .env into .next/standalone",
 );
