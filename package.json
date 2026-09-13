@@ -13,6 +13,7 @@
     "url": "https://github.com/premgiribooks/premgiri-books.git"
   },
   "scripts": {
+    "setup:db": "node scripts/setup-database.mjs",
     "dev": "concurrently -k -n next,electron \"pnpm:dev:next\" \"pnpm:dev:electron\"",
     "dev:next": "next dev",
     "dev:electron": "tsc -p tsconfig.electron.json && wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .",
