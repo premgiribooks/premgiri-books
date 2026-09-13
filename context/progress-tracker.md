@@ -3637,3 +3637,61 @@ releases. Non-blocking (`checkForUpdatesOnStartup` fails silently by design), bu
 auto-update won't actually work until the repo is made public or a token is wired in.
 
 Bumped to **v1.0.5**.
+
+## 2026-09-13 — v1.0.6: v1.0.5's "fix" was incomplete; found the real bugs via true isolation
+
+v1.0.5's install still crashed with the exact same "Cannot find module 'tr46'" error —
+identical hash (`jsdom-0a58932632f2bc2c`), meaning the earlier fix hadn't actually taken
+effect. Root cause of *why* it looked fixed but wasn't: verification up to this point
+only ever booted the standalone server **from inside this dev machine's repo**, so
+Node's ancestor-directory module resolution could silently fall back to this machine's
+real, still-intact `node_modules` above `.next/standalone` whenever the packaged copy
+was missing something — a false-pass smoke test, precisely the "works here, breaks on
+the user's machine" trap this entire investigation has been chasing. Switched to
+copying `.next/standalone` into a directory with no `node_modules` anywhere in its
+ancestry (outside the repo entirely) before testing, so resolution can only ever see
+what's actually inside the packaged tree.
+
+That isolated test surfaced two more real, previously-undetected bugs in
+`prepare-standalone.mjs`:
+
+1. **Shared `visited` Set across sibling branches.** `jsdom` depends on `whatwg-url`
+   both directly and transitively (via `data-urls`), and both happened to resolve to
+   the identical real package in the pnpm store. `ensurePackageRuntimeDependencies`
+   used one mutable `visited` Set threaded through the whole call tree — once the first
+   occurrence expanded `whatwg-url`'s own deps (`tr46`, ...), the Set marked that source
+   package.json as done, so the second occurrence (a different destination directory
+   that independently needed its own copy) got silently skipped. Fixed by cloning the
+   ancestor set per branch instead of mutating one shared instance — still catches
+   genuine cycles within a single lineage, but no longer blocks legitimate re-expansion
+   for a sibling destination.
+2. **`resolvePackageDir` mishandled npm packages that shadow a deprecated Node.js core
+   module name** — `punycode` being the concrete case (`tr46` depends on it).
+   `require.resolve('punycode', ...)` resolves to Node's own built-in `punycode` module
+   and returns the bare string `"punycode"`, not a real file path, even when a real npm
+   `punycode` package is installed as a sibling — Node prioritizes the core module for
+   a bare specifier. `resolvePackageDir` didn't guard against this: it ran
+   `path.dirname("punycode")`, got `"."`, found the *project's own* package.json there,
+   and tried to copy the whole project into itself. That's what the "cannot copy to a
+   subdirectory of self" EINVAL warning seen since the very first `pg-types` fix
+   actually was — dismissed as a benign, unrelated skip every time, when it meant
+   `punycode` (and by extension `tr46`, and by extension `jsdom`) was never actually
+   being copied anywhere. Fixed by detecting a non-absolute `require.resolve()` result
+   and retrying with a trailing slash (`"punycode/"`), which is Node's own documented
+   way to force real npm-package resolution over the core-module shortcut.
+
+Verified this time with actual isolation: copied `.next/standalone` to a directory with
+no ancestor `node_modules`, then directly `require()`'d `pg`, `pino`, `argon2`,
+`@prisma/client`, and both the top-level and Turbopack-proxy `jsdom` — all succeeded.
+Went further than previous rounds: actually constructed a `JSDOM` instance (matching
+`svg-sanitizer.ts`'s real usage) and a `PrismaClient` with the `pg` adapter (matching
+real usage), both succeeded with zero missing-module errors. Also wrote an exhaustive
+scanner (`verify-standalone-deps.mjs` in scratchpad, not committed) walking every
+package.json in the packaged tree to confirm no other declared dependency is missing
+its directory — the only remaining gaps it found are inert metadata dependencies never
+actually `require()`'d at runtime (`@prisma/client-runtime-utils`, `@types/node` inside
+type-only packages, `cross-env`, and dependencies declared on next's own pre-bundled
+compiled output that's already self-contained) — confirmed by grepping for actual
+`require()` calls and by every constructive test above passing without them.
+
+Bumped to **v1.0.6**.

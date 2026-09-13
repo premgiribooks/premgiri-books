@@ -32,7 +32,25 @@ async function copyInto(from, to) {
 // package's real entry file instead (which exports maps do allow) and walk
 // up to the nearest package.json.
 function resolvePackageDir(packageName, fromFile) {
-  const entryFile = require.resolve(packageName, { paths: [fromFile] });
+  let entryFile = require.resolve(packageName, { paths: [fromFile] });
+
+  // A handful of npm package names (e.g. "punycode") collide with a
+  // deprecated Node.js core module of the same name. require.resolve()
+  // prefers the core module for a bare specifier and returns its bare name
+  // ("punycode") instead of a real file path — even when a real npm package
+  // of that name is installed right there as a sibling dependency. That bare
+  // string isn't a path at all, but path.dirname() on it silently returned
+  // "." (the script's own cwd), which then found the *project's own*
+  // package.json and tried to copy the entire project into itself,
+  // triggering a confusing "cannot copy to a subdirectory of self" EINVAL —
+  // confirmed by a real installed app still crashing with "Cannot find
+  // module 'punycode/'" after that got silently skipped. Appending a
+  // trailing slash is Node's own documented way to force real npm-package
+  // resolution and bypass the core-module shortcut.
+  if (!path.isAbsolute(entryFile)) {
+    entryFile = require.resolve(`${packageName}/`, { paths: [fromFile] });
+  }
+
   let dir = path.dirname(entryFile);
   while (!existsSync(path.join(dir, "package.json"))) {
     const parent = path.dirname(dir);
@@ -156,15 +174,30 @@ if (existsSync(path.join(standaloneDir, ".next", "node_modules"))) {
  * @prisma/client, ...), not that package's own further dependencies, so a
  * real installed app crashed with "Cannot find module 'pg-types'" /
  * 'pino-std-serializers' / '@prisma/client-runtime-utils' the moment any
- * of those packages actually ran. `visited` guards against dependency
- * cycles (real in this ecosystem, e.g. some packages depend on themselves
- * via peer chains).
+ * of those packages actually ran.
+ *
+ * `ancestors` guards against genuine dependency cycles (real in this
+ * ecosystem, e.g. some packages depend on themselves via peer chains) — it
+ * must NOT be a single Set mutated and shared across sibling branches. A
+ * real installed v1.0.5 build crashed with "Cannot find module 'tr46'"
+ * because jsdom depends on whatwg-url BOTH directly and transitively (via
+ * data-urls), and both resolve to the exact same real package in the pnpm
+ * store. With one shared mutable Set, whichever branch expanded
+ * whatwg-url's own deps (tr46, ...) first "used up" that resolveFromPackageJson
+ * key permanently, so the second occurrence — a separate destination
+ * directory that independently needs its own tr46 copy — got silently
+ * skipped. Cloning `ancestors` before adding to it (rather than mutating in
+ * place) keeps cycle detection scoped to a single lineage: it still catches
+ * true cycles (A -> B -> A within one chain) while letting the same
+ * package be legitimately expanded again for a sibling/different
+ * destination.
  */
-async function ensurePackageRuntimeDependencies(resolveFromPackageJson, destinationNodeModules, visited = new Set()) {
-  if (visited.has(resolveFromPackageJson)) {
+async function ensurePackageRuntimeDependencies(resolveFromPackageJson, destinationNodeModules, ancestors = new Set()) {
+  if (ancestors.has(resolveFromPackageJson)) {
     return;
   }
-  visited.add(resolveFromPackageJson);
+  const nextAncestors = new Set(ancestors);
+  nextAncestors.add(resolveFromPackageJson);
 
   const packageJson = JSON.parse(await readFile(resolveFromPackageJson, "utf8"));
   const dependencyNames = Object.keys(packageJson.dependencies ?? {});
@@ -180,7 +213,7 @@ async function ensurePackageRuntimeDependencies(resolveFromPackageJson, destinat
       await ensurePackageRuntimeDependencies(
         path.join(sourceDir, "package.json"),
         path.join(destination, "node_modules"),
-        visited,
+        nextAncestors,
       );
     } catch (error) {
       // Not every declared "dependency" is actually require()-able —
