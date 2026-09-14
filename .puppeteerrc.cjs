@@ -1,5 +1,3 @@
-const { join } = require("node:path");
-
 /**
  * Puppeteer's default cache directory is a per-OS-user global location
  * (e.g. `~/.cache/puppeteer`) — fine for a plain dev/server install, but
@@ -12,8 +10,15 @@ const { join } = require("node:path");
  * predictable path `package.json`'s `build.extraResources` and
  * `electron/server.ts`'s packaged-mode `PUPPETEER_CACHE_DIR` can both target.
  *
+ * `require()` is deliberately avoided (even for Node's own `path`) —
+ * `@typescript-eslint/no-require-imports` applies project-wide (found the
+ * hard way: `pnpm lint`'s unscoped `eslint` catches this file too, unlike a
+ * path-scoped `eslint src electron` run) and this is the one file in the
+ * repo that must stay CommonJS (Puppeteer's config loader requires it), so
+ * plain `__dirname` string-joining is used instead of pulling in `path`.
+ *
  * @type {import("puppeteer").Configuration}
  */
 module.exports = {
-  cacheDirectory: join(__dirname, ".cache", "puppeteer"),
+  cacheDirectory: `${__dirname}/.cache/puppeteer`,
 };

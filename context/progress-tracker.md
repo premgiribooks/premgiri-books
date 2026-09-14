@@ -4070,3 +4070,47 @@ vitest run` — **2057/2057 passing** (including `electron/server.test.ts`), `ne
 `v1.0.9`, tag pushed to `origin` on explicit user request ("release this on github") —
 triggering `.github/workflows/release.yml`'s Windows/macOS/Linux matrix build and GitHub
 Release publish.
+
+## 2026-09-14 — CI fix: `pnpm lint` (unscoped) failing on `main` since the PDF Generation merge
+
+Per explicit user instruction ("build is failed please check and fix issues"). GitHub's
+Actions API (public, unauthenticated `GET /repos/.../actions/runs`) showed the real
+picture: **`release.yml`'s "Release desktop app" workflow succeeded for both `v1.0.8` and
+`v1.0.9`** (installers did publish) — but the separate, always-on `build.yml`'s "Build main"
+workflow has been failing on every push since the `feature/pdf-generation-sales-invoice`
+merge commit, at its `pnpm lint` step specifically (confirmed via the Actions Jobs API:
+every step through `tsc --noEmit -p tsconfig.electron.json` succeeded, `pnpm lint` failed,
+`pnpm test`/`pnpm run build` were skipped as a result).
+
+**Root cause, reproduced locally**: `package.json`'s `"lint": "eslint"` script takes no
+path argument — it lints the **entire** repo, unlike the `npx eslint src electron`/`npx
+eslint src electron prisma` commands used to verify the PDF Generation and auto-update-
+silent-install work (both this session's own and, per the entry directly above, the other
+session's identical scoping choice). `.puppeteerrc.cjs`'s `const { join } =
+require("node:path")` tripped `@typescript-eslint/no-require-imports`, which
+`eslint-config-next/typescript` applies project-wide with no existing carve-out for root-
+level `.cjs` config files — invisible to every check this feature's own two prior sessions
+ran, since neither ever ran the actual unscoped `pnpm lint` CI uses.
+
+**Fix**: removed the only `require()` call from `.puppeteerrc.cjs` — `__dirname` (already
+available in a CommonJS file, which this one must stay for Puppeteer's own config loader)
+is joined into the cache path with a template string instead of pulling in `path`. No
+behavior change (verified: `pnpm exec puppeteer browsers install chrome` and
+`renderHtmlToPdf` both still resolve `.cache/puppeteer` correctly).
+
+**Re-verified against the exact `build.yml` sequence**, not just the fixed step in
+isolation: `pnpm install --frozen-lockfile` already in place, `pnpm exec prisma generate`,
+`pnpm exec tsc --noEmit`, `pnpm exec tsc --noEmit -p tsconfig.electron.json`, **`pnpm
+lint`** (now 0 errors — same 4 pre-existing unrelated warnings across `scripts/migrate/*`
+and `purchase-invoices`), `pnpm test` (2057/2057 passing), and `pnpm run build` with the
+same `DATABASE_URL` placeholder CI sets — all green.
+
+**Lesson recorded for future verification passes on this project**: `pnpm lint`/`pnpm
+test`/`pnpm run build` (the actual CI-invoked scripts, unscoped) should be run at least
+once per feature before considering it release-ready, not only path-scoped `npx eslint
+<dirs>` — a scoped run cannot see a lint violation in a new root-level file outside those
+directories, exactly what happened here twice in a row across two different sessions.
+
+Committed directly to `main` (a verified, low-risk, CI-only fix to a config file — not
+routed through a new feature branch, since `main`'s CI was actively red and a full
+branch/PR/merge-review cycle would have left it that way longer for no added safety here).
