@@ -1,26 +1,8 @@
 import { escapeHtml } from "@/lib/html-escape";
 import { PRINT_STYLESHEET } from "@/lib/pdf-templates/print-stylesheet";
 import { formatSalesInvoiceDate } from "@/modules/sales-invoices/utils/format-sales-invoice-date";
+import { customerDisplayName, effectiveLineTax } from "@/modules/sales-invoices/utils/sales-invoice-display";
 import type { SalesInvoiceDetail, SalesInvoiceItemDetail } from "@/types/sales-invoice";
-
-function customerDisplayName(invoice: SalesInvoiceDetail): string {
-  if (invoice.customer) {
-    return invoice.customer.name;
-  }
-  if (invoice.customerMode === "QUICK") {
-    return invoice.quickCustomerName ?? "Quick Customer";
-  }
-  return invoice.quickCustomerName ?? "Walk-in Customer";
-}
-
-function effectiveTax(item: SalesInvoiceItemDetail): number {
-  return (
-    (item.isTaxOverridden ? (item.overriddenCgst ?? 0) : item.cgst) +
-    (item.isTaxOverridden ? (item.overriddenSgst ?? 0) : item.sgst) +
-    (item.isTaxOverridden ? (item.overriddenIgst ?? 0) : item.igst) +
-    (item.isTaxOverridden ? (item.overriddenCess ?? 0) : item.cess)
-  );
-}
 
 function itemRow(item: SalesInvoiceItemDetail): string {
   return `
@@ -29,7 +11,7 @@ function itemRow(item: SalesInvoiceItemDetail): string {
       <td class="text-right">${item.quantity}</td>
       <td class="text-right">${item.rate.toFixed(2)}</td>
       <td class="text-right">${item.taxableAmount.toFixed(2)}</td>
-      <td class="text-right">${effectiveTax(item).toFixed(2)}</td>
+      <td class="text-right">${effectiveLineTax(item).toFixed(2)}</td>
       <td class="text-right">${item.totalAmount.toFixed(2)}</td>
     </tr>`;
 }

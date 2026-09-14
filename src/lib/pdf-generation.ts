@@ -31,7 +31,16 @@ let browserPromise: Promise<Browser> | null = null;
 
 function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = puppeteer.launch({ headless: true });
+    // A rejected Promise is still a truthy reference, so a failed launch
+    // (missing/corrupt Chromium, a bad PUPPETEER_CACHE_DIR) must clear
+    // browserPromise back to null on rejection — otherwise every later call
+    // would reuse and immediately re-reject the same dead Promise, wedging
+    // PDF generation for the rest of this process's lifetime instead of
+    // retrying on the next request (code review finding).
+    browserPromise = puppeteer.launch({ headless: true }).catch((error: unknown) => {
+      browserPromise = null;
+      throw error;
+    });
   }
   return browserPromise;
 }

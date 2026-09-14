@@ -26,9 +26,30 @@ function downloadFilename(invoiceNumber: string): string {
 export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { id } = await params;
 
-  let salesInvoice;
   try {
-    salesInvoice = await salesInvoiceService.getSalesInvoice(id);
+    const salesInvoice = await salesInvoiceService.getSalesInvoice(id);
+    if (!salesInvoice) {
+      return NextResponse.json({ error: "Sales invoice not found." }, { status: 404 });
+    }
+    // Mirrors the detail page's own SalesInvoiceDownloadPdfButton visibility
+    // gate (status !== "DRAFT") — the UI condition alone isn't a real
+    // restriction once this route has its own directly-hittable URL, so it
+    // must be re-enforced here too (code review finding). A DRAFT invoice
+    // is not yet a final document; its invoiceNumber exists but nothing
+    // about it should be handed out as a "Tax Invoice" PDF.
+    if (salesInvoice.status === "DRAFT") {
+      return NextResponse.json({ error: "A draft sales invoice cannot be downloaded as a PDF." }, { status: 400 });
+    }
+
+    const html = buildSalesInvoiceHtml(salesInvoice);
+    const pdf = await renderHtmlToPdf(html, { format: "A5" });
+
+    return new NextResponse(new Uint8Array(pdf), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${downloadFilename(salesInvoice.invoiceNumber)}"`,
+      },
+    });
   } catch (error) {
     if (error instanceof AuthenticationError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -39,21 +60,13 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     if (error instanceof AppError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    logger.error({ err: error }, "Unhandled error loading sales invoice for PDF generation");
+    // Covers both an unexpected getSalesInvoice failure and a
+    // buildSalesInvoiceHtml/renderHtmlToPdf failure (e.g. Chromium launch
+    // failure) — previously only the first was guarded, so a render
+    // failure propagated uncaught into Next's generic error page instead
+    // of this route's own JSON envelope and was never logged (code review
+    // finding).
+    logger.error({ err: error }, "Unhandled error generating sales invoice PDF");
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
-
-  if (!salesInvoice) {
-    return NextResponse.json({ error: "Sales invoice not found." }, { status: 404 });
-  }
-
-  const html = buildSalesInvoiceHtml(salesInvoice);
-  const pdf = await renderHtmlToPdf(html, { format: "A5" });
-
-  return new NextResponse(new Uint8Array(pdf), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${downloadFilename(salesInvoice.invoiceNumber)}"`,
-    },
-  });
 }

@@ -3931,3 +3931,64 @@ Committed on `feature/pdf-generation-sales-invoice`, alongside the Sales Invoice
 feature itself. Next: merge into `main` (blocked on Claude Code's auto-mode "Merge Without
 Review" classifier — see Open Questions), then a version bump + `v*.*.*` tag push to
 actually cut the release.
+
+## 2026-09-14 — PDF Generation: code review + security review, findings fixed
+
+Ran code-reviewer and security-reviewer subagents against the full `main...feature/pdf-
+generation-sales-invoice` diff before attempting the merge again (both to satisfy Claude
+Code's own "Merge Without Review" auto-mode block, and per `code-review.md`'s mandatory
+triggers — this branch touches file system/process-spawn concerns via Puppeteer).
+
+**Security review: 0 CRITICAL/HIGH/MEDIUM/LOW findings.** Explicitly verified (not just
+assumed): every user-derived string field reaching `buildSalesInvoiceHtml` goes through
+`escapeHtml`; the numeric fields interpolated without it are genuinely `number`-typed,
+normalized from Prisma `Decimal` at the repository boundary, not attacker strings;
+`renderHtmlToPdf`'s generated HTML has no external resource reference of any kind, so no
+SSRF/local-file-read surface; the Route Handler's 404 response is identical for "doesn't
+exist" and "belongs to another company," so no cross-tenant existence oracle; the
+`Content-Disposition` filename sanitizer strips CR/LF and can't inject headers; the new
+`PUPPETEER_CACHE_DIR` env var is a local path with no attacker influence. Two informational
+notes (GET-based download relies on the site's existing `sameSite: lax` cookie posture, no
+`X-Content-Type-Options` header) — both pre-existing site-wide posture, not regressions,
+not fixed.
+
+**Code review: 2 HIGH, 3 MEDIUM, 0 CRITICAL/LOW — all fixed**:
+- **HIGH — a failed Chromium launch permanently wedged PDF generation.**
+  `getBrowser()` cached the *rejected* Promise from `puppeteer.launch()` just as
+  eagerly as a resolved one (a rejected Promise is still a truthy reference, so the
+  `if (!browserPromise)` guard never re-fired) — every later `renderHtmlToPdf` call would
+  reuse and instantly re-reject the same dead Promise until the process restarted, even for
+  a genuinely transient failure. Fixed: `getBrowser()` now clears `browserPromise` back to
+  `null` in a `.catch()` before rethrowing, so the next call retries. New test: a mocked
+  one-time launch failure followed by a real successful launch on the next call.
+- **HIGH — render failures bypassed the route's own error envelope/logging.**
+  Only `salesInvoiceService.getSalesInvoice` was wrapped in try/catch; a failure from
+  `buildSalesInvoiceHtml`/`renderHtmlToPdf` (including the wedged-browser case above)
+  propagated uncaught into Next's generic error page instead of this route's own
+  `{ error }` JSON, and was never logged — unlike every other error path three lines above
+  in the same file. Fixed: the whole handler body is now one try/catch. New
+  `route.test.ts` (this branch's first Route Handler test) covers this via mocked
+  `renderHtmlToPdf` rejection asserting a 500 + exactly one `logger.error` call.
+- **MEDIUM — the DRAFT restriction was UI-only.** `SalesInvoiceDownloadPdfButton` is only
+  rendered for `status !== "DRAFT"` on the detail page, but the Route Handler itself had no
+  equivalent check — a directly-hit URL could produce a "Tax Invoice" PDF for an unposted
+  document. Fixed: the route now 400s on `status === "DRAFT"` before rendering, re-verified
+  by `route.test.ts`.
+- **MEDIUM — `customerDisplayName`/tax-override-sum logic duplicated** between
+  `SalesInvoicePrintView` and `buildSalesInvoiceHtml`. Fixed: extracted to a new shared
+  `src/modules/sales-invoices/utils/sales-invoice-display.ts` (`customerDisplayName`,
+  `effectiveLineTax`), imported by both — a small, behavior-preserving edit to the existing
+  Print View (not the rewrite `78-pdf-generation.md`'s Do Not section warns against), with
+  its own new `sales-invoice-display.test.ts`.
+- **MEDIUM — the Route Handler had zero test coverage.** Fixed by the `route.test.ts` added
+  for the two HIGH fixes above, extended to also cover the 401/403/400/404 branches and the
+  success-path headers/body, with `salesInvoiceService`/`buildSalesInvoiceHtml`/
+  `renderHtmlToPdf` all mocked so the happy path doesn't spin up real Chromium.
+
+**Re-verified after fixes**: `npx tsc --noEmit` (0 errors), `npx eslint src electron` (0
+errors, same 2 pre-existing unrelated `purchase-invoices` warnings), `npx vitest run` —
+**2057/2057 passing** (14 new across this fix round: 1 in `pdf-generation.test.ts`, 7 in
+the new `route.test.ts`, 6 in the new `sales-invoice-display.test.ts`), `next build`
+(clean).
+
+Committed on `feature/pdf-generation-sales-invoice`. Next: retry the merge into `main`.
