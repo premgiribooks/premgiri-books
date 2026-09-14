@@ -4028,3 +4028,45 @@ workflow.
 Windows/macOS/Linux matrix build and GitHub Release publish. This is the first release to
 ship PDF Generation (#76, spec 78) — scoped to Sales Invoice only, as recorded in the three
 entries above; the item stays 🟨 In Progress in `context/Phases/phase-tracker.md`, not ✅.
+
+## 2026-09-14 — Fixed silent/reliable auto-update installs; v1.0.9 release cut
+
+User reported the NSIS updater showing "Premgiri Books ERP cannot be closed. Please close
+it manually and click Retry to continue." during an update, requiring a full
+uninstall/reinstall, and asked for a background-update experience like other modern desktop
+apps (download quietly, just restart to apply).
+
+Root cause traced from a real `main.log` (`%APPDATA%\premgir-books-v2\logs\main.log`) plus
+reading `electron/server.ts`, `electron/main.ts`, and `electron/updater.ts`:
+`server.ts`'s `startNextServer` spawns the bundled Next.js server via
+`spawn(process.execPath, ...)` — `process.execPath` is the packaged app's own `.exe`
+(run with `ELECTRON_RUN_AS_NODE=1`), so two processes share that exe's name while the app
+runs. NSIS's "is the app still running" check matches by process name — a guaranteed hit.
+`main.ts`'s `before-quit` sent that child a kill signal and returned immediately without
+waiting for it to actually exit, racing the installer's check (confirmed against
+electron-builder issues #6865/#8131 — same symptom). Separately, the in-app
+"Restart & Install" action called `autoUpdater.quitAndInstall()` with no arguments
+(`isSilent=false` by default), which is what painted the full wizard on every update rather
+than installing quietly — confirmed via `electron-updater`'s `NsisUpdater.doInstall` source
+(`args.push("/S")` only when `isSilent`, and the existing install directory is read from
+the registry either way, so the fix needed no `oneClick`/`allowToChangeInstallationDirectory`
+changes).
+
+**Fix** (`electron/server.ts`, `electron/main.ts`, `electron/updater.ts`): `stop()` is now
+async and waits for the child's real `"exit"` event (SIGKILL after a 5s timeout) instead of
+firing a kill signal and returning; `before-quit` now `preventDefault()`s once, awaits that
+stop, then re-quits, guaranteeing the duplicate-named process is gone before anything
+checks; the install IPC handler now calls `quitAndInstall(true, true)` — silent install +
+auto-relaunch, matching the requested "download quietly → Restart button → app closes →
+silent install → relaunches" flow. No Tray exists in this app and no `BrowserWindow` close
+handler intercepts quit, so neither needed touching.
+
+Re-verified against the full project: `npx tsc --noEmit` (0 errors), `npx eslint src
+electron` (0 errors, same 2 pre-existing unrelated `purchase-invoices` warnings), `npx
+vitest run` — **2057/2057 passing** (including `electron/server.test.ts`), `next build`
+(clean).
+
+**Release**: version bumped `1.0.8` -> `1.0.9` in `package.json`, committed, tagged
+`v1.0.9`, tag pushed to `origin` on explicit user request ("release this on github") —
+triggering `.github/workflows/release.yml`'s Windows/macOS/Linux matrix build and GitHub
+Release publish.
