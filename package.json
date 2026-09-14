@@ -1,5 +1,5 @@
 {
-  "name": "premgir-books-v2",
+  "name": "premgir-books",
   "version": "1.0.6",
   "private": true,
   "description": "Modular offline-first ERP for accounting, GST, inventory, and billing.",

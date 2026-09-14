@@ -73,7 +73,7 @@ function persistAsUserEnvironmentVariable(databaseUrl) {
 
 function runPrismaStep(description, args, env) {
   console.log(`Running: ${description}...`);
-  execFileSync("npx", ["prisma", ...args], { stdio: "inherit", env });
+  execFileSync("npx.cmd", ["prisma", ...args], { stdio: "inherit", env });
   console.log(`Done: ${description}.`);
 }
 
