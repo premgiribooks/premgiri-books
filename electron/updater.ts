@@ -11,6 +11,31 @@ function broadcastStatus(status: UpdateStatus): void {
   mainWindow?.webContents.send(UPDATE_STATUS_CHANNEL, status);
 }
 
+/**
+ * The one previously-real failure mode here: `premgiribooks/premgiri-books`
+ * going private (or losing its releases) makes electron-updater's GitHub
+ * provider 404 on `releases.atom` for every installed app, silently
+ * (`autoUpdater.autoDownload` never fires). electron-updater's HttpError
+ * carries `statusCode`/`code` alongside the generic `Error.message` — check
+ * for that shape instead of string-matching the raw log line, and surface a
+ * message that names the actual cause instead of a raw HTTP stack, so this
+ * doesn't require digging through main.log to diagnose again (see
+ * docs/release-process.md's "Private repo + electron-updater" note; a CI
+ * guard in .github/workflows/release.yml now also refuses to publish a
+ * release at all while the repo is private).
+ */
+function describeUpdateError(error: Error): string {
+  const statusCode = (error as { statusCode?: number }).statusCode;
+  if (statusCode === 404) {
+    return (
+      "Couldn't reach the update feed (404 from GitHub Releases). This happens when the " +
+      "releases repo is private or has no published release yet — see " +
+      "docs/release-process.md's \"Private repo + electron-updater\" note."
+    );
+  }
+  return error.message;
+}
+
 function notifyUpdateDownloaded(version: string): void {
   if (!Notification.isSupported()) {
     return;
@@ -69,8 +94,9 @@ export function initializeAutoUpdater(window: BrowserWindow, logger: Logger): vo
     notifyUpdateDownloaded(info.version);
   });
   autoUpdater.on("error", (error) => {
-    logger.error({ error }, "Auto-update check failed");
-    broadcastStatus({ state: "error", message: error.message });
+    const message = describeUpdateError(error);
+    logger.error({ error, message }, "Auto-update check failed");
+    broadcastStatus({ state: "error", message });
   });
 
   ipcMain.handle(UPDATE_CHECK_CHANNEL, () => checkForUpdatesManually());
@@ -118,7 +144,7 @@ export async function checkForUpdatesManually(): Promise<void> {
     await dialog.showMessageBox({
       type: "error",
       message: "Couldn't check for updates.",
-      detail: error instanceof Error ? error.message : String(error),
+      detail: error instanceof Error ? describeUpdateError(error) : String(error),
     });
   }
 }

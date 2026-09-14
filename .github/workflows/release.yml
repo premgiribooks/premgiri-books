@@ -26,6 +26,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # electron-updater's GitHub provider reads releases.atom/latest.yml
+      # unauthenticated at runtime on every installed app — if this repo is
+      # private, that 404s for every user and auto-update silently stops
+      # working (confirmed: this exact failure shipped once already, see
+      # docs/release-process.md's "Private repo + electron-updater" note).
+      # Fail the whole release before it builds anything rather than publish
+      # installers nobody's app can ever auto-update from.
+      - name: Verify releases repo is public
+        shell: bash
+        run: |
+          if [ "$(gh api "repos/${{ github.repository }}" --jq .private)" = "true" ]; then
+            echo "::error::${{ github.repository }} is private. electron-updater needs unauthenticated read access to GitHub Releases at runtime, or every installed app fails to detect updates (404 on releases.atom). Make the repo public before pushing a release tag, or wire an update token into the desktop app first — see docs/release-process.md." >&2
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # Retried and made idempotent: a real v1.0.2 run failed here on a
       # transient "HTTP 500" from GitHub's own API (nothing wrong with this
       # command), and a 5xx response doesn't reliably tell you whether the
