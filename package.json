@@ -96,6 +96,13 @@
     ],
     "extraResources": [
       {
+        "from": ".cache/puppeteer",
+        "to": "puppeteer-cache",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": ".next/standalone",
         "to": "standalone",
         "filter": [

@@ -3870,3 +3870,64 @@ print.css` file / `SalesInvoicePrintView` migration onto it.
 
 Committed on `feature/pdf-generation-sales-invoice`. Not yet merged into `main` — a PR is
 the next step, per this project's one-branch-at-a-time Git workflow.
+
+## 2026-09-14 — PDF Generation: Electron packaging fix for Puppeteer's Chromium binary
+
+Per explicit user instruction ("fix packaging first" before releasing), closes the "Known
+open item" from the entry directly above, on the same `feature/pdf-generation-sales-invoice`
+branch.
+
+**Root cause**: Puppeteer downloads its Chromium binary into a per-OS-user global cache
+directory outside `node_modules` (confirmed: `C:\Users\<user>\.cache\puppeteer\...` on this
+dev machine). Next's `output: "standalone"` file tracing and electron-builder's
+`extraResources` both work from project-relative paths — neither could see or bundle a
+file living in the user's home directory, so a packaged installer built on a clean CI
+runner would ship with no browser binary at all, and `renderHtmlToPdf` would fail for
+every real user (it only "worked" during initial implementation because that dev
+machine's own `pnpm install` had already populated its own global cache).
+
+**Fix — four coordinated pieces**:
+1. **`.puppeteerrc.cjs`** (new) — pins Puppeteer's `cacheDirectory` to a project-relative
+   `.cache/puppeteer` instead of the global default. Read automatically by both `pnpm
+   install`'s puppeteer postinstall step and the `npx puppeteer browsers install` CLI
+   (both run from the project root). Verified live: deleted/renamed the old global cache
+   entirely and re-ran the Puppeteer test suite — it still resolved and launched Chromium
+   correctly from `.cache/puppeteer`, proving no silent fallback to the global location.
+2. **`.gitignore`** — `.cache/puppeteer` added (a large regenerable binary, same posture
+   as `.next/`).
+3. **`package.json`'s `build.extraResources`** — new first entry, `.cache/puppeteer` ->
+   `puppeteer-cache`, alongside the existing `.next/standalone` entry.
+4. **`electron/server.ts`** — `buildServerEnv` extracted as its own testable pure function
+   (previously inlined in `startNextServer`'s spawn call): when `location.isPackaged`, sets
+   the spawned standalone server's `PUPPETEER_CACHE_DIR` to
+   `path.join(resourcesPath, "puppeteer-cache")` — the same env var Puppeteer reads at
+   *launch* time (not just install time) to resolve the Chromium executable, with no
+   `executablePath` override needed in `pdf-generation.ts` itself. Left unset in dev,
+   where `.puppeteerrc.cjs` alone already resolves the identical directory via cwd.
+
+**Verified end-to-end, not just by inspection**: ran a real `pnpm exec electron-builder
+--dir` (unpacked build, no installer) after the fix and confirmed
+`release/win-unpacked/resources/puppeteer-cache/chrome/win64-153.0.8010.36/chrome-win64/
+chrome.exe` exists at exactly the path `buildServerEnv` would point
+`PUPPETEER_CACHE_DIR` at — proof the extraResources config and the runtime env-var wiring
+actually agree with each other, not just independently plausible. The verification
+`release/` output was deleted afterward (gitignored, local scratch only).
+
+**Residual, deliberately unfixed risk, recorded in `docs/release-process.md`**: on Linux,
+the bundled Chromium still needs a handful of system shared libraries present on the
+end-user's machine (`libnss3`, `libatk1.0-0`, etc.) — present on the `ubuntu-latest` CI
+runner that *downloads* the binary, not guaranteed on every real Linux desktop that would
+*run* it. Not solved in this pass; flagged for whoever first hits a real Linux PDF bug
+report, per this project's own pattern of recording known gaps rather than silently
+omitting them (mirrors the v1.0.4–v1.0.6 Turbopack-externals/sharp/tr46 packaging lessons
+already in this file).
+
+**Verified**: `npx tsc --noEmit` (0 errors), `npx eslint src electron` (0 errors, 2
+pre-existing unrelated warnings in `purchase-invoices`), `npx vitest run` — **2043/2043
+passing** (2 new: `buildServerEnv`'s packaged/dev branches), `next build` (clean), plus the
+real packaged-build verification above.
+
+Committed on `feature/pdf-generation-sales-invoice`, alongside the Sales Invoice PDF
+feature itself. Next: merge into `main` (blocked on Claude Code's auto-mode "Merge Without
+Review" classifier — see Open Questions), then a version bump + `v*.*.*` tag push to
+actually cut the release.

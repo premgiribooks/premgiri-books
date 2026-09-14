@@ -70,6 +70,49 @@ export interface RunningServer {
 }
 
 /**
+ * The standalone server's own env, split out from startNextServer so the
+ * packaged-vs-dev PUPPETEER_CACHE_DIR branch (78-pdf-generation.md's known
+ * packaging gap) is unit-testable without actually spawning a process.
+ * Puppeteer's downloaded Chromium (see `.puppeteerrc.cjs`) lives outside
+ * `node_modules`, in `.cache/puppeteer`, so it is not swept up by Next's
+ * output-file-tracing into `.next/standalone` the way a real dependency
+ * would be — it is instead shipped as its own `extraResources` entry
+ * (`package.json`'s `build.extraResources`, unpacked to
+ * `<resourcesPath>/puppeteer-cache`) and only findable by the spawned
+ * server process via this env var, which puppeteer.launch() reads at
+ * runtime to resolve the Chromium executable. Unset in dev — the .puppeteerrc.cjs
+ * config file (found via the project root cwd `next dev` already runs from)
+ * already points at the same `.cache/puppeteer` directory there.
+ */
+export function buildServerEnv(
+  location: StandaloneServerLocation,
+  port: number,
+  hostname: string,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    // process.execPath is the Electron binary itself, not a system Node
+    // install — without this, the "child process" is actually a second
+    // full Electron app instance, which re-runs main.ts, which spawns
+    // another server, which spawns another Electron instance, forking
+    // uncontrollably. ELECTRON_RUN_AS_NODE makes Electron's own bundled
+    // binary behave as plain Node for this one process, which is also
+    // why the standalone server doesn't need a separate Node.js install
+    // on the end user's machine.
+    ELECTRON_RUN_AS_NODE: "1",
+    NODE_ENV: "production",
+    PORT: String(port),
+    HOSTNAME: hostname,
+  };
+
+  if (location.isPackaged) {
+    env.PUPPETEER_CACHE_DIR = path.join(location.resourcesPath, "puppeteer-cache");
+  }
+
+  return env;
+}
+
+/**
  * Spawns the bundled Next.js standalone server as a child process on a free
  * local port and waits for it to accept requests before resolving.
  */
@@ -84,21 +127,7 @@ export async function startNextServer(
 
   const child: ChildProcess = spawn(process.execPath, [entry], {
     cwd: path.dirname(entry),
-    env: {
-      ...process.env,
-      // process.execPath is the Electron binary itself, not a system Node
-      // install — without this, the "child process" is actually a second
-      // full Electron app instance, which re-runs main.ts, which spawns
-      // another server, which spawns another Electron instance, forking
-      // uncontrollably. ELECTRON_RUN_AS_NODE makes Electron's own bundled
-      // binary behave as plain Node for this one process, which is also
-      // why the standalone server doesn't need a separate Node.js install
-      // on the end user's machine.
-      ELECTRON_RUN_AS_NODE: "1",
-      NODE_ENV: "production",
-      PORT: String(port),
-      HOSTNAME: hostname,
-    },
+    env: buildServerEnv(location, port, hostname),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
