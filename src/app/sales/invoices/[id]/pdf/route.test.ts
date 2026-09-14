@@ -25,6 +25,18 @@ vi.mock("@/lib/pdf-generation", () => ({
 vi.mock("@/lib/logger", () => ({
   logger: { error: errorMock },
 }));
+// Mocked rather than imported for real: @/lib/current-user transitively
+// imports @/lib/prisma, which throws at MODULE-IMPORT time if DATABASE_URL
+// isn't set — true on a clean CI runner (build.yml's `pnpm test` step sets
+// no DATABASE_URL, unlike its `pnpm run build` step) even though every
+// assertion here only needs these two classes' identity for `instanceof`
+// checks, never a real session/DB lookup. Found via a CI-only test failure
+// this local `pnpm test` run couldn't reproduce (this dev machine already
+// has a real DATABASE_URL configured).
+vi.mock("@/lib/current-user", () => ({
+  AuthenticationError: class AuthenticationError extends Error {},
+  AuthorizationError: class AuthorizationError extends Error {},
+}));
 
 function params(id: string) {
   return { params: Promise.resolve({ id }) };

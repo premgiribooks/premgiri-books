@@ -4114,3 +4114,50 @@ directories, exactly what happened here twice in a row across two different sess
 Committed directly to `main` (a verified, low-risk, CI-only fix to a config file — not
 routed through a new feature branch, since `main`'s CI was actively red and a full
 branch/PR/merge-review cycle would have left it that way longer for no added safety here).
+
+**Two more rounds were needed before "Build main" actually went green** — used the public,
+unauthenticated GitHub Actions Jobs/Check-Runs/Annotations API (`/actions/runs/{id}/jobs`,
+`/commits/{sha}/check-runs`, `/check-runs/{id}/annotations`) to read exact per-step
+conclusions and file/line-level annotations after each push, rather than guessing from a
+local repro that (twice) couldn't actually reproduce the failure:
+
+- **Round 2 — `pnpm lint` still failed after the `require()` fix above**, this time inside
+  `.cache/puppeteer/chrome/linux-153.0.8010.36/chrome-linux64/resources/inspector_overlay/
+  main.js` — Puppeteer's own downloaded Chromium package ships unpacked DevTools frontend
+  JS there **on Linux**, and `eslint.config.mjs` had no ignore for `.cache/`, so ESLint
+  walked into a vendored binary dependency and tried to lint someone else's minified
+  browser code. Not reproducible on this Windows dev machine — the Windows Chromium
+  package doesn't include that same loose resource file in its own layout, which is
+  exactly why this got past local verification. Fixed by adding `.cache/**` to
+  `eslint.config.mjs`'s `globalIgnores`, independent of any one platform's packaging.
+- **Round 3 — `pnpm lint` passed, `pnpm test` then failed** with `Error: DATABASE_URL is
+  not set` from `src/lib/prisma.ts:9`. Root cause: `route.test.ts` (added during the code-
+  review-fix round two entries above) imported the **real** `AuthenticationError`/
+  `AuthorizationError` classes from `@/lib/current-user` — unlike every mock in that same
+  file — and merely importing that module (never even calling a function on it)
+  transitively pulls in `@/lib/session` -> `@/lib/prisma`, which throws at *module-import
+  time* if `DATABASE_URL` isn't set. `build.yml`'s `pnpm test` step deliberately sets no
+  `DATABASE_URL` (only its later `pnpm run build` step does); this dev machine has one
+  configured as a real OS environment variable from earlier setup, so the gap was invisible
+  locally through three separate full-suite runs. Fixed by mocking `@/lib/current-user`
+  in `route.test.ts` too (two minimal `class ... extends Error {}` stand-ins — every
+  assertion only needs their identity for the route handler's own `instanceof` checks,
+  never a real session lookup). **Re-verified specifically against the failure mode this
+  time**, not just re-run as-is: `env -u DATABASE_URL` (a real unset, not just "didn't
+  reference it") around a full `vitest run` — 2057/2057 still passing.
+
+**Updated lesson**: path-scoped `npx eslint <dirs>` and a `vitest run` on a machine with
+its own `DATABASE_URL` already configured can both look completely clean while hiding a
+CI-only failure. For this project specifically, the unscoped `pnpm lint` catches files
+outside the touched directories (including newly-downloaded vendored dependencies), and a
+`DATABASE_URL`-unset `vitest run` catches an accidental unmocked DB-adjacent import — both
+now confirmed necessary, not merely "more thorough," precautions before calling a change
+release-ready. Also demonstrated a useful technique for this project going forward: the
+GitHub Actions REST API (runs/jobs/check-runs/annotations) is readable unauthenticated for
+this public repo and gives exact per-step and per-file failure detail without needing `gh`
+CLI or repo-admin log-download access — faster than guessing from a local repro alone when
+one is available.
+
+All three fixes (require-imports, `.cache` lint ignore, `route.test.ts`'s
+`current-user` mock) committed directly to `main`, each pushed and re-verified against the
+GitHub Actions API individually before moving to the next.
