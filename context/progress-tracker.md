@@ -3760,3 +3760,113 @@ TypeScript project).
 
 Committed on `feature/installer-database-setup`. Not yet merged into `main` — a PR is the
 next step, per this project's one-branch-at-a-time Git workflow.
+
+## 2026-09-14 — PDF Generation (#76, spec 78): first vertical slice — Sales Invoice PDF
+
+Per explicit user instruction ("start existing pdf generation"), on a fresh
+`feature/pdf-generation-sales-invoice` branch cut from `main`. `78-pdf-generation.md`
+scopes ten document templates plus a generic report-PDF template (the latter blocked on
+Excel Export's `ReportExportTable` contract, spec 77, which is itself still undrafted-code/
+not implemented) — per `ai-workflow-rules.md`'s one-feature-at-a-time rule, this pass
+implements only the shared rendering core plus **one** document template, Sales Invoice
+(the document the spec itself calls out as the one with the most business urgency — the
+only Phase 3/4 document that already had a browser-only Print View to upgrade). The
+remaining nine document templates and the report-PDF half are explicitly **not** done here
+and remain tracked as open work under item #76.
+
+**Added `puppeteer` (25.11.0)** as a real dependency — `pnpm add puppeteer`, then
+`package.json`'s new `pnpm.onlyBuiltDependencies: ["puppeteer"]` so its postinstall
+(downloads a pinned Chromium build into the OS-level puppeteer cache, not into
+`node_modules`) actually runs under pnpm 10's default-blocked build-scripts policy;
+without this the dependency installs but the browser binary never downloads. Verified via
+a real `pnpm install` run — Chromium 153.0.8010.36 downloaded successfully.
+
+**`src/lib/pdf-generation.ts`** — `renderHtmlToPdf(html, options): Promise<Buffer>` per
+the spec's shared-core contract: a single headless Chromium instance launched lazily and
+reused across requests (only a page/tab is opened+closed per render), zero permission
+check / companyId / Prisma import / business logic (verified: no imports from
+`src/modules/**` or `@prisma/client`). One deviation from the spec's literal
+`page.setContent(..., { waitUntil: "networkidle0" })`: puppeteer 25's `setContent()` type
+only accepts `"load" | "domcontentloaded"` (the `networkidle*` events are `goto()`-only in
+this version) — used `"load"` instead, which is sufficient since every template embeds its
+own assets inline and fetches nothing external.
+
+**`src/lib/pdf-templates/print-stylesheet.ts`** — the shared print stylesheet
+78-pdf-generation.md names as a literal `src/styles/print.css` file. Implemented instead as
+a `PRINT_STYLESHEET` TypeScript string constant, a deliberate deviation: its only consumer
+right now is a server-rendered template running in the Node route-handler process (outside
+the Next.js CSS pipeline), and Electron's `output: "standalone"` packaging doesn't
+reliably ship raw `src/` sources for a runtime `fs.readFileSync` — a real risk given this
+project's own v1.0.4–v1.0.6 history of Electron-packaging bugs from exactly this class of
+"works in dev, breaks packaged" gap (see the entries above). Revisit as a literal shared
+`.css` file only once/if `SalesInvoicePrintView` is itself migrated to consume it too
+(the full multi-document spec's stated end state) — not needed for this slice, since that
+existing component is explicitly not touched here (`ai-workflow-rules.md`'s Refactoring
+Rules: "avoid unnecessary rewrites"; the spec's own Do Not section: don't rewrite it).
+
+**`src/lib/html-escape.ts`** — a small shared `escapeHtml()` used by every interpolated,
+user-entered field (customer name, product name, narration, payment reference/ledger name)
+before it goes into the generated HTML string — every `build*Html` template builds raw
+HTML by string interpolation, so this is the injection guard the framework's usual
+JSX-escaping doesn't provide here.
+
+**`src/modules/sales-invoices/pdf/sales-invoice-pdf.ts`** — `buildSalesInvoiceHtml(invoice:
+SalesInvoiceDetail): string`, mirroring `SalesInvoicePrintView`'s existing on-screen layout
+(header/Bill To/line items/totals/payments/narration) so the already-shipped Print View and
+this new PDF look the same. Every figure is read verbatim from the already-posted document
+— no new business computation, no company-logo/branding block (the existing Print View has
+none either; out of scope for this slice, matching what's actually being mirrored).
+
+**`src/app/sales/invoices/[id]/pdf/route.ts`** — a new Route Handler (this codebase's
+first — no other Route Handler existed before this), `GET`-only, no business logic
+(code-standards.md's Business Logic rule): calls `salesInvoiceService.getSalesInvoice(id)`
+(which re-checks its own `sales`/`view` permission and company scoping exactly as the
+detail page does), 404s on a missing/foreign-company invoice, maps `AuthenticationError`/
+`AuthorizationError`/`AppError` to 401/403/400, then `buildSalesInvoiceHtml` +
+`renderHtmlToPdf({ format: "A5" })` (ui-context.md's "Invoices — A5/A4" convention) and
+returns the buffer with `Content-Type: application/pdf` and a sanitized
+`Content-Disposition: attachment` filename. `next/server`'s `NextResponse` needed
+`new Uint8Array(pdf)` rather than the raw `Buffer` — a real TS lib mismatch between Node's
+`Buffer<ArrayBufferLike>` and DOM's `BodyInit`, not an actual runtime behavior difference.
+
+**`src/modules/sales-invoices/components/sales-invoice-download-pdf-button.tsx`** — a
+plain server-renderable `<a href=".../pdf" download>` styled as a Button (this codebase's
+existing `nativeButton={false} render={<Link/>}` convention, matching the neighboring Edit/
+Print buttons on the same page) — no client JS needed. Wired into
+`src/app/sales/invoices/[id]/page.tsx` beside the existing, **unmodified**
+`SalesInvoicePrintButton`, under the identical `status !== "DRAFT"` visibility gate.
+
+**Tests** (`src/lib/pdf-generation.test.ts`, `src/modules/sales-invoices/pdf/sales-invoice-
+pdf.test.ts`): `renderHtmlToPdf` produces a `%PDF-`-prefixed buffer for both `A4` and `A5`;
+a coarse regression guard (spy on `puppeteer.launch`) confirms the browser instance is
+reused, not relaunched, across sequential calls; `buildSalesInvoiceHtml` renders the
+invoice number, party name (including the quick-customer fallback), line items, and grand
+total, and a dedicated test confirms a `<script>`-bearing narration is escaped, not
+embedded raw.
+
+**Verified**: `npx tsc --noEmit` (0 errors), `npx eslint` on every new/changed file (0
+errors/warnings), `npx vitest run` — **2041/2041 passing** (7 new), `next build` — clean,
+`/sales/invoices/[id]/pdf` present in the route table as a dynamic Route Handler.
+
+**Known open item, not resolved in this pass**: Puppeteer's Chromium binary lives in the
+OS-level puppeteer cache directory, **not** inside `node_modules` and therefore not covered
+by `next.config.ts`'s `outputFileTracingIncludes` or electron-builder's `extraResources` —
+confirmed working end-to-end in this **dev-machine** environment only (the same machine
+that ran `pnpm install`). A packaged Electron installer for a different end-user machine
+will not have that cache directory populated and this feature will fail there until
+electron-builder's `extraResources` (or an equivalent bundling step) is extended to ship
+it, or `PUPPETEER_CACHE_DIR` is pinned into a location the installer does populate. Not
+solved here — genuinely a separate, packaging-focused concern (mirrors this project's own
+past sharp/tr46/Turbopack-externals packaging lessons above), flagged rather than silently
+left for someone to discover at release time.
+
+**Not done in this pass** (remaining `78-pdf-generation.md` scope, item #76 stays 🟨, not
+✅, in `context/Phases/phase-tracker.md`): the other nine document templates (Quotation,
+Sales Order, Delivery Challan, Sales Return, Credit Note, Debit Note, Purchase Order, Goods
+Receipt Note, Purchase Return — Purchase Invoice stays permanently excluded per that
+document's own spec), the generic `buildReportHtml`/report-PDF half (blocked on Excel
+Export, spec 77, tracker #75, itself still unimplemented), and the literal `src/styles/
+print.css` file / `SalesInvoicePrintView` migration onto it.
+
+Committed on `feature/pdf-generation-sales-invoice`. Not yet merged into `main` — a PR is
+the next step, per this project's one-branch-at-a-time Git workflow.

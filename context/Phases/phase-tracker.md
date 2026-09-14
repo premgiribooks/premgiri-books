@@ -2045,7 +2045,7 @@ as usual:
 | 73  | Global Search    | Masters    | ⬜     |
 | 74  | Excel Import     | Masters    | ⬜     |
 | 75  | Excel Export     | Reports    | ⬜     |
-| 76  | PDF Generation   | Reports    | ⬜     |
+| 76  | PDF Generation   | Reports    | 🟨     |
 | 77  | Barcode Billing  | Sales      | ⬜     |
 | 78  | Audit Logs       | Platform   | ⬜     |
 | 79  | Backup & Restore | Database   | ⬜     |
