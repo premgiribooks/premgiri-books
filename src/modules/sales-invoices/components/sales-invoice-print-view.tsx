@@ -1,18 +1,9 @@
 import { formatSalesInvoiceDate } from "@/modules/sales-invoices/utils/format-sales-invoice-date";
+import { customerDisplayName, effectiveLineTax } from "@/modules/sales-invoices/utils/sales-invoice-display";
 import type { SalesInvoiceDetail } from "@/types/sales-invoice";
 
 interface SalesInvoicePrintViewProps {
   salesInvoice: SalesInvoiceDetail;
-}
-
-function customerDisplayName(invoice: SalesInvoiceDetail): string {
-  if (invoice.customer) {
-    return invoice.customer.name;
-  }
-  if (invoice.customerMode === "QUICK") {
-    return invoice.quickCustomerName ?? "Quick Customer";
-  }
-  return invoice.quickCustomerName ?? "Walk-in Customer";
 }
 
 /** A plain print-stylesheet layout (`ui-context.md`'s A4/A5 convention) —
@@ -53,11 +44,7 @@ export function SalesInvoicePrintView({ salesInvoice }: SalesInvoicePrintViewPro
         </thead>
         <tbody>
           {salesInvoice.items.map((item) => {
-            const tax =
-              (item.isTaxOverridden ? (item.overriddenCgst ?? 0) : item.cgst) +
-              (item.isTaxOverridden ? (item.overriddenSgst ?? 0) : item.sgst) +
-              (item.isTaxOverridden ? (item.overriddenIgst ?? 0) : item.igst) +
-              (item.isTaxOverridden ? (item.overriddenCess ?? 0) : item.cess);
+            const tax = effectiveLineTax(item);
             return (
               <tr key={item.id} className="border-b border-border/60">
                 <td className="py-1">

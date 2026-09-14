@@ -71,3 +71,28 @@ To test a packaged build locally without publishing, run `pnpm dist:dir`
     message naming the actual cause, instead of the raw HTTP error dump —
     check `main.log` for `"Auto-update check failed"` first if a user
     reports updates not working.
+- **PDF Generation needs Puppeteer's Chromium bundled, not just installed.**
+  `src/lib/pdf-generation.ts` (`78-pdf-generation.md`) launches a real headless
+  Chromium via `puppeteer`. That browser binary lives outside `node_modules`
+  (Puppeteer's own download cache), so Next's output-file-tracing into
+  `.next/standalone` never picks it up the way a real npm dependency would.
+  Fixed the same way as `.next/standalone` itself: `.puppeteerrc.cjs` pins
+  the download to a project-relative `.cache/puppeteer` (instead of the
+  default per-OS-user global cache), `pnpm install`'s puppeteer postinstall
+  downloads it there (enabled under pnpm 10's build-script policy via
+  `package.json`'s `pnpm.onlyBuiltDependencies`), `package.json`'s
+  `build.extraResources` ships that folder into the installer as
+  `puppeteer-cache`, and `electron/server.ts`'s `buildServerEnv` points the
+  spawned standalone server's `PUPPETEER_CACHE_DIR` at it — but only when
+  packaged (`location.isPackaged`); in dev, `.puppeteerrc.cjs` alone already
+  resolves the same directory. If PDF downloads fail only in a packaged
+  build (never in dev), verify the release's CI run actually downloaded
+  Chromium during `pnpm install --frozen-lockfile` and that `puppeteer-cache`
+  exists under the installed app's resources directory.
+  - **Residual, unaddressed risk on Linux**: Puppeteer's bundled Chromium
+    needs a handful of system shared libraries (`libnss3`, `libatk1.0-0`,
+    etc.) present on the machine actually running the installed AppImage/deb
+    — present on `ubuntu-latest`'s GitHub Actions runner (where the binary
+    is *downloaded*, not *run*) but not guaranteed on every end-user Linux
+    desktop. Not solved here; flagged for whoever first gets a real Linux
+    PDF-generation bug report.

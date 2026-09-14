@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { SalesInvoiceDownloadPdfButton } from "@/modules/sales-invoices/components/sales-invoice-download-pdf-button";
 import { SalesInvoicePrintButton } from "@/modules/sales-invoices/components/sales-invoice-print-button";
 import { SalesInvoicePrintView } from "@/modules/sales-invoices/components/sales-invoice-print-view";
 import { SalesInvoiceStatusActions } from "@/modules/sales-invoices/components/sales-invoice-status-actions";
@@ -80,6 +81,7 @@ export default async function SalesInvoiceDetailPage({ params }: SalesInvoiceDet
                 />
               ) : null}
               {salesInvoice.status !== "DRAFT" ? <SalesInvoicePrintButton /> : null}
+              {salesInvoice.status !== "DRAFT" ? <SalesInvoiceDownloadPdfButton salesInvoiceId={salesInvoice.id} /> : null}
               {canCreateReturn && salesInvoice.status === "POSTED" ? (
                 <Button
                   variant="outline"

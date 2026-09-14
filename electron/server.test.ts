@@ -2,7 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { resolveStandaloneServerEntry, waitForServerReady } from "./server";
+import { buildServerEnv, resolveStandaloneServerEntry, waitForServerReady } from "./server";
 
 describe("resolveStandaloneServerEntry", () => {
   it("resolves under resourcesPath when packaged", () => {
@@ -25,6 +25,36 @@ describe("resolveStandaloneServerEntry", () => {
     });
 
     expect(entry).toBe(path.join("/repo", ".next", "standalone", "server.js"));
+  });
+});
+
+describe("buildServerEnv", () => {
+  it("points PUPPETEER_CACHE_DIR at the bundled puppeteer-cache resource when packaged", () => {
+    const env = buildServerEnv(
+      { isPackaged: true, resourcesPath: "/Applications/Premgiri Books ERP.app/Contents/Resources", projectRoot: "/unused" },
+      8903,
+      "127.0.0.1",
+    );
+
+    expect(env.PUPPETEER_CACHE_DIR).toBe(
+      path.join("/Applications/Premgiri Books ERP.app/Contents/Resources", "puppeteer-cache"),
+    );
+    expect(env.ELECTRON_RUN_AS_NODE).toBe("1");
+    expect(env.PORT).toBe("8903");
+  });
+
+  it("leaves PUPPETEER_CACHE_DIR unset in dev — .puppeteerrc.cjs already resolves it there", () => {
+    const previous = process.env.PUPPETEER_CACHE_DIR;
+    delete process.env.PUPPETEER_CACHE_DIR;
+
+    try {
+      const env = buildServerEnv({ isPackaged: false, resourcesPath: "/unused", projectRoot: "/repo" }, 8903, "127.0.0.1");
+      expect(env.PUPPETEER_CACHE_DIR).toBeUndefined();
+    } finally {
+      if (previous !== undefined) {
+        process.env.PUPPETEER_CACHE_DIR = previous;
+      }
+    }
   });
 });
 
