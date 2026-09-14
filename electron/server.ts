@@ -66,8 +66,22 @@ export async function waitForServerReady(
 
 export interface RunningServer {
   url: string;
-  stop: () => void;
+  /**
+   * Resolves only once the child process has actually exited (verified via
+   * its "exit" event) — never fire-and-forget. The child is spawned via
+   * `process.execPath` (see below), which is the packaged app's own .exe, so
+   * while it's alive there are two processes sharing that exe's name/path.
+   * NSIS's "is the app still running" check (used both by the installer
+   * overwriting files on update and by electron-updater's silent
+   * quitAndInstall) matches by process name — an un-awaited kill() races
+   * against that check and is what previously caused the installer's
+   * "cannot be closed" dialog. Escalates to SIGKILL if graceful shutdown
+   * doesn't finish within STOP_TIMEOUT_MS (e.g. a slow Prisma pool drain).
+   */
+  stop: () => Promise<void>;
 }
+
+const STOP_TIMEOUT_MS = 5_000;
 
 /**
  * The standalone server's own env, split out from startNextServer so the
@@ -131,14 +145,28 @@ export async function startNextServer(
     stdio: ["ignore", "pipe", "pipe"],
   });
 
+  let hasExited = false;
+
   child.stdout?.on("data", (chunk: Buffer) => logger.info(chunk.toString().trim()));
   child.stderr?.on("data", (chunk: Buffer) => logger.error(chunk.toString().trim()));
   child.on("exit", (code, signal) => {
+    hasExited = true;
     logger.warn(`Local server process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`);
   });
 
-  const stop = (): void => {
-    child.kill();
+  const stop = (): Promise<void> => {
+    if (hasExited) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      const forceKill = setTimeout(() => child.kill("SIGKILL"), STOP_TIMEOUT_MS);
+      child.once("exit", () => {
+        clearTimeout(forceKill);
+        resolve();
+      });
+      child.kill();
+    });
   };
 
   try {

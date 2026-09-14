@@ -126,6 +126,27 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
-  runningServer?.stop();
+let isQuittingForReal = false;
+
+/**
+ * Must actually wait for the standalone server child to exit — not just send
+ * it a kill signal — before letting the app quit for real. That child shares
+ * the packaged app's own .exe (see server.ts), so an update's silent install
+ * (electron-updater's quitAndInstall, wired in updater.ts) races against
+ * Windows still listing it as running if this doesn't block. preventDefault
+ * + a guard flag turns Electron's normally-synchronous "quit" into one that
+ * waits on this async cleanup exactly once, then re-triggers it for real.
+ */
+app.on("before-quit", (event) => {
+  if (isQuittingForReal || !runningServer) {
+    return;
+  }
+
+  event.preventDefault();
+  isQuittingForReal = true;
+
+  runningServer
+    .stop()
+    .catch((error: unknown) => logger.error({ error }, "Error stopping local server during quit"))
+    .finally(() => app.quit());
 });

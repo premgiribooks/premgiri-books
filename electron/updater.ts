@@ -100,7 +100,16 @@ export function initializeAutoUpdater(window: BrowserWindow, logger: Logger): vo
   });
 
   ipcMain.handle(UPDATE_CHECK_CHANNEL, () => checkForUpdatesManually());
-  ipcMain.on(UPDATE_INSTALL_CHANNEL, () => autoUpdater.quitAndInstall());
+  // isSilent=true skips the NSIS wizard entirely (electron-updater passes
+  // /S to the downloaded installer, which reuses the existing install
+  // directory from the registry regardless of the assisted-installer
+  // allowToChangeInstallationDirectory setting used for first-time installs);
+  // isForceRunAfter=true relaunches the updated app once install finishes.
+  // main.ts's before-quit handler is what makes this reliable rather than
+  // just quiet-but-broken: it now waits for the bundled server's child
+  // process — which shares this app's own .exe — to fully exit before the
+  // app-quit electron-updater is waiting on actually happens.
+  ipcMain.on(UPDATE_INSTALL_CHANNEL, () => autoUpdater.quitAndInstall(true, true));
 }
 
 /** Silent background check, run once shortly after the window loads. */
