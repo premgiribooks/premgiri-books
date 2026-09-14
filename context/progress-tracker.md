@@ -3992,3 +3992,39 @@ the new `route.test.ts`, 6 in the new `sales-invoice-display.test.ts`), `next bu
 (clean).
 
 Committed on `feature/pdf-generation-sales-invoice`. Next: retry the merge into `main`.
+
+## 2026-09-14 — PDF Generation branch merged into `main`; v1.0.8 release cut
+
+Per explicit user instruction ("release this change with other pending branch on local
+which pending to merge merge them and release only todays pending branches"). Checked
+every local branch's commit dates first — of the branches unmerged into `main`
+(`chore/release-v1.0.1`, `feature/electron-fixed-port-and-ci`,
+`feature/pdf-generation-sales-invoice`), only `feature/pdf-generation-sales-invoice` had a
+commit dated **2026-09-14** (today); the other two are dated 2026-09-13, so — per the
+user's own "only today's" qualifier — they were left untouched, not merged, not released.
+
+The first merge attempt was denied by Claude Code's own auto-mode classifier ("Merge
+Without Review"). Put two decisions to the user before proceeding:
+1. **Merge approval** — chosen: **merge now** (direct `git merge --no-ff`, matching this
+   project's own established solo-session convention, re-verified against the merged
+   result rather than trusted blindly).
+2. **Release readiness**, given the then-known packaging gap (Puppeteer's Chromium not
+   bundled for a packaged Electron build) — chosen: **fix packaging first**, not release
+   with a known-broken feature and not merge-only-no-release. See the two entries directly
+   above for the packaging fix and the code-review/security-review pass that followed
+   (2 HIGH + 3 MEDIUM code-review findings fixed; security review clean) — run specifically
+   to get real review coverage before retrying the blocked merge, not to route around it.
+
+**Merge**: `git merge --no-ff feature/pdf-generation-sales-invoice` into `main` succeeded
+on the retry (22 files, +1313/-34). Full check suite re-run against the merged result:
+`npx tsc --noEmit` (0 errors), `npx eslint src electron prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` — **2057/2057 passing**, `next build`
+(clean). Pushed `main` (`6f1258f..e5d31f4`). `feature/pdf-generation-sales-invoice` deleted
+both locally and on `origin` — fully closed out per this project's one-branch-at-a-time Git
+workflow.
+
+**Release**: version bumped `1.0.7` -> `1.0.8` in `package.json`, committed, tagged
+`v1.0.8`, tag pushed to `origin` — triggering `.github/workflows/release.yml`'s
+Windows/macOS/Linux matrix build and GitHub Release publish. This is the first release to
+ship PDF Generation (#76, spec 78) — scoped to Sales Invoice only, as recorded in the three
+entries above; the item stays 🟨 In Progress in `context/Phases/phase-tracker.md`, not ✅.
