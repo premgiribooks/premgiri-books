@@ -4161,3 +4161,71 @@ one is available.
 All three fixes (require-imports, `.cache` lint ignore, `route.test.ts`'s
 `current-user` mock) committed directly to `main`, each pushed and re-verified against the
 GitHub Actions API individually before moving to the next.
+
+## 2026-09-14 — CI fix, round 4: `pnpm test` still failing on Linux — real Chromium can't launch
+
+**Round 3's fix advanced the failure from `pnpm lint` to `pnpm test`, but `pnpm test`
+itself then failed too** — this time with no useful GitHub annotation at all (only the
+generic "Process completed with exit code 1"), since a runtime test assertion failure
+isn't the kind of thing the Checks/Annotations API surfaces file/line detail for the way
+ESLint or `tsc` do. Stopped guessing from annotations alone at this point and got a real,
+exact repro instead: started Docker Desktop on this dev machine and ran the identical
+`build.yml` sequence (`pnpm install --frozen-lockfile`, `pnpm exec prisma generate`, `pnpm
+lint`, `pnpm test`) inside a plain `node:22-bookworm` container.
+
+**Confirmed exactly**: all 4 `src/lib/pdf-generation.test.ts` tests fail with `Error:
+Failed to launch the browser process: Code: 127`, and the actual stderr underneath it —
+`error while loading shared libraries: libnspr4.so: cannot open shared object file: No
+such file or directory` — is precisely the residual Linux risk already flagged (before it
+ever caused a real failure) in `docs/release-process.md`'s PDF Generation section:
+Puppeteer's downloaded Chromium binary exists on disk (the `.cache/puppeteer` fix from two
+entries above works correctly), but the bare Linux environment is missing several shared
+libraries Chromium's dynamic linker needs merely to start the process — nothing to do with
+GitHub Actions specifically, reproduced identically in a generic Debian container.
+
+**Two-part fix, each verified independently in the same container before combining them**:
+1. **`src/lib/pdf-generation.ts`**: added `args: ["--no-sandbox", "--disable-setuid-
+   sandbox"]` to `puppeteer.launch()` — tested alone first and confirmed this did **not**
+   fix the `libnspr4.so` error by itself (proving the failure is a missing-library issue,
+   not a sandbox/user-namespace restriction, before committing to a specific fix rather
+   than guessing between the two well-known Puppeteer-in-CI failure classes). Kept anyway
+   as a real, independently-justified hardening: safe specifically because every caller
+   only ever renders this app's own self-contained, server-generated HTML (already
+   confirmed by the earlier security review — no external resource fetch, no third-party
+   or user-navigated content), so the sandbox this flag disables was never protecting
+   against anything this feature actually does.
+2. **`.github/workflows/build.yml`**: added an `apt-get install` step (the standard
+   Puppeteer-on-Debian/Ubuntu dependency list from Puppeteer's own troubleshooting
+   guidance — `libnspr4`, `libnss3`, `libatk-bridge2.0-0`, `libgtk-3-0`, etc., ~30 packages)
+   before `pnpm test`, placed after `pnpm install --frozen-lockfile` (so Chromium itself is
+   already downloaded) and before the `tsc`/`lint`/`test` steps. Re-ran the *exact* apt
+   package list inside the same container and confirmed all 4 previously-failing tests now
+   pass. `release.yml` needs no equivalent change — its `pnpm run build` step never
+   launches a browser (`renderHtmlToPdf` only runs inside the Route Handler at request
+   time), consistent with `v1.0.8`/`v1.0.9` already having published successfully despite
+   this whole `build.yml`-only failure chain.
+
+**Full re-verification, in the container, of every `build.yml` step in sequence** (not
+just the two previously-failing ones in isolation): `pnpm exec tsc --noEmit` (0 errors),
+`pnpm exec tsc --noEmit -p tsconfig.electron.json` (0 errors), `pnpm lint` (0 errors),
+`pnpm test` — **150/150 test files, 2057/2057 tests passing**, `pnpm run build` with the
+same placeholder `DATABASE_URL` `build.yml` sets — all exit 0. Also re-ran the full suite
+on this Windows dev machine (`tsc`, `eslint`, and a `DATABASE_URL`-unset `vitest run`) to
+confirm the `--no-sandbox` addition changed nothing there — still 2057/2057.
+
+**Housekeeping**: an unrelated, unexpectedly-large `.pnpm-store/` directory (~1GB) had
+appeared at the project root at some point during this session's various `pnpm`
+invocations — untracked, but with no `.gitignore` entry to stop a future accidental `git
+add -A` from picking it up. Added `/.pnpm-store` to `.gitignore` alongside this round's
+fix (not committed itself, just excluded).
+
+**Final lesson, compounding the two above**: a scoped lint check, a `DATABASE_URL`-present
+local test run, *and* a same-OS (Windows) local test run can ALL look completely clean
+while a Linux CI runner still fails — three independent blind spots stacked on top of each
+other across this one feature's release. Docker (already installed on this dev machine,
+just not running) turned out to be the fastest way to close the loop for good: an exact,
+disposable repro of the actual failing environment beats iterating against GitHub Actions
+one ~2-minute round trip at a time. Recorded for any future change that touches
+Puppeteer/Chromium, native dependencies, or anything else plausibly OS-specific: reach for
+a quick Linux container repro before the second unexplained CI-only failure, not after the
+fourth.

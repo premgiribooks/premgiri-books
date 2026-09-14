@@ -37,10 +37,26 @@ function getBrowser(): Promise<Browser> {
     // would reuse and immediately re-reject the same dead Promise, wedging
     // PDF generation for the rest of this process's lifetime instead of
     // retrying on the next request (code review finding).
-    browserPromise = puppeteer.launch({ headless: true }).catch((error: unknown) => {
-      browserPromise = null;
-      throw error;
-    });
+    browserPromise = puppeteer
+      .launch({
+        headless: true,
+        // Chrome's own sandbox needs a kernel/AppArmor-permitted unprivileged
+        // user namespace, which a locked-down Linux host (a minimal CI
+        // container; some restrictive desktop-Linux AppArmor profiles) can
+        // deny outright — Chromium then fails to even launch (confirmed:
+        // reproduced with "Failed to launch the browser process: Code: 127"
+        // in a plain Debian container). Safe to disable here specifically
+        // because every caller only ever renders this app's own
+        // self-contained, server-generated HTML (no external resource
+        // fetch, no third-party or user-navigated content) — the sandbox
+        // exists to contain an untrusted web page, which is never what
+        // this renders.
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      })
+      .catch((error: unknown) => {
+        browserPromise = null;
+        throw error;
+      });
   }
   return browserPromise;
 }
