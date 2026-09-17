@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { PHYSICAL_VERIFICATION_STATUS_LABELS } from "@/modules/physical-verifications/components/physical-verification-status-badge";
 import { PHYSICAL_VERIFICATION_STATUS_VALUES } from "@/modules/physical-verifications/validation/physical-verification-schema";
 import type { PhysicalVerificationWarehouseOption } from "@/types/physical-verification";
@@ -85,24 +86,17 @@ export function PhysicalVerificationFilterBar({ warehouses }: PhysicalVerificati
         </SelectContent>
       </Select>
 
-      <Select
-        value={searchParams.get("warehouseId") ?? ALL_VALUE}
-        onValueChange={(next) => updateParams({ warehouseId: next ?? ALL_VALUE })}
-      >
-        <SelectTrigger className="w-full sm:w-48" aria-label="Filter by warehouse">
-          <SelectValue>
-            {(current: string | null) => warehouses.find((warehouse) => warehouse.id === current)?.name ?? "All Warehouses"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All Warehouses</SelectItem>
-          {warehouses.map((warehouse) => (
-            <SelectItem key={warehouse.id} value={warehouse.id}>
-              {warehouse.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        options={warehouses}
+        value={searchParams.get("warehouseId") ?? undefined}
+        onChange={(next) => updateParams({ warehouseId: next ?? ALL_VALUE })}
+        getOptionId={(warehouse) => warehouse.id}
+        getOptionLabel={(warehouse) => warehouse.name}
+        noneLabel="All Warehouses"
+        placeholder="All Warehouses"
+        aria-label="Filter by warehouse"
+        className="w-full sm:w-48"
+      />
 
       <Input
         type="date"

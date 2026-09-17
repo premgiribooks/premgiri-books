@@ -17,13 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import {
   createGoodsReceiptNoteAction,
   updateGoodsReceiptNoteAction,
@@ -41,11 +35,6 @@ import type {
 } from "@/types/goods-receipt-note";
 
 const LIST_PATH = "/purchase/receipts";
-
-// Base UI's Select decides controlled-vs-uncontrolled on the first render by
-// checking whether `value` is `undefined` — mirrors delivery-challan-form.tsx's
-// NONE_VALUE fix exactly.
-const NONE_VALUE = "__none__";
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -171,32 +160,16 @@ export function GoodsReceiptNoteForm({ options, goodsReceiptNote, purchaseOrderP
               <FormItem>
                 <FormLabel>Supplier *</FormLabel>
                 <FormControl>
-                  <Select
-                    value={field.value || NONE_VALUE}
-                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
+                  <SearchableSelect
+                    options={options.suppliers}
+                    value={field.value || undefined}
+                    onChange={(next) => field.onChange(next ?? "")}
+                    getOptionId={(supplier) => supplier.id}
+                    getOptionLabel={(supplier) => supplier.name}
+                    allowNone={false}
+                    placeholder="Select a supplier"
                     disabled={isSupplierLocked}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a supplier">
-                        {(current: string | null) => {
-                          if (!current || current === NONE_VALUE) {
-                            return "Select a supplier";
-                          }
-                          return (
-                            options.suppliers.find((supplier) => supplier.id === current)?.name ??
-                            "Select a supplier"
-                          );
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </FormControl>
                 {isSupplierLocked ? (
                   <p className="text-xs text-muted-foreground">Locked to the linked purchase order&apos;s supplier.</p>

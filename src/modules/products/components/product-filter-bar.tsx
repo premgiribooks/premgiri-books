@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { PRODUCT_TYPE_LABELS } from "@/modules/products/components/product-type-badge";
 import { PRODUCT_TYPE_VALUES } from "@/modules/products/validation/product-schema";
 import type { ProductMasterOption } from "@/types/product";
@@ -51,6 +52,26 @@ function FilterSelect({ value, onChange, allLabel, options, ariaLabel }: FilterS
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// Categories and brands are a company's master data and can grow long enough
+// that scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
+function FilterCombobox({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
+  return (
+    <SearchableSelect
+      options={options}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(option) => option.value}
+      getOptionLabel={(option) => option.label}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-44"
+    />
   );
 }
 
@@ -118,7 +139,7 @@ export function ProductFilterBar({ categories, brands }: ProductFilterBarProps) 
         }))}
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("category") ?? ALL_VALUE}
         onChange={(value) => updateParams({ category: value })}
         allLabel="All Categories"
@@ -126,7 +147,7 @@ export function ProductFilterBar({ categories, brands }: ProductFilterBarProps) 
         options={categories.map((category) => ({ value: category.id, label: category.name }))}
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("brand") ?? ALL_VALUE}
         onChange={(value) => updateParams({ brand: value })}
         allLabel="All Brands"

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { SALES_ORDER_STATUS_LABELS } from "@/modules/sales-orders/components/sales-order-status-badge";
 import { SALES_ORDER_STATUS_VALUES } from "@/modules/sales-orders/validation/sales-order-schema";
 import type { SalesOrderCustomerOption } from "@/types/sales-order";
@@ -45,6 +46,26 @@ function FilterSelect({ value, onChange, allLabel, options, ariaLabel }: FilterS
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// The Customers list (a company's master data) can grow long enough that
+// scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
+function FilterCombobox({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
+  return (
+    <SearchableSelect
+      options={options}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(option) => option.value}
+      getOptionLabel={(option) => option.label}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-44"
+    />
   );
 }
 
@@ -111,7 +132,7 @@ export function SalesOrderFilterBar({ customers }: SalesOrderFilterBarProps) {
         }))}
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("customerId") ?? ALL_VALUE}
         onChange={(value) => updateParams({ customerId: value })}
         allLabel="All Customers"

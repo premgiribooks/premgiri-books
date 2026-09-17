@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import type { WarehouseBranchOption } from "@/types/warehouse";
 
-const NONE_VALUE = "__none__";
 const NO_BRANCH_LABEL = "No branch";
 
 interface BranchSelectorProps {
@@ -39,7 +32,7 @@ function branchLabel(branch: WarehouseBranchOption): string {
 }
 
 /**
- * Optional-branch picker for the warehouse form, mirroring
+ * Optional, filterable branch picker for the warehouse form, mirroring
  * category-selector.tsx (via ledger-group-selector.tsx).
  */
 export function BranchSelector({
@@ -50,41 +43,16 @@ export function BranchSelector({
   ...triggerProps
 }: BranchSelectorProps) {
   return (
-    <Select
-      // Base UI's Select decides controlled-vs-uncontrolled on the first
-      // render by checking whether `value` is `undefined` — NONE_VALUE (a
-      // distinct, defined "controlled, nothing selected yet" sentinel) keeps
-      // it controlled for the component's entire lifetime; see
-      // category-selector.tsx for the reference fix this mirrors.
-      value={value ?? NONE_VALUE}
-      onValueChange={(next) => onChange(!next || next === NONE_VALUE ? undefined : next)}
+    <SearchableSelect
+      options={branches}
+      value={value}
+      onChange={onChange}
+      getOptionId={(branch) => branch.id}
+      getOptionLabel={branchLabel}
+      noneLabel={NO_BRANCH_LABEL}
+      emptyLabel="No branches"
       disabled={disabled}
-    >
-      <SelectTrigger className="w-full" {...triggerProps}>
-        <SelectValue placeholder={NO_BRANCH_LABEL}>
-          {(current: string | null) => {
-            if (!current || current === NONE_VALUE) {
-              return NO_BRANCH_LABEL;
-            }
-            const selected = branches.find((branch) => branch.id === current);
-            return selected ? branchLabel(selected) : NO_BRANCH_LABEL;
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE_VALUE}>{NO_BRANCH_LABEL}</SelectItem>
-        {branches.length === 0 ? (
-          <SelectItem value="__no_branches__" disabled>
-            No branches
-          </SelectItem>
-        ) : (
-          branches.map((branch) => (
-            <SelectItem key={branch.id} value={branch.id}>
-              {branchLabel(branch)}
-            </SelectItem>
-          ))
-        )}
-      </SelectContent>
-    </Select>
+      {...triggerProps}
+    />
   );
 }

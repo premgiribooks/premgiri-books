@@ -14,11 +14,33 @@ import { useNavPermissions } from "@/components/providers/nav-permissions-provid
 import { useFavorites } from "@/hooks/use-favorites";
 import { recordRecentPage, useRecentPages } from "@/hooks/use-recent-pages";
 import { setCommandPaletteOpen, toggleCommandPalette, useCommandPaletteOpen } from "@/hooks/use-command-palette";
-import { searchEntities, type SearchResults } from "@/lib/global-search";
+import type { GlobalSearchGroup, GlobalSearchGroupKey } from "@/types/global-search";
 
-const EMPTY_DATA_RESULTS: SearchResults = { products: [], customers: [], suppliers: [] };
+const EMPTY_DATA_RESULTS: GlobalSearchGroup[] = [];
 const MIN_DATA_QUERY_LENGTH = 2;
-const SECTION_ORDER = ["Favorites", "Recent", "Pages", "Products", "Customers", "Suppliers"] as const;
+// A full second, not a hair-trigger 200-300ms — see the debounce effect's
+// own comment below for why this fan-out specifically needs to wait for a
+// real pause in typing.
+const SEARCH_DEBOUNCE_MS = 1000;
+const SECTION_ORDER = ["Favorites", "Recent", "Pages", "Products", "Customers", "Suppliers", "Ledgers"] as const;
+
+// Each in-scope master's own existing filtered list screen, deep-linked from
+// this group's "See all N results" row with the query pre-filled into its
+// own URL-state `search` param (75-global-search.md's UI section) — never a
+// new query-string contract.
+const GROUP_LIST_PATH: Record<GlobalSearchGroupKey, string> = {
+  products: "/masters/products",
+  customers: "/masters/customers",
+  suppliers: "/masters/suppliers",
+  ledgers: "/accounting/ledgers",
+};
+
+const GROUP_SECTION: Record<GlobalSearchGroupKey, (typeof SECTION_ORDER)[number]> = {
+  products: "Products",
+  customers: "Customers",
+  suppliers: "Suppliers",
+  ledgers: "Ledgers",
+};
 
 interface PaletteRow {
   key: string;
@@ -32,13 +54,14 @@ interface PaletteRow {
 /** Global Ctrl/Cmd+K quick navigation. Mounted once in AppShell so it works
  * from any authenticated page. "PAGES" results come from the same
  * permission-filtered nav tree the Sidebar uses (navigation-filter.ts);
- * "DATA" results (Products/Customers/Suppliers) come from
- * lib/global-search.ts, which reuses each module's own service. */
+ * "DATA" results (Products/Customers/Suppliers/Ledgers) come from
+ * /api/search (75-global-search.md), which reuses each module's own service
+ * and is already gated per group by masters:view/accounting:view. */
 export function CommandPalette() {
   const open = useCommandPaletteOpen();
   const [query, setQuery] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
-  const [dataResults, setDataResults] = React.useState<SearchResults>(EMPTY_DATA_RESULTS);
+  const [dataResults, setDataResults] = React.useState<GlobalSearchGroup[]>(EMPTY_DATA_RESULTS);
   const router = useRouter();
   const permissions = useNavPermissions();
   const favorites = useFavorites();
@@ -82,28 +105,46 @@ export function CommandPalette() {
   const trimmedQuery = query.trim();
 
   // Debounced DATA-tier fetch — a real effect (subscribes to an external
-  // system via searchEntities); the too-short-query/closed case is handled
-  // by `effectiveDataResults` below instead of synchronously clearing state
-  // here.
+  // system via /api/search); the too-short-query/closed case is handled by
+  // `effectiveDataResults` below instead of synchronously clearing state
+  // here. A full second, not a hair-trigger 200-300ms: this call fans out to
+  // four services, so it must wait for the user to actually pause typing
+  // rather than firing (and hitting the DB) on every keystroke. Uses a real
+  // `fetch()` against a Route Handler rather than a Server Action — this
+  // Next.js version's own docs warn Server Actions "are queued... using them
+  // for data fetching introduces sequential execution," which is exactly
+  // wrong for search-as-you-type (see route.ts's own comment for the full
+  // story) — and an AbortController cancels a still-in-flight request the
+  // moment a newer keystroke supersedes it, instead of leaving it to
+  // complete and land out of order.
   React.useEffect(() => {
     if (!open || trimmedQuery.length < MIN_DATA_QUERY_LENGTH) {
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     const handle = setTimeout(() => {
-      void searchEntities(trimmedQuery).then((results) => {
-        if (!cancelled) {
-          setDataResults(results);
-        }
-      });
-    }, 200);
+      void fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`, { signal: controller.signal })
+        .then((response) => response.json() as Promise<{ success: boolean; data?: GlobalSearchGroup[] }>)
+        .then((result) => {
+          if (result.success && result.data) {
+            setDataResults(result.data);
+          }
+        })
+        .catch(() => {
+          // Aborted (a newer keystroke superseded this request) or a
+          // transient network failure — either way, leave the last-known
+          // results in place rather than surfacing an error for what's just
+          // a best-effort, debounced background fetch.
+        });
+    }, SEARCH_DEBOUNCE_MS);
     return () => {
-      cancelled = true;
+      controller.abort();
       clearTimeout(handle);
     };
   }, [trimmedQuery, open]);
 
   const effectiveDataResults = trimmedQuery.length >= MIN_DATA_QUERY_LENGTH ? dataResults : EMPTY_DATA_RESULTS;
+  const hasAnyDataPermission = permissions.masters || permissions.accounting;
 
   const rows: PaletteRow[] = React.useMemo(() => {
     if (!trimmedQuery) {
@@ -125,29 +166,31 @@ export function CommandPalette() {
       .filter((item) => item.label.toLowerCase().includes(lowerQuery))
       .map((item) => ({ key: `page-${item.href}`, label: item.label, href: item.href, icon: item.icon, section: "Pages" as const }));
 
-    const dataRows = [
-      ...effectiveDataResults.products.map((item) => ({
-        key: `product-${item.id}`,
-        label: item.label,
-        sublabel: item.sublabel,
+    const dataRows: PaletteRow[] = effectiveDataResults.flatMap((group) => {
+      const section = GROUP_SECTION[group.groupKey];
+      const itemRows = group.items.map((item) => ({
+        key: `${group.groupKey}-${item.id}`,
+        label: item.title,
+        sublabel: item.subtitle,
         href: item.href,
-        section: "Products" as const,
-      })),
-      ...effectiveDataResults.customers.map((item) => ({
-        key: `customer-${item.id}`,
-        label: item.label,
-        sublabel: item.sublabel,
-        href: item.href,
-        section: "Customers" as const,
-      })),
-      ...effectiveDataResults.suppliers.map((item) => ({
-        key: `supplier-${item.id}`,
-        label: item.label,
-        sublabel: item.sublabel,
-        href: item.href,
-        section: "Suppliers" as const,
-      })),
-    ];
+        section,
+      }));
+
+      // "See all N results in {group}" — only when the group is non-empty
+      // and capped (75-global-search.md's UI section); deep-links to that
+      // master's own existing list screen with the query pre-filled.
+      if (group.totalMatches > group.items.length) {
+        itemRows.push({
+          key: `${group.groupKey}-see-all`,
+          label: `See all ${group.totalMatches} results in ${group.groupLabel}`,
+          sublabel: undefined,
+          href: `${GROUP_LIST_PATH[group.groupKey]}?search=${encodeURIComponent(trimmedQuery)}`,
+          section,
+        });
+      }
+
+      return itemRows;
+    });
 
     return [...pageRows, ...dataRows];
   }, [trimmedQuery, favorites, recent, leafByHref, visibleLeaves, effectiveDataResults]);
@@ -201,7 +244,7 @@ export function CommandPalette() {
       <DialogContent showCloseButton={false} className="top-[15%] max-w-lg translate-y-0 gap-0 p-0 sm:max-w-lg">
         <DialogTitle className="sr-only">Quick navigation</DialogTitle>
         <DialogDescription className="sr-only">
-          Search pages, products, customers, and suppliers
+          Search pages, products, customers, suppliers, and ledgers
         </DialogDescription>
 
         <div className="flex items-center gap-2 border-b border-border px-3">
@@ -211,7 +254,7 @@ export function CommandPalette() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Search pages, products, customers, suppliers..."
+            placeholder="Search pages, products, customers, suppliers, ledgers..."
             className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
           />
         </div>
@@ -219,7 +262,11 @@ export function CommandPalette() {
         <div className="max-h-80 overflow-y-auto p-1.5">
           {rows.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {trimmedQuery ? "No matches found." : "Start typing to search pages, products, customers, or suppliers."}
+              {!trimmedQuery
+                ? "Start typing to search pages, products, customers, suppliers, or ledgers."
+                : hasAnyDataPermission
+                  ? "No matches found."
+                  : "No matching pages found. You don't have access to search products, customers, suppliers, or ledgers yet."}
             </p>
           )}
 

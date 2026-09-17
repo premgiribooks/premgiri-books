@@ -2,13 +2,7 @@
 
 import type { Role } from "@prisma/client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 
 interface RoleSelectProps {
   roles: Role[];
@@ -25,32 +19,19 @@ export function RoleSelect({
   value,
   onChange,
   disabled,
-  id,
-  "aria-describedby": ariaDescribedBy,
-  "aria-invalid": ariaInvalid,
+  ...triggerProps
 }: RoleSelectProps) {
   return (
-    <Select
-      items={roles.map((role) => ({ value: role.id, label: role.name }))}
-      value={value === "" ? null : value}
-      onValueChange={(nextValue) => onChange(nextValue ?? "")}
+    <SearchableSelect
+      options={roles}
+      value={value === "" ? undefined : value}
+      onChange={(next) => onChange(next ?? "")}
+      getOptionId={(role) => role.id}
+      getOptionLabel={(role) => role.name}
+      allowNone={false}
+      placeholder="Select a role"
       disabled={disabled}
-    >
-      <SelectTrigger
-        id={id}
-        aria-describedby={ariaDescribedBy}
-        aria-invalid={ariaInvalid}
-        className="w-full"
-      >
-        <SelectValue placeholder="Select a role" />
-      </SelectTrigger>
-      <SelectContent>
-        {roles.map((role) => (
-          <SelectItem key={role.id} value={role.id}>
-            {role.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      {...triggerProps}
+    />
   );
 }

@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { PAYROLL_RUN_STATUS_LABELS } from "@/modules/payroll/components/payroll-run-status-badge";
 import type { FinancialYear } from "@/types/financial-year";
 
@@ -127,74 +128,52 @@ export function EmployeeReportFilterBar({
       {financialYears ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Financial Year
-          <Select
-            value={searchParams.get("financialYearId") ?? ""}
-            onValueChange={(next) => updateParams({ financialYearId: next || undefined })}
-          >
-            <SelectTrigger className="w-full sm:w-48" aria-label="Financial year">
-              <SelectValue>
-                {(current: string | null) => financialYears.find((fy) => fy.id === current)?.name ?? "Active FY"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {financialYears.map((financialYear) => (
-                <SelectItem key={financialYear.id} value={financialYear.id}>
-                  {financialYear.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={financialYears}
+            value={searchParams.get("financialYearId") ?? undefined}
+            onChange={(next) => updateParams({ financialYearId: next })}
+            getOptionId={(financialYear) => financialYear.id}
+            getOptionLabel={(financialYear) => financialYear.name}
+            noneLabel="Active FY"
+            placeholder="Active FY"
+            aria-label="Financial year"
+            className="w-full sm:w-48"
+          />
         </label>
       ) : null}
 
       {employees ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Employee
-          <Select
-            value={searchParams.get("employeeId") ?? ""}
-            onValueChange={(next) => updateParams({ employeeId: next || undefined })}
-          >
-            <SelectTrigger className="w-full sm:w-56" aria-label="Select an employee">
-              <SelectValue>
-                {(current: string | null) =>
-                  employees.find((employee) => employee.id === current)?.name ??
-                  (employeeRequired ? "Select an employee" : "Every employee")
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {!employeeRequired ? <SelectItem value={ALL_VALUE}>Every employee</SelectItem> : null}
-              {employees.map((employee) => (
-                <SelectItem key={employee.id} value={employee.id}>
-                  {employee.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={employees}
+            value={searchParams.get("employeeId") ?? undefined}
+            onChange={(next) => updateParams({ employeeId: next })}
+            getOptionId={(employee) => employee.id}
+            getOptionLabel={(employee) => employee.name}
+            allowNone={!employeeRequired}
+            noneLabel="Every employee"
+            placeholder={employeeRequired ? "Select an employee" : "Every employee"}
+            aria-label="Select an employee"
+            className="w-full sm:w-56"
+          />
         </label>
       ) : null}
 
       {branches ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Branch
-          <Select
-            value={searchParams.get("branchId") ?? ALL_VALUE}
-            onValueChange={(next) => updateParams({ branchId: next ?? undefined })}
-          >
-            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by branch">
-              <SelectValue>
-                {(current: string | null) => branches.find((branch) => branch.id === current)?.name ?? "All Branches"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_VALUE}>All Branches</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={branches}
+            value={searchParams.get("branchId") ?? undefined}
+            onChange={(next) => updateParams({ branchId: next })}
+            getOptionId={(branch) => branch.id}
+            getOptionLabel={(branch) => branch.name}
+            noneLabel="All Branches"
+            placeholder="All Branches"
+            aria-label="Filter by branch"
+            className="w-full sm:w-48"
+          />
         </label>
       ) : null}
 

@@ -342,3 +342,45 @@ Verify
   pass.
 
 Feature-spec 75 (this spec) is `context/Phases/phase-tracker.md`'s Phase 11 item #73.
+
+---
+
+## v3 Compatibility Note
+
+This spec is fully forward-compatible with v3 and v4. Two implementation notes:
+
+**1. Use `getSystemContext()` (not `getCurrentCompanyUser()` directly):**
+
+By the time this spec is implemented, v3 spec 105 (SystemContext Adoption Retrofit) will
+be in progress or complete. The `globalSearchService` must follow the v3 Bridge
+Decision's Context-as-Parameter rule (`context-v3/ai-workflow-rules.md`):
+
+```typescript
+// ✅ v3-correct pattern:
+export class GlobalSearchService {
+  constructor(private readonly db: PrismaClient) {}
+
+  async search(ctx: SystemContext, query: string): Promise<GlobalSearchResult> {
+    const company = ctx.assertCompany();
+    // ... fan-out to sub-services ...
+  }
+}
+```
+
+Do NOT call `getCurrentCompanyUser()` or `getSystemContext()` internally inside the
+service class. Resolve `ctx` once at the Server Action layer and pass it in.
+
+Also note: the real function name in `src/lib/system-context.ts` is
+`resolveSystemContext()`, not `getSystemContext()`. Use the alias that v3 spec FX-08
+adds (`getSystemContext`), or call `resolveSystemContext()` directly until the alias
+exists.
+
+**2. v4 compatibility — sub-service fan-out:**
+
+In v4, the four target entities (Products, Customers, Suppliers, Ledgers) live in
+separate microservices (Masters Service — spec 117). The `globalSearchService` becomes
+an aggregating API Gateway route that fans out four HTTP calls rather than four
+in-process service calls. The interface shape (query → grouped results) is unchanged —
+only the transport is replaced. Design the service method signature to be portable:
+no direct Prisma imports inside `globalSearchService` itself; all DB access delegated
+to the owning module's service (which is already the spec's own rule).

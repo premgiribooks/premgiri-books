@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { CUSTOMER_TYPE_LABELS } from "@/modules/customers/components/customer-type-badge";
 import { CUSTOMER_TYPE_VALUES } from "@/modules/customers/validation/customer-schema";
 import { resolveDefaultAsOfDate, toCalendarDateString } from "@/modules/reports/validation/financial-report-filters-schema";
@@ -92,20 +93,17 @@ export function CustomerReportFilterBar({
         <>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             Financial Year
-            <Select value={selectedFinancialYearId} onValueChange={handleFinancialYearChange}>
-              <SelectTrigger className="w-full sm:w-48" aria-label="Financial year">
-                <SelectValue>
-                  {(current: string | null) => financialYears.find((fy) => fy.id === current)?.name ?? "Select a financial year"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {financialYears.map((financialYear) => (
-                  <SelectItem key={financialYear.id} value={financialYear.id}>
-                    {financialYear.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={financialYears}
+              value={selectedFinancialYearId}
+              onChange={(next) => handleFinancialYearChange(next ?? null)}
+              getOptionId={(financialYear) => financialYear.id}
+              getOptionLabel={(financialYear) => financialYear.name}
+              allowNone={false}
+              placeholder="Select a financial year"
+              aria-label="Financial year"
+              className="w-full sm:w-48"
+            />
           </label>
 
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -126,23 +124,17 @@ export function CustomerReportFilterBar({
       {customers ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Customer
-          <Select
-            value={searchParams.get("customerId") ?? ""}
-            onValueChange={(next) => updateParams({ customerId: next || undefined })}
-          >
-            <SelectTrigger className="w-full sm:w-56" aria-label="Select a customer">
-              <SelectValue>
-                {(current: string | null) => customers.find((customer) => customer.id === current)?.name ?? "Select a customer"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {customers.map((customer) => (
-                <SelectItem key={customer.id} value={customer.id}>
-                  {customer.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={customers}
+            value={searchParams.get("customerId") ?? undefined}
+            onChange={(next) => updateParams({ customerId: next })}
+            getOptionId={(customer) => customer.id}
+            getOptionLabel={(customer) => customer.name}
+            allowNone={false}
+            placeholder="Select a customer"
+            aria-label="Select a customer"
+            className="w-full sm:w-56"
+          />
         </label>
       ) : null}
 

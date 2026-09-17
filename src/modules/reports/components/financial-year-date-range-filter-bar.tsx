@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { resolveDefaultAsOfDate, toCalendarDateString } from "@/modules/reports/validation/financial-report-filters-schema";
 import type { FinancialYear } from "@/types/financial-year";
 
@@ -64,20 +64,17 @@ export function FinancialYearDateRangeFilterBar({
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Financial Year
-        <Select value={selectedFinancialYearId} onValueChange={handleFinancialYearChange}>
-          <SelectTrigger className="w-full sm:w-48" aria-label="Financial year">
-            <SelectValue>
-              {(current: string | null) => financialYears.find((fy) => fy.id === current)?.name ?? "Select a financial year"}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {financialYears.map((financialYear) => (
-              <SelectItem key={financialYear.id} value={financialYear.id}>
-                {financialYear.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={financialYears}
+          value={selectedFinancialYearId}
+          onChange={(next) => handleFinancialYearChange(next ?? null)}
+          getOptionId={(financialYear) => financialYear.id}
+          getOptionLabel={(financialYear) => financialYear.name}
+          allowNone={false}
+          placeholder="Select a financial year"
+          aria-label="Financial year"
+          className="w-full sm:w-48"
+        />
       </label>
 
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">

@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-const NONE_VALUE = "__none__";
-const EMPTY_VALUE = "__no_options__";
+import { SearchableSelect } from "@/components/common/searchable-select";
 
 export interface ProductOptionItem {
   id: string;
@@ -49,10 +40,10 @@ function optionLabel(option: ProductOptionItem): string {
 }
 
 /**
- * Shared picker for the Product Form's six master lookups (Category, Brand,
- * Unit, HSN/SAC, GST Rate, Default Warehouse), one generic component instead
- * of six near-identical copies — the same Select recipe as
- * branch-selector.tsx.
+ * Shared, filterable picker for the Product Form's six master lookups
+ * (Category, Brand, Unit, HSN/SAC, GST Rate, Default Warehouse), one generic
+ * component instead of six near-identical copies — the same SearchableSelect
+ * recipe as branch-selector.tsx.
  */
 export function ProductOptionSelector({
   options,
@@ -65,44 +56,19 @@ export function ProductOptionSelector({
   disabled,
   ...triggerProps
 }: ProductOptionSelectorProps) {
-  const displayPlaceholder = placeholder ?? (allowNone ? noneLabel : "Select…");
-
   return (
-    <Select
-      // Base UI's Select decides controlled-vs-uncontrolled on the first
-      // render by checking whether `value` is `undefined` — NONE_VALUE (a
-      // distinct, defined "controlled, nothing selected yet" sentinel) keeps
-      // it controlled for the component's entire lifetime (see
-      // branch-selector.tsx for the reference fix this mirrors).
-      value={value ?? NONE_VALUE}
-      onValueChange={(next) => onChange(!next || next === NONE_VALUE ? undefined : next)}
+    <SearchableSelect
+      options={options}
+      value={value}
+      onChange={onChange}
+      getOptionId={(option) => option.id}
+      getOptionLabel={optionLabel}
+      allowNone={allowNone}
+      noneLabel={noneLabel}
+      emptyLabel={emptyLabel}
+      placeholder={placeholder}
       disabled={disabled}
-    >
-      <SelectTrigger className="w-full" {...triggerProps}>
-        <SelectValue placeholder={displayPlaceholder}>
-          {(current: string | null) => {
-            if (!current || current === NONE_VALUE) {
-              return displayPlaceholder;
-            }
-            const selected = options.find((option) => option.id === current);
-            return selected ? optionLabel(selected) : displayPlaceholder;
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {allowNone ? <SelectItem value={NONE_VALUE}>{noneLabel}</SelectItem> : null}
-        {options.length === 0 ? (
-          <SelectItem value={EMPTY_VALUE} disabled>
-            {emptyLabel}
-          </SelectItem>
-        ) : (
-          options.map((option) => (
-            <SelectItem key={option.id} value={option.id}>
-              {optionLabel(option)}
-            </SelectItem>
-          ))
-        )}
-      </SelectContent>
-    </Select>
+      {...triggerProps}
+    />
   );
 }

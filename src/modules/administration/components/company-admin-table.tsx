@@ -6,13 +6,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import {
   Table,
   TableBody,
@@ -240,35 +234,22 @@ export function CompanyAdminTable({ companyAdmins, companies }: CompanyAdminTabl
                         )
                       }
                     />
-                    <Select
-                      // `items` lets <SelectValue> resolve the trigger's
-                      // label (company name) up front — without it, Base UI
-                      // only knows an option's label once its <SelectItem>
-                      // has actually mounted (i.e. after the popup has been
-                      // opened at least once), so the trigger would show the
-                      // raw companyId until then.
-                      items={Object.fromEntries(
-                        companyOptionsFor(admin).map((company) => [company.id, company.companyName])
-                      )}
+                    <SearchableSelect
+                      options={companyOptionsFor(admin)}
                       value={profileDraft.companyId}
-                      onValueChange={(companyId) => {
+                      onChange={(companyId) => {
                         if (!companyId) {
                           return;
                         }
                         setProfileDraft((current) => (current ? { ...current, companyId } : current));
                       }}
-                    >
-                      <SelectTrigger aria-label="Company" className="w-full">
-                        <SelectValue placeholder="Company" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companyOptionsFor(admin).map((company) => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.companyName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      getOptionId={(company) => company.id}
+                      getOptionLabel={(company) => company.companyName}
+                      allowNone={false}
+                      placeholder="Company"
+                      aria-label="Company"
+                      className="w-full"
+                    />
                   </div>
                   <div className="flex justify-end pb-2">
                     <Button

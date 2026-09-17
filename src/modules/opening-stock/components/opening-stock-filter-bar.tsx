@@ -4,7 +4,7 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import type { OpeningStockProductOption, OpeningStockWarehouseOption } from "@/types/opening-stock";
 
 const ALL_VALUE = "all";
@@ -18,21 +18,23 @@ interface FilterSelectProps {
   ariaLabel: string;
 }
 
-function FilterSelect({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
+// Products and warehouses are a company's master data and can grow long
+// enough that scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
+function FilterCombobox({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
   return (
-    <Select value={value} onValueChange={(next) => onChange(next ?? ALL_VALUE)}>
-      <SelectTrigger className="w-full sm:w-48" aria-label={ariaLabel}>
-        <SelectValue>{(current: string | null) => options.find((option) => option.value === current)?.label ?? allLabel}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL_VALUE}>{allLabel}</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect
+      options={options}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(option) => option.value}
+      getOptionLabel={(option) => option.label}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-48"
+    />
   );
 }
 
@@ -85,7 +87,7 @@ export function OpeningStockFilterBar({ products, warehouses }: OpeningStockFilt
         aria-label="Search opening stock entries"
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("productId") ?? ALL_VALUE}
         onChange={(value) => updateParams({ productId: value })}
         allLabel="All Products"
@@ -93,7 +95,7 @@ export function OpeningStockFilterBar({ products, warehouses }: OpeningStockFilt
         options={products.map((product) => ({ value: product.id, label: product.name }))}
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("warehouseId") ?? ALL_VALUE}
         onChange={(value) => updateParams({ warehouseId: value })}
         allLabel="All Warehouses"

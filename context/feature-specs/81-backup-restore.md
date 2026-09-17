@@ -486,3 +486,53 @@ Verify
   route, no longer a stub).
 
 Feature-spec 81 (this spec) is `context/Phases/phase-tracker.md`'s Phase 11 item #79.
+
+---
+
+## v3 Compatibility Note — Spec 102 (Backup Verification)
+
+v3 spec 102 (`context-v3/feature-specs/102-backup-verification.md`) **extends** this
+spec, not replaces it. The two specs are additive:
+
+| This spec (81) | v3 spec 102 |
+|---|---|
+| `pg_dump` on-demand + scheduled | Adds automated restore-and-verify step |
+| `BackupJob` model | Adds `verifiedAt`, `verificationStatus` columns |
+| Manual "Download" of backup files | Adds integrity hash check |
+| `SUCCEEDED`/`FAILED` status | Adds `VERIFIED`/`VERIFY_FAILED` status |
+
+**Implementation order:** This spec (81) must be implemented before v3 spec 102.
+Spec 102 explicitly extends `BackupJob` and `backupService`.
+
+---
+
+## ⚠️ v4 Supersession Note — Per-Tenant Database Architecture
+
+This spec assumes a **single shared PostgreSQL database** for all tenants on the
+installation — `pg_dump` backs up the whole database including every company's data.
+
+In v4, each company has its **own PostgreSQL database** (spec 123 — Per-Tenant
+Database). The backup strategy must change:
+
+**v3 → v4 migration for this feature:**
+1. In v3 (this spec): `pg_dump` the single shared database — unchanged.
+2. In v4 (spec 123): each company's database is backed up independently. The
+   `BackupJob` model gains a nullable `companyId` (per-company backup) and the
+   backup service becomes multi-tenant aware.
+3. The Super Admin backup screen in v4 shows per-company backup status, not a
+   single installation-wide backup.
+
+**v3 data:** the v3 `BackupJob` table (single-database, null `companyId`) is migrated
+to v4 as historical records. New backups in v4 are per-company.
+
+**Design constraint:** the v3 `BackupJob` model should include a nullable `companyId`
+field even in v3, set to `null` for the whole-database backups this spec performs, so
+that the v4 migration does not require a schema change — only new values.
+
+```prisma
+// v3 BackupJob — add nullable companyId for v4-readiness:
+model BackupJob {
+  // existing fields...
+  companyId String? // null = whole-database backup (v3); populated = per-company backup (v4)
+}
+```

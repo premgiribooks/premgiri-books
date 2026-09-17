@@ -3,13 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import type { AttendanceEmployeeOption } from "@/types/attendance";
 
 const ALL_EMPLOYEES_VALUE = "all";
@@ -45,26 +39,17 @@ export function AttendanceHistoryFilterBar({ employees }: AttendanceHistoryFilte
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-      <Select
-        value={employeeId}
-        onValueChange={(next) => updateParams({ employeeId: next ?? ALL_EMPLOYEES_VALUE })}
-      >
-        <SelectTrigger className="w-full sm:w-56" aria-label="Filter by employee">
-          <SelectValue>
-            {(current: string | null) =>
-              employees.find((employee) => employee.id === current)?.fullName ?? "All Employees"
-            }
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_EMPLOYEES_VALUE}>All Employees</SelectItem>
-          {employees.map((employee) => (
-            <SelectItem key={employee.id} value={employee.id}>
-              {employee.employeeCode} — {employee.fullName}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        options={employees}
+        value={employeeId === ALL_EMPLOYEES_VALUE ? undefined : employeeId}
+        onChange={(next) => updateParams({ employeeId: next ?? ALL_EMPLOYEES_VALUE })}
+        getOptionId={(employee) => employee.id}
+        getOptionLabel={(employee) => `${employee.employeeCode} — ${employee.fullName}`}
+        noneLabel="All Employees"
+        placeholder="All Employees"
+        aria-label="Filter by employee"
+        className="w-full sm:w-56"
+      />
 
       <Input
         type="date"

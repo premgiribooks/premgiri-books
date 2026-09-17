@@ -11,6 +11,7 @@ import { FormSection } from "@/components/common/form-section";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import { createCreditNoteDraftAction, updateCreditNoteDraftAction } from "@/modules/credit-notes/actions/credit-note-actions";
 import { CreditNoteLineEditor } from "@/modules/credit-notes/components/credit-note-line-editor";
@@ -122,29 +123,15 @@ export function CreditNoteForm({ options, creditNote }: CreditNoteFormProps) {
           <FormItem>
             <FormLabel>Link Sales Invoice (optional)</FormLabel>
             <FormControl>
-              <Select
-                value={salesInvoiceId ?? NONE_VALUE}
-                onValueChange={(next) => applyInvoicePrefill(!next || next === NONE_VALUE ? undefined : next)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="No linked invoice">
-                    {(current: string | null) => {
-                      if (!current || current === NONE_VALUE) {
-                        return "No linked invoice";
-                      }
-                      return options.invoices.find((invoice) => invoice.id === current)?.invoiceNumber ?? "No linked invoice";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE_VALUE}>No linked invoice</SelectItem>
-                  {options.invoices.map((invoice) => (
-                    <SelectItem key={invoice.id} value={invoice.id}>
-                      {invoice.invoiceNumber} — {invoice.customerName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={options.invoices}
+                value={salesInvoiceId}
+                onChange={(next) => applyInvoicePrefill(next)}
+                getOptionId={(invoice) => invoice.id}
+                getOptionLabel={(invoice) => `${invoice.invoiceNumber} — ${invoice.customerName}`}
+                noneLabel="No linked invoice"
+                placeholder="No linked invoice"
+              />
             </FormControl>
           </FormItem>
 
@@ -155,25 +142,15 @@ export function CreditNoteForm({ options, creditNote }: CreditNoteFormProps) {
               <FormItem>
                 <FormLabel>Customer *</FormLabel>
                 <FormControl>
-                  <Select value={field.value || NONE_VALUE} onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a customer">
-                        {(current: string | null) => {
-                          if (!current || current === NONE_VALUE) {
-                            return "Select a customer";
-                          }
-                          return options.customers.find((customer) => customer.id === current)?.name ?? "Select a customer";
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={options.customers}
+                    value={field.value || undefined}
+                    onChange={(next) => field.onChange(next ?? "")}
+                    getOptionId={(customer) => customer.id}
+                    getOptionLabel={(customer) => customer.name}
+                    allowNone={false}
+                    placeholder="Select a customer"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -261,28 +238,15 @@ export function CreditNoteForm({ options, creditNote }: CreditNoteFormProps) {
                 <FormItem>
                   <FormLabel>Refund Ledger *</FormLabel>
                   <FormControl>
-                    <Select
-                      value={field.value || NONE_VALUE}
-                      onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a ledger">
-                          {(current: string | null) => {
-                            if (!current || current === NONE_VALUE) {
-                              return "Select a ledger";
-                            }
-                            return options.refundLedgers.find((ledger) => ledger.id === current)?.name ?? "Select a ledger";
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.refundLedgers.map((ledger) => (
-                          <SelectItem key={ledger.id} value={ledger.id}>
-                            {ledger.name} ({ledger.groupName})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      options={options.refundLedgers}
+                      value={field.value || undefined}
+                      onChange={(next) => field.onChange(next ?? "")}
+                      getOptionId={(ledger) => ledger.id}
+                      getOptionLabel={(ledger) => `${ledger.name} (${ledger.groupName})`}
+                      allowNone={false}
+                      placeholder="Select a ledger"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

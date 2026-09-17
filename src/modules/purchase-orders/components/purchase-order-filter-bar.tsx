@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { PURCHASE_ORDER_STATUS_LABELS } from "@/modules/purchase-orders/components/purchase-order-status-badge";
 import { PURCHASE_ORDER_STATUS_VALUES } from "@/modules/purchase-orders/validation/purchase-order-schema";
 import type { PurchaseOrderSupplierOption } from "@/types/purchase-order";
@@ -45,6 +46,26 @@ function FilterSelect({ value, onChange, allLabel, options, ariaLabel }: FilterS
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// A company's master/reference data (here, Suppliers) can grow long enough
+// that scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
+function FilterCombobox({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
+  return (
+    <SearchableSelect
+      options={options}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(option) => option.value}
+      getOptionLabel={(option) => option.label}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-44"
+    />
   );
 }
 
@@ -111,7 +132,7 @@ export function PurchaseOrderFilterBar({ suppliers }: PurchaseOrderFilterBarProp
         }))}
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("supplierId") ?? ALL_VALUE}
         onChange={(value) => updateParams({ supplierId: value })}
         allLabel="All Suppliers"

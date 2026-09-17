@@ -479,3 +479,36 @@ Verify
   pass; `/settings/audit-logs` appears in the build route table.
 
 Feature-spec 80 (this spec) is `context/Phases/phase-tracker.md`'s Phase 11 item #78.
+
+---
+
+## v3 Relationship Note — Spec 93 (Universal Audit Trail)
+
+v3 spec 93 (`context-v3/feature-specs/93-universal-audit-trail.md`) extends the audit
+trail significantly beyond this spec's scope. The two specs are **additive, not
+conflicting** — this spec (80) is the foundation; spec 93 builds on top of it:
+
+| This spec (80) | v3 spec 93 |
+|---|---|
+| Retrofits 10 existing voucher/document post/cancel call sites | Retrofits ALL ~50 service write methods |
+| Adds `DOCUMENT_POSTED` / `DOCUMENT_CANCELLED` event types | Adds `CREATED`, `UPDATED`, `CANCELLED`, `POSTED`, `DELETED` generically |
+| Adds `createdBy`/`updatedBy` to nothing | Adds `createdBy`/`updatedBy` to **all** business model tables |
+| Introduces `audit` permission module + Company-scoped UI | Keeps the same UI, no duplicate screen |
+
+**Implementation order:** This spec (80) must be implemented before v3 spec 93.
+Spec 93 explicitly builds on this spec's `auditLogService.record()` call-site pattern
+(which it names `recordDocumentAuditEvent` here) and extends it to all service writes.
+
+**No conflict in `AuditLog` schema:** both specs use the same existing `AuditLog` model
+and `auditLogService.record()` function — no second model, no schema change.
+
+**After v3 spec 93 is implemented:** the "Deferred v2 items" in the Do Not section
+(master-level create/edit events, stock-movement events, GST return events) are all
+covered by v3 spec 93's universal retrofit. No separate follow-up spec is needed for them.
+
+## v4 Relationship Note
+
+In v4, each microservice writes its own audit events to the central `AuditLog` service
+(or a dedicated Audit microservice, per v4 spec 136 — Observability). The v3 pattern of
+calling `auditLogService.record()` from each service is unchanged at the interface level
+— only the transport changes (direct call → Kafka event → Audit service consumer).

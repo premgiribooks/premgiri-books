@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { SALES_INVOICE_STATUS_LABELS } from "@/modules/sales-invoices/components/sales-invoice-status-badge";
 import { SALES_INVOICE_STATUS_VALUES } from "@/modules/sales-invoices/validation/sales-invoice-schema";
 import type { SalesInvoiceCustomerOption } from "@/types/sales-invoice";
@@ -20,6 +21,8 @@ interface FilterSelectProps {
   ariaLabel: string;
 }
 
+// Small, fixed option sets (status, type) — a plain Select, no filtering
+// needed for a handful of choices.
 function FilterSelect({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next ?? ALL_VALUE)}>
@@ -35,6 +38,26 @@ function FilterSelect({ value, onChange, allLabel, options, ariaLabel }: FilterS
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// A company's master/reference data (here, Customers) can grow long enough
+// that scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
+function FilterCombobox({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
+  return (
+    <SearchableSelect
+      options={options}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(option) => option.value}
+      getOptionLabel={(option) => option.label}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-44"
+    />
   );
 }
 
@@ -94,7 +117,7 @@ export function SalesInvoiceFilterBar({ customers }: SalesInvoiceFilterBarProps)
         options={SALES_INVOICE_STATUS_VALUES.map((value) => ({ value, label: SALES_INVOICE_STATUS_LABELS[value] }))}
       />
 
-      <FilterSelect
+      <FilterCombobox
         value={searchParams.get("customerId") ?? ALL_VALUE}
         onChange={(value) => updateParams({ customerId: value })}
         allLabel="All Customers"

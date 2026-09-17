@@ -7,13 +7,11 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { numericFieldWidth } from "@/lib/utils";
 import type { CreateCreditNoteInput } from "@/modules/credit-notes/validation/credit-note-schema";
 import type { CreditNoteGstRateOption } from "@/types/credit-note";
-
-const NONE_VALUE = "__none__";
 
 const BLANK_LINE = { description: "", taxableAmount: 0, ratePercent: 0, cessPercent: 0 };
 
@@ -38,8 +36,8 @@ export function CreditNoteLineEditor({ gstRates }: CreditNoteLineEditorProps) {
   const { control, setValue } = useFormContext<CreateCreditNoteInput>();
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
 
-  function applyGstRate(index: number, gstRateId: string | null | undefined) {
-    if (!gstRateId || gstRateId === NONE_VALUE) {
+  function applyGstRate(index: number, gstRateId: string | undefined) {
+    if (!gstRateId) {
       return;
     }
     const rate = gstRates.find((option) => option.id === gstRateId);
@@ -105,18 +103,16 @@ export function CreditNoteLineEditor({ gstRates }: CreditNoteLineEditorProps) {
                 </TableCell>
 
                 <TableCell className="min-w-40">
-                  <Select value={NONE_VALUE} onValueChange={(value) => applyGstRate(index, value)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Pick a rate" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {gstRates.map((rate) => (
-                        <SelectItem key={rate.id} value={rate.id}>
-                          {gstRateLabel(rate)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={gstRates}
+                    value={undefined}
+                    onChange={(gstRateId) => applyGstRate(index, gstRateId)}
+                    getOptionId={(rate) => rate.id}
+                    getOptionLabel={(rate) => gstRateLabel(rate)}
+                    allowNone={false}
+                    placeholder="Pick a rate"
+                    className="w-full"
+                  />
                 </TableCell>
 
                 <TableCell>

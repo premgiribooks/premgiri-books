@@ -1916,13 +1916,20 @@ findings at all. Both reviews ran in parallel against commit `cd3a619`.
 Re-verified after the LOW fix: `npx tsc --noEmit` and `npx eslint src/config/navigation.ts`
 both clean.
 
-| Tracker # | Feature                                        | Depends On                                              | Status |
-| --------- | ----------------------------------------------- | -------------------------------------------------------- | ------ |
-| 83        | Payment Mode Master                              | Ledger Master                                             | ✅     |
-| 84        | Payment Mode Integration — Sales Documents        | Payment Mode Master; Sales Invoice; Sales Return           | ⬜     |
-| 85        | Payment Mode Integration — Purchase Documents     | Payment Mode Master; Purchase Invoice; Purchase Return     | ⬜     |
-| 86        | Payment Mode Integration — Manual Vouchers        | Payment Mode Master; Payment/Receipt/Contra Voucher        | ⬜     |
-| 87        | Liability Settlement                             | Trial Balance; Payment Voucher                             | ✅     |
+| Tracker # | Feature                                                | Depends On                                                              | Spec file                                                         | Status |
+| --------- | ------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- | ------ |
+| 83        | Payment Mode Master                                     | Ledger Master                                                             | `context/feature-specs/86-payment-mode-master.md`                 | ✅     |
+| 84        | Payment Mode Integration — Sales Documents              | Payment Mode Master; Sales Invoice; Sales Return                          | `context/feature-specs/91-payment-mode-integration-sales.md`      | ⬜     |
+| 85        | Payment Mode Integration — Purchase Documents           | Payment Mode Master; #84; Purchase Invoice; Purchase Return               | `context/feature-specs/92-payment-mode-integration-purchase.md`   | ⬜     |
+| 86        | Payment Mode Integration — Manual Vouchers              | Payment Mode Master; #84; Payment/Receipt/Contra Voucher                  | `context/feature-specs/93-payment-mode-integration-manual-vouchers.md` | ⬜     |
+| 87        | Liability Settlement                                    | Trial Balance; Payment Voucher                                            | `context/feature-specs/87-liability-settlement.md`                | ✅     |
+
+Specs 91–93 **drafted 2026-09-14** (documentation only, not yet implemented). Spec
+numbers 91/92/93 in the `context/feature-specs/` directory are distinct from v3's
+91–109 in `context-v3/feature-specs/` — both sequences are per-directory. Drafted in
+dependency order: spec 91 introduces the shared `assertPaymentModeMatchesLedger` helper
+and `getLedgerPaymentClass` classifier that specs 92 and 93 both reuse. Must be
+implemented in order: #84 (spec 91) → #85 (spec 92) → #86 (spec 93).
 
 ## Item #87 (Liability Settlement, spec 87) implemented 2026-09-13
 
@@ -2042,13 +2049,89 @@ as usual:
 
 | #   | Feature          | Depends On | Status |
 | --- | ---------------- | ---------- | ------ |
-| 73  | Global Search    | Masters    | ⬜     |
+| 73  | Global Search    | Masters    | ✅     |
 | 74  | Excel Import     | Masters    | ⬜     |
 | 75  | Excel Export     | Reports    | ⬜     |
 | 76  | PDF Generation   | Reports    | 🟨     |
 | 77  | Barcode Billing  | Sales      | ⬜     |
 | 78  | Audit Logs       | Platform   | ⬜     |
 | 79  | Backup & Restore | Database   | ⬜     |
+
+> **#73 Global Search implemented 2026-09-17.** `src/modules/search/`
+> (`global-search-service.ts`, Zod validation, `src/app/api/search/route.ts`)
+> formalizes and replaces the prior ad-hoc `src/lib/global-search.ts` (a
+> Products/Customers/Suppliers-only helper the Ctrl+K Command Palette already
+> called ahead of this spec being written — see `progress-tracker.md`'s
+> matching dated entry for the file-by-file detail and the Masters-hub-
+> permission overlap note it superseded). Adds the fourth in-scope group
+> (Ledgers, gated on `accounting:view` independently from the other three
+> groups' `masters:view`, per the spec's Business Rules — and filtered to
+> exclude Bank/Customer/Supplier-owned ledgers, whose edit route 404s by
+> design), a "See all N results in {group}" row per capped section, and an
+> "Active-only by default" `status: "active"` filter the ad-hoc version never
+> applied. `ledgerService.listSelectableLedgers` already accepted a `search`
+> filter — no additive service-signature change was needed for any of the
+> four target services; each group's `totalMatches`/cap-at-5 is computed in
+> the new composition service itself instead. **Transport is a Route Handler,
+> not a Server Action** — a live UAT session surfaced that a Server Action
+> invoked from the client both queues (serializing rapid successive calls)
+> and re-renders the whole invoking page, per this Next.js version's own
+> docs; see `progress-tracker.md`'s dated entry for the full root-cause and
+> fix. Debounce is 1000ms. `context/Phases/phase-tracker.md` and
+> `progress-tracker.md` both updated per the Tracker Update Rule.
+
+> **Cross-cutting: Master/Reference Pickers → Searchable Comboboxes,
+> 2026-09-17.** Not a numbered Phase 12 item — a codebase-wide UI change
+> spanning every already-shipped module's own screens, per explicit user
+> request. New shared `src/components/common/searchable-select.tsx` (built on
+> a new `src/components/ui/combobox.tsx` wrapper around `@base-ui/react/
+> combobox` — no new dependency) applied to 41 files: 7 dedicated selector
+> components rewritten directly, 34 filter-bar/react-hook-form pickers
+> converted by 5 parallel agents across disjoint file batches. 55 small
+> fixed-enum `Select`s deliberately left untouched (out of scope). Includes
+> `autoSelectSingleOption` (default `true`, added same day per a follow-up
+> user request) — a lone available option is picked automatically instead of
+> requiring a manual choice, applying to all 41 converted pickers with no
+> per-file changes since it lives in the one shared component. Verified:
+> `tsc`/`eslint`/`vitest run` (151 test files, 2065 tests) clean; live
+> browser verification and Git Workflow (branch/PR/merge) still pending — see
+> `progress-tracker.md`'s matching dated entry.
+
+> **Feature: Multi-Tab Page Navigation, 2026-09-17 (spec 94,
+> `context/feature-specs/94-multi-tab-navigation.md`).** Not a numbered
+> Phase 12 item — shell/navigation infrastructure, per explicit user request.
+> Every internal navigation now opens/reuses a tab in a new strip below the
+> Breadcrumb Bar (`AppShell` and `PlatformShell` both), with the background
+> tab's full component tree kept mounted via React's `<Activity>` (React
+> 19.2, bundled, no new dependency) rather than torn down — scroll position
+> and in-progress form/filter input survive a tab switch. Deliberately does
+> **not** enable Next.js 16's own `cacheComponents` route-preservation
+> feature, which would have solved this natively but requires a project-wide
+> rendering/caching-model migration out of proportion to one navigation-
+> chrome feature; see the spec's own "Architecture Decision" section for the
+> full reasoning, including how `router.replace` + a `skipCacheUpdate` guard
+> keep Next's own router state (read directly by ~40 existing filter-bar
+> components, `Sidebar`, `BreadcrumbBar`) truthful across a tab-strip switch
+> without discarding the cached, kept-alive content. `MAX_OPEN_TABS = 12`
+> (13th tab evicts the oldest other tab). Verified: `tsc`/`eslint` clean,
+> `vitest run` (152 test files, 2075 tests — 10 new, the framework-free
+> `page-tabs-reducer.ts` unit tests; the router-sync glue itself is left to
+> live browser testing per this codebase's existing UI-testing convention),
+> `next build` succeeds across every route. Interactive browser verification
+> and Git Workflow (branch/PR/merge) still pending — see `progress-
+> tracker.md`'s matching dated entry.
+
+> **Fix, same day (2026-09-17), found via live manual testing:** tabs didn't
+> persist across navigations at all — revisiting the same page spuriously
+> duplicated it, and a genuinely different page silently failed to open a
+> new tab. Root cause: every `page.tsx` wraps `<AppShell>`/`<PlatformShell>`
+> directly (no shared route-group `layout.tsx`), so the shell — and the
+> React state/Context the tab list originally lived in — fully unmounts and
+> remounts on every navigation. Fixed by moving the tab store to module-level
+> state in `use-page-tabs.tsx` (the same pattern `use-breadcrumb-label.ts`
+> already used for the identical reason). `tsc`/`eslint`/`vitest run` (152
+> files, 2075 tests) all still pass; see `progress-tracker.md`'s matching
+> dated entry for the full root-cause writeup.
 
 ---
 

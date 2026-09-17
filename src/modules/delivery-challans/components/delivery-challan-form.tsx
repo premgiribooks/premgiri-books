@@ -17,13 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import {
   createDeliveryChallanAction,
   updateDeliveryChallanAction,
@@ -41,11 +35,6 @@ import type {
 } from "@/types/delivery-challan";
 
 const LIST_PATH = "/sales/challans";
-
-// Base UI's Select decides controlled-vs-uncontrolled on the first render by
-// checking whether `value` is `undefined` — mirrors sales-order-form.tsx's
-// NONE_VALUE fix exactly (commit f45f7c1).
-const NONE_VALUE = "__none__";
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -169,32 +158,16 @@ export function DeliveryChallanForm({ options, deliveryChallan, salesOrderPrefil
               <FormItem>
                 <FormLabel>Customer *</FormLabel>
                 <FormControl>
-                  <Select
-                    value={field.value || NONE_VALUE}
-                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
+                  <SearchableSelect
+                    options={options.customers}
+                    value={field.value || undefined}
+                    onChange={(next) => field.onChange(next ?? "")}
+                    getOptionId={(customer) => customer.id}
+                    getOptionLabel={(customer) => customer.name}
+                    allowNone={false}
                     disabled={isCustomerLocked}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a customer">
-                        {(current: string | null) => {
-                          if (!current || current === NONE_VALUE) {
-                            return "Select a customer";
-                          }
-                          return (
-                            options.customers.find((customer) => customer.id === current)?.name ??
-                            "Select a customer"
-                          );
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Select a customer"
+                  />
                 </FormControl>
                 {isCustomerLocked ? (
                   <p className="text-xs text-muted-foreground">Locked to the linked sales order&apos;s customer.</p>

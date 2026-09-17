@@ -4,9 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const ALL_VALUE = "all";
+import { SearchableSelect } from "@/components/common/searchable-select";
 
 interface InventoryReportFilterOption {
   id: string;
@@ -89,50 +87,35 @@ export function InventoryReportFilterBar({
       {products ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Product
-          <Select
-            value={searchParams.get("productId") ?? (productRequired ? "" : ALL_VALUE)}
-            onValueChange={(next) => updateParams({ productId: !next || next === ALL_VALUE ? undefined : next })}
-          >
-            <SelectTrigger className="w-full sm:w-56" aria-label="Filter by product">
-              <SelectValue>
-                {(current: string | null) =>
-                  products.find((product) => product.id === current)?.name ?? (productRequired ? "Select a product" : "All Products")
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {productRequired ? null : <SelectItem value={ALL_VALUE}>All Products</SelectItem>}
-              {products.map((product) => (
-                <SelectItem key={product.id} value={product.id}>
-                  {product.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={products}
+            value={searchParams.get("productId") ?? undefined}
+            onChange={(next) => updateParams({ productId: next })}
+            getOptionId={(product) => product.id}
+            getOptionLabel={(product) => product.name}
+            allowNone={!productRequired}
+            noneLabel="All Products"
+            placeholder={productRequired ? "Select a product" : "All Products"}
+            aria-label="Filter by product"
+            className="w-full sm:w-56"
+          />
         </label>
       ) : null}
 
       {warehouses ? (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           Warehouse
-          <Select
-            value={searchParams.get("warehouseId") ?? ALL_VALUE}
-            onValueChange={(next) => updateParams({ warehouseId: !next || next === ALL_VALUE ? undefined : next })}
-          >
-            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by warehouse">
-              <SelectValue>
-                {(current: string | null) => warehouses.find((warehouse) => warehouse.id === current)?.name ?? "All Warehouses"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_VALUE}>All Warehouses</SelectItem>
-              {warehouses.map((warehouse) => (
-                <SelectItem key={warehouse.id} value={warehouse.id}>
-                  {warehouse.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={warehouses}
+            value={searchParams.get("warehouseId") ?? undefined}
+            onChange={(next) => updateParams({ warehouseId: next })}
+            getOptionId={(warehouse) => warehouse.id}
+            getOptionLabel={(warehouse) => warehouse.name}
+            noneLabel="All Warehouses"
+            placeholder="All Warehouses"
+            aria-label="Filter by warehouse"
+            className="w-full sm:w-48"
+          />
         </label>
       ) : null}
 

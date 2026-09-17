@@ -13,6 +13,7 @@ import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import {
   createDraftAction,
@@ -216,29 +217,16 @@ export function PurchaseInvoiceForm({ options, purchaseInvoice, goodsReceiptNote
               <FormItem>
                 <FormLabel>Supplier *</FormLabel>
                 <FormControl>
-                  <Select
-                    value={field.value || NONE_VALUE}
-                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
+                  <SearchableSelect
+                    options={options.suppliers}
+                    value={field.value || undefined}
+                    onChange={(next) => field.onChange(next ?? "")}
+                    getOptionId={(supplier) => supplier.id}
+                    getOptionLabel={(supplier) => supplier.name}
+                    allowNone={false}
+                    placeholder="Select a supplier"
                     disabled={isLockedToGrn}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a supplier">
-                        {(current: string | null) => {
-                          if (!current || current === NONE_VALUE) {
-                            return "Select a supplier";
-                          }
-                          return options.suppliers.find((supplier) => supplier.id === current)?.name ?? "Select a supplier";
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </FormControl>
                 <LedgerOutstandingBalance
                   ledgerId={selectedSupplierLedgerId}

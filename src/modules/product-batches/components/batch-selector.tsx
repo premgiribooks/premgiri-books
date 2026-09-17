@@ -2,14 +2,10 @@
 
 import * as React from "react";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { listBatchOptionsAction } from "@/modules/product-batches/actions/product-batch-actions";
 import { formatProductBatchDate } from "@/modules/product-batches/utils/format-product-batch-date";
 import type { ProductBatchOption } from "@/types/product-batch";
-
-const NONE_VALUE = "__none__";
-const EMPTY_VALUE = "__no_batches__";
-const LOADING_VALUE = "__loading__";
 
 interface BatchSelectorProps {
   productId: string | undefined;
@@ -29,13 +25,13 @@ function optionLabel(option: ProductBatchOption): string {
 }
 
 /**
- * Reusable batch picker (50-batch-tracking.md's UI section) — the one piece
- * of UI this spec ships that other documents' line editors will later
- * import once each is retrofitted (see the spec's Retrofit Decision; not
- * wired into any document by this task). Self-fetches its options via
- * `listBatchOptionsAction` whenever `productId`/`warehouseId` changes, so a
- * consuming line editor only needs to pass the selected product/warehouse
- * and a controlled `value`.
+ * Reusable, filterable batch picker (50-batch-tracking.md's UI section) —
+ * the one piece of UI this spec ships that other documents' line editors
+ * will later import once each is retrofitted (see the spec's Retrofit
+ * Decision; not wired into any document by this task). Self-fetches its
+ * options via `listBatchOptionsAction` whenever `productId`/`warehouseId`
+ * changes, so a consuming line editor only needs to pass the selected
+ * product/warehouse and a controlled `value`.
  */
 export function BatchSelector({
   productId,
@@ -85,39 +81,16 @@ export function BatchSelector({
   const placeholder = !productId ? "Select a product first" : isLoading ? "Loading batches…" : "Select a batch";
 
   return (
-    <Select
-      value={value ?? NONE_VALUE}
-      onValueChange={(next) => onChange(!next || next === NONE_VALUE ? undefined : next)}
+    <SearchableSelect
+      options={options}
+      value={value}
+      onChange={onChange}
+      getOptionId={(option) => option.id}
+      getOptionLabel={optionLabel}
+      emptyLabel="No active batches"
+      placeholder={placeholder}
       disabled={isDisabled}
-    >
-      <SelectTrigger className="w-full" {...triggerProps}>
-        <SelectValue placeholder={placeholder}>
-          {(current: string | null) => {
-            if (!current || current === NONE_VALUE) {
-              return placeholder;
-            }
-            const selected = options.find((option) => option.id === current);
-            return selected ? optionLabel(selected) : placeholder;
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {isLoading ? (
-          <SelectItem value={LOADING_VALUE} disabled>
-            Loading…
-          </SelectItem>
-        ) : options.length === 0 ? (
-          <SelectItem value={EMPTY_VALUE} disabled>
-            No active batches
-          </SelectItem>
-        ) : (
-          options.map((option) => (
-            <SelectItem key={option.id} value={option.id}>
-              {optionLabel(option)}
-            </SelectItem>
-          ))
-        )}
-      </SelectContent>
-    </Select>
+      {...triggerProps}
+    />
   );
 }

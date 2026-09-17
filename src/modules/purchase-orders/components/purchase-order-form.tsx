@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import {
   createPurchaseOrderAction,
@@ -177,31 +178,15 @@ export function PurchaseOrderForm({ options, purchaseOrder }: PurchaseOrderFormP
               <FormItem>
                 <FormLabel>Supplier *</FormLabel>
                 <FormControl>
-                  <Select
-                    value={field.value || NONE_VALUE}
-                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a supplier">
-                        {(current: string | null) => {
-                          if (!current || current === NONE_VALUE) {
-                            return "Select a supplier";
-                          }
-                          return (
-                            options.suppliers.find((supplier) => supplier.id === current)?.name ??
-                            "Select a supplier"
-                          );
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.suppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={options.suppliers}
+                    value={field.value || undefined}
+                    onChange={(next) => field.onChange(next ?? "")}
+                    getOptionId={(supplier) => supplier.id}
+                    getOptionLabel={(supplier) => supplier.name}
+                    allowNone={false}
+                    placeholder="Select a supplier"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

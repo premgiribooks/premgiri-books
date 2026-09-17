@@ -13,6 +13,7 @@ import { FormSection } from "@/components/common/form-section";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { numericFieldWidth } from "@/lib/utils";
 import { createPurchaseReturnDraftAction, updatePurchaseReturnDraftAction } from "@/modules/purchase-returns/actions/purchase-return-actions";
@@ -20,10 +21,6 @@ import { isValidCalendarDate, REFUND_MODE_VALUES } from "@/modules/purchase-retu
 import type { PurchaseReturnDetail, PurchaseReturnFormOptions, ReturnablePurchaseInvoiceDetail } from "@/types/purchase-return";
 
 const LIST_PATH = "/purchase/returns";
-// Base UI's Select decides controlled-vs-uncontrolled on the first render by
-// checking whether `value` is `undefined` — mirrors sales-return-form.tsx's
-// NONE_VALUE fix exactly.
-const NONE_VALUE = "__none__";
 
 type RefundMode = (typeof REFUND_MODE_VALUES)[number];
 
@@ -227,28 +224,14 @@ export function PurchaseReturnForm({ invoice, options, purchaseReturn }: Purchas
                 <FormItem>
                   <FormLabel>Refund Ledger *</FormLabel>
                   <FormControl>
-                    <Select
-                      value={field.value || NONE_VALUE}
-                      onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a ledger">
-                          {(current: string | null) => {
-                            if (!current || current === NONE_VALUE) {
-                              return "Select a ledger";
-                            }
-                            return options.refundLedgers.find((ledger) => ledger.id === current)?.name ?? "Select a ledger";
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.refundLedgers.map((ledger) => (
-                          <SelectItem key={ledger.id} value={ledger.id}>
-                            {ledger.name} ({ledger.groupName})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      options={options.refundLedgers}
+                      value={field.value || undefined}
+                      onChange={(next) => field.onChange(next ?? "")}
+                      getOptionId={(ledger) => ledger.id}
+                      getOptionLabel={(ledger) => `${ledger.name} (${ledger.groupName})`}
+                      placeholder="Select a ledger"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

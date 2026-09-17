@@ -4,11 +4,10 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import type { GstPartyOption } from "@/types/gst-report";
 
 const SEARCH_DEBOUNCE_MS = 300;
-const ALL_VALUE = "all";
 
 interface GstReportFilterBarProps {
   /** Customers for the Outward register, Suppliers for Inward — fetched server-side by the page. */
@@ -82,24 +81,17 @@ export function GstReportFilterBar({ partyOptions, partyLabel }: GstReportFilter
 
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {partyLabel}
-        <Select
-          value={searchParams.get("partyId") ?? ALL_VALUE}
-          onValueChange={(next) => updateParams({ partyId: !next || next === ALL_VALUE ? undefined : next })}
-        >
-          <SelectTrigger className="w-full sm:w-48" aria-label={`Filter by ${partyLabel.toLowerCase()}`}>
-            <SelectValue>
-              {(current: string | null) => partyOptions.find((party) => party.id === current)?.name ?? `All ${partyLabel}s`}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>All {partyLabel}s</SelectItem>
-            {partyOptions.map((party) => (
-              <SelectItem key={party.id} value={party.id}>
-                {party.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={partyOptions}
+          value={searchParams.get("partyId") ?? undefined}
+          onChange={(next) => updateParams({ partyId: next })}
+          getOptionId={(party) => party.id}
+          getOptionLabel={(party) => party.name}
+          noneLabel={`All ${partyLabel}s`}
+          placeholder={`All ${partyLabel}s`}
+          aria-label={`Filter by ${partyLabel.toLowerCase()}`}
+          className="w-full sm:w-48"
+        />
       </label>
 
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">

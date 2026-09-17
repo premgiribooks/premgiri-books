@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { STOCK_TRANSFER_STATUS_LABELS } from "@/modules/stock-transfers/components/stock-transfer-status-badge";
 import { STOCK_TRANSFER_STATUS_VALUES } from "@/modules/stock-transfers/validation/stock-transfer-schema";
 import type { StockTransferWarehouseOption } from "@/types/stock-transfer";
@@ -20,22 +21,23 @@ interface WarehouseFilterSelectProps {
   warehouses: StockTransferWarehouseOption[];
 }
 
-/** Mirrors opening-stock-filter-bar.tsx's FilterSelect. */
+// Warehouses are a company's master data and can grow long enough that
+// scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
 function WarehouseFilterSelect({ value, onChange, allLabel, ariaLabel, warehouses }: WarehouseFilterSelectProps) {
   return (
-    <Select value={value} onValueChange={(next) => onChange(next ?? ALL_VALUE)}>
-      <SelectTrigger className="w-full sm:w-48" aria-label={ariaLabel}>
-        <SelectValue>{(current: string | null) => warehouses.find((warehouse) => warehouse.id === current)?.name ?? allLabel}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL_VALUE}>{allLabel}</SelectItem>
-        {warehouses.map((warehouse) => (
-          <SelectItem key={warehouse.id} value={warehouse.id}>
-            {warehouse.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect
+      options={warehouses}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(warehouse) => warehouse.id}
+      getOptionLabel={(warehouse) => warehouse.name}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-48"
+    />
   );
 }
 

@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import {
   createQuotationAction,
@@ -182,31 +183,15 @@ export function QuotationForm({ options, quotation }: QuotationFormProps) {
               <FormItem>
                 <FormLabel>Customer *</FormLabel>
                 <FormControl>
-                  <Select
-                    value={field.value || NONE_VALUE}
-                    onValueChange={(next) => field.onChange(!next || next === NONE_VALUE ? "" : next)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a customer">
-                        {(current: string | null) => {
-                          if (!current || current === NONE_VALUE) {
-                            return "Select a customer";
-                          }
-                          return (
-                            options.customers.find((customer) => customer.id === current)?.name ??
-                            "Select a customer"
-                          );
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options.customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={options.customers}
+                    value={field.value || undefined}
+                    onChange={(next) => field.onChange(next ?? "")}
+                    getOptionId={(customer) => customer.id}
+                    getOptionLabel={(customer) => customer.name}
+                    allowNone={false}
+                    placeholder="Select a customer"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

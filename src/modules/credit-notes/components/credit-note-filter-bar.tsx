@@ -5,12 +5,41 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { CREDIT_NOTE_STATUS_LABELS } from "@/modules/credit-notes/components/credit-note-status-badge";
 import { CREDIT_NOTE_STATUS_VALUES } from "@/modules/credit-notes/validation/credit-note-schema";
 import type { CreditNoteCustomerOption } from "@/types/credit-note";
 
 const ALL_VALUE = "all";
 const SEARCH_DEBOUNCE_MS = 300;
+
+interface FilterSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  allLabel: string;
+  options: { value: string; label: string }[];
+  ariaLabel: string;
+}
+
+// The Customers list (a company's master data) can grow long enough that
+// scrolling a fixed dropdown stops being usable — filterable via
+// SearchableSelect instead. "All ___" is modeled as SearchableSelect's own
+// "None" (cleared filter), not a real id.
+function FilterCombobox({ value, onChange, allLabel, options, ariaLabel }: FilterSelectProps) {
+  return (
+    <SearchableSelect
+      options={options}
+      value={value === ALL_VALUE ? undefined : value}
+      onChange={(next) => onChange(next ?? ALL_VALUE)}
+      getOptionId={(option) => option.value}
+      getOptionLabel={(option) => option.label}
+      noneLabel={allLabel}
+      placeholder={allLabel}
+      aria-label={ariaLabel}
+      className="w-full sm:w-48"
+    />
+  );
+}
 
 interface CreditNoteFilterBarProps {
   customers: CreditNoteCustomerOption[];
@@ -83,24 +112,13 @@ export function CreditNoteFilterBar({ customers }: CreditNoteFilterBarProps) {
         </SelectContent>
       </Select>
 
-      <Select
+      <FilterCombobox
         value={searchParams.get("customerId") ?? ALL_VALUE}
-        onValueChange={(next) => updateParams({ customerId: next ?? ALL_VALUE })}
-      >
-        <SelectTrigger className="w-full sm:w-48" aria-label="Filter by customer">
-          <SelectValue>
-            {(current: string | null) => customers.find((customer) => customer.id === current)?.name ?? "All Customers"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All Customers</SelectItem>
-          {customers.map((customer) => (
-            <SelectItem key={customer.id} value={customer.id}>
-              {customer.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        onChange={(value) => updateParams({ customerId: value })}
+        allLabel="All Customers"
+        ariaLabel="Filter by customer"
+        options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
+      />
     </div>
   );
 }

@@ -1,15 +1,9 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import type { Category } from "@/types/category";
 
-const NONE_VALUE = "__none__";
+const NO_PARENT_LABEL = "No parent (top-level category)";
 
 interface CategorySelectorProps {
   /**
@@ -37,49 +31,29 @@ function categoryLabel(category: Category): string {
 }
 
 /**
- * Reusable parent-category picker, mirroring ledger-group-selector.tsx.
- * Flat, alphabetical; the tree page conveys hierarchy, this stays legible
- * as a plain lookup.
+ * Reusable, filterable parent-category picker, mirroring
+ * ledger-group-selector.tsx. Flat, alphabetical; the tree page conveys
+ * hierarchy, this stays legible as a plain lookup.
  */
 export function CategorySelector({
   categories,
   value,
   onChange,
-  placeholder = "Select a category",
+  placeholder = NO_PARENT_LABEL,
   disabled,
   ...triggerProps
 }: CategorySelectorProps) {
   return (
-    <Select
-      // Base UI's Select decides controlled-vs-uncontrolled on the first
-      // render by checking whether `value` is `undefined` — NONE_VALUE (a
-      // distinct, defined "controlled, nothing selected yet" sentinel) keeps
-      // it controlled for the component's entire lifetime. See
-      // context/current-error/05-role-select-uncontrolled-to-controlled.md
-      // for the reference fix this mirrors (via ledger-group-selector.tsx).
-      value={value ?? NONE_VALUE}
-      onValueChange={(next) => onChange(!next || next === NONE_VALUE ? undefined : next)}
+    <SearchableSelect
+      options={categories}
+      value={value}
+      onChange={onChange}
+      getOptionId={(category) => category.id}
+      getOptionLabel={categoryLabel}
+      noneLabel={NO_PARENT_LABEL}
+      placeholder={placeholder}
       disabled={disabled}
-    >
-      <SelectTrigger className="w-full" {...triggerProps}>
-        <SelectValue placeholder={placeholder}>
-          {(current: string | null) => {
-            if (!current || current === NONE_VALUE) {
-              return "No parent (top-level category)";
-            }
-            const selected = categories.find((category) => category.id === current);
-            return selected ? categoryLabel(selected) : placeholder;
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE_VALUE}>No parent (top-level category)</SelectItem>
-        {categories.map((category) => (
-          <SelectItem key={category.id} value={category.id}>
-            {categoryLabel(category)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      {...triggerProps}
+    />
   );
 }

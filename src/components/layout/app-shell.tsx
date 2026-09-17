@@ -9,9 +9,12 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Content } from "@/components/layout/content";
 import { StatusBar } from "@/components/layout/status-bar";
 import { BreadcrumbBar } from "@/components/layout/breadcrumb-bar";
+import { PageTabsBar } from "@/components/layout/page-tabs-bar";
+import { PageTabsOutlet } from "@/components/layout/page-tabs-outlet";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ALL_NAV_LEAVES, type NavLeaf } from "@/config/navigation";
+import { useRecordPageVisit } from "@/hooks/use-page-tabs";
 import { recordRecentPage } from "@/hooks/use-recent-pages";
 
 /** The most specific (longest-href) nav leaf whose route contains `pathname`
@@ -53,15 +56,25 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, [pathname]);
 
+  // Every page.tsx wraps its own content in <AppShell> directly (no shared
+  // layout.tsx above them), so AppShell itself fully remounts on every
+  // navigation — a React Context/state instance can't survive that. This
+  // records the visit into use-page-tabs.tsx's own module-level store
+  // instead, which does.
+  useRecordPageVisit(children);
+
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-foreground">
       <TopNavbar onOpenMobileNav={() => setMobileNavOpen(true)} />
       <BreadcrumbBar />
+      <PageTabsBar />
       <div className="flex flex-1 overflow-hidden">
         <div className="hidden md:flex h-full">
           <Sidebar />
         </div>
-        <Content>{children}</Content>
+        <Content>
+          <PageTabsOutlet />
+        </Content>
       </div>
       <StatusBar />
 
