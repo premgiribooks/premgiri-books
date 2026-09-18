@@ -4979,10 +4979,18 @@ findings**:
 succeeds; `/accounting/payment-vouchers*`, `/accounting/receipt-vouchers*`, and
 `/accounting/contra-vouchers*` all appear in the route table.
 
-**Not yet done**: push to `origin`, PR, and merge into `main` — still pending; the
-cross-cutting TOCTOU follow-up noted above (separate task, not blocking this feature);
-live browser click-through — deferred to the user's own session, consistent with this
-codebase's convention.
+**Pushed `feature/payment-mode-integration-manual-vouchers` to `origin`, merged `--no-ff`
+into `main`** (merge commit `dbb7ef5`, no conflicts) after explicit user confirmation,
+given this branch carries a schema migration already applied against the shared dev
+database. Re-verified against the merged result: `npx prisma generate`, `npx prisma
+migrate status` (schema already up to date), `npx tsc --noEmit`, `npx eslint src prisma`
+(0 errors, same 2 pre-existing warnings), `npx vitest run` (153 files, 2124 tests), `next
+build` — all pass. Pushed `main` to `origin` (`ca936bc..dbb7ef5`).
+
+**Not yet done**: the cross-cutting TOCTOU follow-up noted above (separate task, spans
+#84/#85/#86's own create paths, not blocking); live browser click-through — this session
+ran the automated check suite only, consistent with this codebase's own convention of
+deferring interactive UI verification to the user's own session for most features.
 
 Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
 Rule. **This was the last item in the Payment Mode Integration sequence (#84/#85/#86,

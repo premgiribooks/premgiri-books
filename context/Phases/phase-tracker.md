@@ -1955,8 +1955,9 @@ Return, Credit Note, Purchase Invoice, Purchase Return, and the three direct-pay
 vouchers) carries a structured Payment Mode. Code review + security review (parallel
 subagents) both APPROVE, no CRITICAL/HIGH findings — one MEDIUM fixed (weak regression
 test), one MEDIUM recorded as a pre-existing cross-cutting TOCTOU gap shared with #84/#85
-(follow-up recommended, not blocking). Not yet merged to `main` — pending push/PR/merge
-and the user's own verification.
+(follow-up recommended, not blocking). Pushed and merged into `main` (merge commit
+`dbb7ef5`), re-verified clean against the merged result. **Payment Mode Integration
+(#84/#85/#86, specs 91/92/93) is now fully shipped.**
 
 ## Item #87 (Liability Settlement, spec 87) implemented 2026-09-13
 
