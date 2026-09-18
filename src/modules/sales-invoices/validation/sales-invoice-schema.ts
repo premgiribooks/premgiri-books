@@ -130,6 +130,7 @@ export type SalesInvoiceLineInput = z.infer<typeof salesInvoiceLineSchema>;
 
 export const salesInvoicePaymentSchema = z.object({
   ledgerId: z.uuid("Select a valid ledger"),
+  paymentModeId: z.uuid("Select a payment mode"),
   amount: z
     .number("Amount must be a number")
     .positive("Amount must be greater than zero")

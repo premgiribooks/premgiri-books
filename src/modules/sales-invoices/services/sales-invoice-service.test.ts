@@ -38,6 +38,7 @@ const {
   recordMovementsMock,
   resolvePriceMock,
   getLedgerBalanceMock,
+  assertPaymentModeMatchesLedgerMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -73,6 +74,7 @@ const {
   recordMovementsMock: vi.fn(),
   resolvePriceMock: vi.fn(),
   getLedgerBalanceMock: vi.fn(),
+  assertPaymentModeMatchesLedgerMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -142,8 +144,10 @@ vi.mock("@/modules/company/services/company-settings-service", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: { $transaction: (fn: (tx: unknown) => unknown) => fn(FAKE_TX) },
 }));
+vi.mock("@/lib/payment-mode-validation", () => ({ assertPaymentModeMatchesLedger: assertPaymentModeMatchesLedgerMock }));
 
 import { AppError } from "@/lib/app-error";
+import { prisma } from "@/lib/prisma";
 import { salesInvoiceService } from "@/modules/sales-invoices/services/sales-invoice-service";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -160,6 +164,7 @@ const NEW_CUSTOMER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const NEW_CUSTOMER_LEDGER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const DELIVERY_CHALLAN_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const VOUCHER_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const PAYMENT_MODE_ID = "fffffff1-ffff-4fff-8fff-fffffffffff1";
 
 const CURRENT_USER = {
   id: USER_ID,
@@ -303,10 +308,12 @@ beforeEach(() => {
   recordMovementsMock.mockReset();
   resolvePriceMock.mockReset();
   getLedgerBalanceMock.mockReset();
+  assertPaymentModeMatchesLedgerMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
   assertPermissionMock.mockResolvedValue(undefined);
+  assertPaymentModeMatchesLedgerMock.mockResolvedValue(undefined);
   findCustomerForInvoiceMock.mockResolvedValue(ACTIVE_CUSTOMER);
   findCompanyStateCodeMock.mockResolvedValue("27");
   findProductsForLinesMock.mockResolvedValue([PRODUCT]);
@@ -340,14 +347,14 @@ describe("createDraft", () => {
 
   it("rejects an overpayment against the freshly computed grand total", async () => {
     await expect(
-      salesInvoiceService.createDraft(validInput({ payments: [{ ledgerId: LEDGER_ID, amount: 100000 }] }))
+      salesInvoiceService.createDraft(validInput({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 100000 }] }))
     ).rejects.toThrow("cannot exceed the invoice's grand total");
   });
 
   it("WALK_IN with less than full payment is rejected", async () => {
     await expect(
       salesInvoiceService.createDraft(
-        validInput({ customerMode: "WALK_IN", customerId: undefined, payments: [{ ledgerId: LEDGER_ID, amount: 1 }] })
+        validInput({ customerMode: "WALK_IN", customerId: undefined, payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 1 }] })
       )
     ).rejects.toThrow("Walk-in sales require full payment.");
   });
@@ -360,6 +367,17 @@ describe("createDraft", () => {
   it("every rejection is an AppError", async () => {
     findCustomerForInvoiceMock.mockResolvedValueOnce(null);
     await expect(salesInvoiceService.createDraft(validInput())).rejects.toBeInstanceOf(AppError);
+  });
+
+  // Code review finding: verify assertPaymentModeMatchesLedger is validated
+  // against the global `prisma` singleton at draft-save time (never a stale
+  // transaction from a prior call) — the counterpart posting-time assertion
+  // below confirms the transaction-scoped `tx` is used instead.
+  it("validates each payment's mode against its ledger via the global prisma client, not a transaction", async () => {
+    await salesInvoiceService.createDraft(
+      validInput({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 100 }] })
+    );
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(prisma, PAYMENT_MODE_ID, LEDGER_ID, COMPANY_ID);
   });
 });
 
@@ -417,7 +435,7 @@ describe("postSalesInvoice — orchestration order and ledger entries", () => {
   });
 
   it("posts no customer-ledger entry when payments cover the grand total exactly", async () => {
-    const row = invoiceRow({ payments: [{ ledgerId: LEDGER_ID, amount: 236 }] });
+    const row = invoiceRow({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 236 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
 
     await salesInvoiceService.postSalesInvoice("inv-1");
@@ -427,8 +445,22 @@ describe("postSalesInvoice — orchestration order and ledger entries", () => {
     expect(entries).toEqual(expect.arrayContaining([{ ledgerId: LEDGER_ID, entryType: "DEBIT", amount: 236 }]));
   });
 
+  // Code review finding: posting must re-validate each payment's mode
+  // against its ledger INSIDE the same transaction as the rest of posting
+  // (FAKE_TX), never through the outside-transaction global `prisma` — the
+  // exact "never trust a stale/outside read" convention this file's own
+  // verifyPermanentCustomer doc comment documents.
+  it("validates each payment's mode against its ledger using the posting transaction, not the global prisma client", async () => {
+    const row = invoiceRow({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 236 }] });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+
+    await salesInvoiceService.postSalesInvoice("inv-1");
+
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(FAKE_TX, PAYMENT_MODE_ID, LEDGER_ID, COMPANY_ID);
+  });
+
   it("rejects an overpayment for a PERMANENT invoice, validated against the freshly recomputed total", async () => {
-    const row = invoiceRow({ payments: [{ ledgerId: LEDGER_ID, amount: 500 }] });
+    const row = invoiceRow({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 500 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     await expect(salesInvoiceService.postSalesInvoice("inv-1")).rejects.toThrow(
       "Total payments cannot exceed the invoice's grand total."
@@ -437,13 +469,13 @@ describe("postSalesInvoice — orchestration order and ledger entries", () => {
   });
 
   it("rejects an underpaid WALK_IN invoice at posting", async () => {
-    const row = invoiceRow({ customerMode: "WALK_IN", customerId: null, payments: [{ ledgerId: LEDGER_ID, amount: 1 }] });
+    const row = invoiceRow({ customerMode: "WALK_IN", customerId: null, payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 1 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     await expect(salesInvoiceService.postSalesInvoice("inv-1")).rejects.toThrow("Walk-in sales require full payment.");
   });
 
   it("posts a fully-paid WALK_IN invoice with no customer-ledger entry", async () => {
-    const row = invoiceRow({ customerMode: "WALK_IN", customerId: null, payments: [{ ledgerId: LEDGER_ID, amount: 236 }] });
+    const row = invoiceRow({ customerMode: "WALK_IN", customerId: null, payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 236 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     await salesInvoiceService.postSalesInvoice("inv-1");
     const entries = postVoucherMock.mock.calls[0][1].entries;
@@ -573,7 +605,7 @@ describe("postSalesInvoice — Quick Customer conversion", () => {
   });
 
   it("does NOT convert when the QUICK invoice is fully paid", async () => {
-    const row = quickInvoiceRow({ payments: [{ ledgerId: LEDGER_ID, amount: 236 }] });
+    const row = quickInvoiceRow({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 236 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
 
     await salesInvoiceService.postSalesInvoice("inv-1");

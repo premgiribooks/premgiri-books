@@ -5,6 +5,7 @@ import { createCreditNoteSchema, isValidCalendarDate, toUtcDate } from "@/module
 const CUSTOMER_ID = "11111111-1111-4111-8111-111111111111";
 const INVOICE_ID = "22222222-2222-4222-8222-222222222222";
 const LEDGER_ID = "33333333-3333-4333-8333-333333333333";
+const PAYMENT_MODE_ID = "44444444-4444-4444-8444-444444444444";
 
 function validInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -79,8 +80,15 @@ describe("createCreditNoteSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts CASH_REFUND with a refundLedgerId", () => {
+  it("rejects CASH_REFUND with a refundLedgerId but no paymentModeId", () => {
     const result = createCreditNoteSchema.safeParse(validInput({ refundMode: "CASH_REFUND", refundLedgerId: LEDGER_ID }));
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts CASH_REFUND with both a refundLedgerId and a paymentModeId", () => {
+    const result = createCreditNoteSchema.safeParse(
+      validInput({ refundMode: "CASH_REFUND", refundLedgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+    );
     expect(result.success).toBe(true);
   });
 

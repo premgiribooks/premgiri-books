@@ -41,7 +41,7 @@ const ITEM_INCLUDE = {
 } as const;
 
 const PAYMENT_INCLUDE = {
-  payments: { include: { ledger: { select: { id: true, name: true } } } },
+  payments: { include: { ledger: { select: { id: true, name: true } }, paymentMode: { select: { id: true, name: true } } } },
 } as const;
 
 type SalesInvoiceListRowRaw = Prisma.SalesInvoiceGetPayload<{
@@ -157,6 +157,7 @@ function toSalesInvoiceDetail(raw: SalesInvoiceDetailRaw): SalesInvoiceDetail {
     ...payment,
     amount: payment.amount.toNumber(),
     ledger: payment.ledger,
+    paymentMode: payment.paymentMode,
   }));
 
   return {
@@ -249,6 +250,7 @@ export interface SalesInvoiceHeaderPersistData {
 
 export interface SalesInvoicePaymentPersistData {
   ledgerId: string;
+  paymentModeId: string;
   amount: number;
   reference: string | null;
 }

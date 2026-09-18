@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import { getLedgerPaymentClassMap } from "@/lib/ledger-class";
+import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +15,7 @@ import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import type { VoucherEntryLineInput } from "@/engines/voucher/voucher-validation";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { assertSalesLedgerMappingComplete, isSalesLedgerMappingComplete } from "@/modules/company/utils/sales-ledger-mapping";
+import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
 import {
   salesReturnRepository,
   type SalesInvoiceForReturn,
@@ -58,6 +61,7 @@ const CANNOT_CANCEL_MESSAGE = "Only a posted sales return can be cancelled.";
 const REFUND_LEDGER_REQUIRED_MESSAGE = "Select a refund ledger for a cash refund.";
 const REFUND_LEDGER_NOT_FOUND_MESSAGE = "Selected refund ledger not found.";
 const REFUND_LEDGER_INACTIVE_MESSAGE = "Selected refund ledger is inactive and cannot be posted to.";
+const REFUND_PAYMENT_MODE_REQUIRED_MESSAGE = "Select a payment mode for a cash refund.";
 const WALK_IN_FORCED_CASH_REFUND_MESSAGE =
   "This return's source invoice has no customer ledger — refund mode must be Cash Refund.";
 const RETURN_DATE_BEFORE_INVOICE_MESSAGE = "Return date cannot be before the invoice date.";
@@ -129,6 +133,12 @@ function resolveRefundMode(requested: RefundMode | undefined, invoiceHasCustomer
 function assertRefundLedgerProvided(refundMode: RefundMode, refundLedgerId: string | undefined): void {
   if (refundMode === "CASH_REFUND" && !refundLedgerId) {
     throw new AppError(REFUND_LEDGER_REQUIRED_MESSAGE);
+  }
+}
+
+function assertRefundPaymentModeProvided(refundMode: RefundMode, paymentModeId: string | undefined): void {
+  if (refundMode === "CASH_REFUND" && !paymentModeId) {
+    throw new AppError(REFUND_PAYMENT_MODE_REQUIRED_MESSAGE);
   }
 }
 
@@ -229,6 +239,7 @@ function buildHeaderPersistData(
   returnDate: Date,
   refundMode: RefundMode,
   refundLedgerId: string | null,
+  paymentModeId: string | null,
   reason: string | null,
   totals: SalesReturnTotals
 ): SalesReturnHeaderPersistData {
@@ -237,6 +248,7 @@ function buildHeaderPersistData(
     returnDate,
     refundMode,
     refundLedgerId: refundMode === "CASH_REFUND" ? refundLedgerId : null,
+    paymentModeId: refundMode === "CASH_REFUND" ? paymentModeId : null,
     reason,
     ...totals,
   };
@@ -274,8 +286,10 @@ async function resolveSalesReturnInput(
 
   const refundMode = resolveRefundMode(data.refundMode, invoice.customerId !== null);
   assertRefundLedgerProvided(refundMode, data.refundLedgerId);
+  assertRefundPaymentModeProvided(refundMode, data.paymentModeId);
   if (refundMode === "CASH_REFUND") {
     await assertRefundLedgerActive(prisma, companyId, data.refundLedgerId as string);
+    await assertPaymentModeMatchesLedger(prisma, data.paymentModeId as string, data.refundLedgerId as string, companyId);
   }
 
   const lines = await buildReturnLines(prisma, invoice, data.lines);
@@ -371,12 +385,18 @@ export const salesReturnService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "sales", "view");
 
-    const [refundLedgers, settings] = await Promise.all([
+    const [refundLedgers, ledgerClassById, paymentModes, settings] = await Promise.all([
       salesReturnRepository.findSelectableRefundLedgers(user.companyId),
+      getLedgerPaymentClassMap(user.companyId),
+      paymentModeService.listActivePaymentModes(),
       companySettingsService.getSettings(user.companyId),
     ]);
 
-    return { refundLedgers, isLedgerMappingComplete: isSalesLedgerMappingComplete(settings) };
+    return {
+      refundLedgers: refundLedgers.map((ledger) => ({ ...ledger, ledgerClass: ledgerClassById.get(ledger.id) ?? "NEITHER" })),
+      paymentModes: paymentModes.map((mode) => ({ id: mode.id, name: mode.name, ledgerClass: mode.ledgerClass })),
+      isLedgerMappingComplete: isSalesLedgerMappingComplete(settings),
+    };
   },
 
   /** The "New Sales Return" invoice picker's search results. */
@@ -447,6 +467,7 @@ export const salesReturnService = {
       toUtcDate(data.returnDate),
       resolved.refundMode,
       data.refundLedgerId ?? null,
+      data.paymentModeId ?? null,
       data.reason ?? null,
       resolved.totals
     );
@@ -478,6 +499,7 @@ export const salesReturnService = {
       toUtcDate(data.returnDate),
       resolved.refundMode,
       data.refundLedgerId ?? null,
+      data.paymentModeId ?? null,
       data.reason ?? null,
       resolved.totals
     );
@@ -538,9 +560,11 @@ export const salesReturnService = {
         throw new AppError(INVOICE_NOT_POSTED_MESSAGE);
       }
 
-      // Re-verify the refund ledger is still active when CASH_REFUND.
+      // Re-verify the refund ledger is still active, and its payment mode
+      // still matches, when CASH_REFUND.
       if (current.refundMode === "CASH_REFUND") {
         await assertRefundLedgerActive(tx, user.companyId, current.refundLedgerId as string);
+        await assertPaymentModeMatchesLedger(tx, current.paymentModeId as string, current.refundLedgerId as string, user.companyId);
       }
 
       // Step 2 + 3: re-check line/header consistency and recompute fresh.
@@ -618,6 +642,7 @@ export const salesReturnService = {
         current.returnDate,
         current.refundMode,
         current.refundLedgerId,
+        current.paymentModeId,
         current.reason,
         totals
       );

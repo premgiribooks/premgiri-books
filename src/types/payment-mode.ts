@@ -10,6 +10,15 @@ export interface PaymentModeListFilters {
   status?: PaymentModeStatusFilter;
 }
 
+/** A Payment Mode picker's option shape — shared by every payment-line
+ * dropdown across Sales Invoice, Sales Return, and Credit Note
+ * (91-payment-mode-integration-sales.md's UI section). */
+export interface PaymentModeOption {
+  id: string;
+  name: string;
+  ledgerClass: PaymentModeLedgerClass;
+}
+
 export type ActivatePaymentModeResult =
   | { status: "not_found" }
   | { status: "ok"; paymentMode: PaymentMode };

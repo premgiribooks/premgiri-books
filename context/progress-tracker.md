@@ -4568,3 +4568,130 @@ Git Workflow (branch/PR/merge) for this whole feature — still pending.
 
 Both `context/Phases/phase-tracker.md` and this tracker updated per the
 Tracker Update Rule.
+
+## 2026-09-18 — Feature: Payment Mode Integration — Sales Documents (#84, spec 91)
+
+Per explicit user instruction ("start next"), the next unimplemented item in dependency
+order per `context/Phases/phase-tracker.md`'s Phase 11 table (#83 Payment Mode Master and
+#87 Liability Settlement were already ✅; #84 was the first ⬜ item, and #85/#86 both
+depend on it). Implemented on a fresh `feature/payment-mode-integration-sales` branch cut
+from `main`. Wires the existing `PaymentMode` master (spec 86: Cash/Bank Transfer/UPI/
+Card/Cheque, each with `ledgerClass` CASH/BANK/ANY) into three documents' payment lines:
+Sales Invoice, Sales Return, and Credit Note.
+
+**Spec/reality discrepancy found and resolved before implementing**: spec 91 describes
+Sales Return's and Credit Note's payment shapes as `refundPayments[]`/a `SalesReturnRefund`
+and `CreditNoteRefund` model — neither model exists. The actual schema (spec 39/40, already
+implemented) gives both documents a single nullable `refundLedgerId` field, populated only
+when `refundMode === "CASH_REFUND"` (a `LEDGER_ADJUSTMENT` return/note never touches a
+cash/bank ledger at all). Per `ai-workflow-rules.md`'s "prefer the documented architecture,
+record the discrepancy" rule: implemented `paymentModeId` as a single nullable field on
+both `SalesReturn` and `CreditNote`, mirroring `refundLedgerId`'s own nullability exactly
+(required in the Zod schema and the service only when CASH_REFUND), rather than inventing
+the two array models the spec assumed. Sales Invoice's `SalesInvoicePayment.payments[]` did
+match the spec literally (a real array), so `paymentModeId` there is a plain required
+column, backfilled by migration.
+
+**Schema**: `PaymentMode` gains three back-relation array fields (`salesInvoicePayments`,
+`salesReturns`, `creditNotes`). `SalesInvoicePayment.paymentModeId` is `String` (required).
+`SalesReturn.paymentModeId`/`CreditNote.paymentModeId` are `String?` (nullable), each with
+a plain `@relation` (`onDelete: SetNull`, vs. `Restrict` for the required Sales Invoice
+one). Migration `20260918043848_payment_mode_integration_sales` was hand-written
+(`--create-only`) because `prisma migrate dev` refuses to generate a NOT NULL column with
+no default against SalesInvoicePayment's existing rows.
+
+**New shared modules** (spec 91's own stated purpose — the foundation specs 92/93 will
+reuse):
+- `src/lib/ledger-class.ts` — extracted the existing binary `isCashOrBankClass` into a
+  three-way `classifyLedger`/`LedgerPaymentClass` (`CASH`/`BANK`/`NEITHER`), then added
+  `getLedgerPaymentClass(client, ledgerId, companyId)` (single-ledger) and
+  `getLedgerPaymentClassMap(companyId)` (company-wide, batched — powers the UI's
+  ledger-picker annotations below). `assertLedgersAreCashOrBank`/`getCashAndBankLedgerIds`
+  are unchanged in behavior (re-expressed in terms of the new classifier, same tests pass
+  unmodified).
+- `src/lib/payment-mode-validation.ts` (new) — `assertPaymentModeMatchesLedger(client,
+  paymentModeId, ledgerId, companyId)`: rejects an unknown/cross-company/inactive payment
+  mode outright, then checks the mode's `ledgerClass` against the ledger's own three-way
+  class (`CASH`/`BANK` must match exactly; `ANY` accepts either). **Deliberate signature
+  deviation from spec 91's own literal `(paymentModeId, ledgerId, companyId)`** (no client
+  parameter): added a `client: PrismaClientOrTransaction` first parameter so a posting-time
+  call reads the ledger row inside the same transaction as the rest of posting, mirroring
+  `assertLedgersAreCashOrBank`'s own established convention and its "never trust an
+  outside-transaction read" rationale (`sales-invoice-service.ts`'s `verifyPermanentCustomer`
+  doc comment, itself a prior security-review finding). Following the spec literally here
+  would have reintroduced exactly the TOCTOU gap that prior finding closed.
+
+**Wired into all three services** (`sales-invoice-service.ts`, `sales-return-service.ts`,
+`credit-note-service.ts`): `assertPaymentModeMatchesLedger` runs against the global `prisma`
+at `createDraft`/`updateDraft` time, and again against the transaction's own `tx` inside
+`postSalesInvoice`/`postSalesReturn`/`postCreditNote` — re-validated fresh at posting,
+never trusting a stale draft-time result, matching this module's own established
+"recompute everything at posting" philosophy. Sales Return's/Credit Note's `resolveMode`
+helpers gained a parallel `assertRefundPaymentModeProvided` alongside the existing
+`assertRefundLedgerRequirementMet`.
+
+**UI**: `SalesInvoicePaymentEditor` gained a Payment Mode column per payment line;
+`SalesReturnForm`/`CreditNoteForm` gained a Payment Mode picker alongside the Refund
+Ledger picker (shown only for CASH_REFUND). All three auto-select the closest-matching
+active Payment Mode when the ledger/refund-ledger changes (an exact `ledgerClass` match
+wins over an `ANY` mode) via a small `closestMatchingPaymentModeId` helper duplicated
+per-component — a UX hint only, independently re-validated server-side regardless. Sales
+Invoice's detail page, print view, and PDF template, plus Sales Return's/Credit Note's
+detail pages, now show the payment mode name alongside the ledger name.
+
+**Code review + security review (parallel subagents) — both found the same CRITICAL/HIGH
+issue independently, both fixed**:
+- **CRITICAL/HIGH (both reviews, same root cause): the migration's "Cash" backfill would
+  fail against any database with companies created before spec 86 (Payment Mode Master)
+  shipped (2026-09-13).** `PaymentMode` seeding only happens via the
+  `COMPANY_BOOTSTRAPPED` domain event (`register-bootstrap-handler.ts`), which fires only
+  for newly-created companies — spec 86's own migration was schema-only, with no
+  retroactive seed for pre-existing companies. The backfill `UPDATE ... JOIN "PaymentMode"
+  pm ON pm.name = 'Cash'` would match zero rows for such a company, leaving
+  `paymentModeId` NULL, and the immediately-following `ALTER COLUMN ... SET NOT NULL`
+  would then abort the entire migration — a real deployment blocker for any non-fresh
+  database, not a hypothetical edge case. **Fixed**: the migration now first `INSERT`s a
+  "Cash" `PaymentMode` row (`isSystemDefined: true`, `ledgerClass: CASH`) for every company
+  that has at least one existing `SalesInvoicePayment` row but no "Cash" mode yet
+  (`gen_random_uuid()::TEXT`, the same raw-SQL UUID pattern already established in
+  `20260713140000_platform_company_split_schema`'s own data-backfill migration), before
+  the existing backfill `UPDATE` runs. Verified against this session's own dev database
+  (which already had a seeded "Cash" mode for its one company, so the new INSERT is a
+  no-op there) — `npx prisma migrate status` reports no drift after the edit.
+- **MEDIUM (security review): `getLedgerPaymentClass`'s doc comment overclaimed full
+  Serializable-snapshot consistency.** `ledgerGroupRepository.findMany` has no `client`
+  parameter and always reads via the global `prisma` singleton — a pre-existing gap
+  inherited from (not introduced by) `assertLedgersAreCashOrBank`, which has carried the
+  same limitation since it was written. Only the ledger row's own fields are guaranteed
+  transaction-safe; the Cash-in-Hand group hierarchy is not. **Fixed**: reworded the doc
+  comment to describe the actual, partial guarantee instead of overclaiming full isolation
+  — not fixed at the architecture level (would mean threading `client` through
+  `ledgerGroupRepository.findMany` and every existing caller, out of scope for this spec).
+- **MEDIUM (code review): no test asserted `assertPaymentModeMatchesLedger` received the
+  correct `prisma`-vs-`tx` client** at each call site, even though the source code was
+  already correct — a regression here (e.g., posting accidentally validating through the
+  global `prisma`) would have gone undetected. **Fixed**: added explicit
+  `toHaveBeenCalledWith(prisma, ...)` / `toHaveBeenCalledWith(FAKE_TX, ...)` assertions to
+  all three service test files, one pair per service (draft-time vs. posting-time).
+- **LOW (code review): missing negative-schema test for Sales Invoice's unconditionally
+  required `paymentModeId`.** Fixed — added alongside the existing payments-array tests.
+
+**Verified** (after all fixes): `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0
+errors, same 2 pre-existing unrelated warnings), `npx vitest run` — **153 test files, 2099
+tests passing** (+24 new: `ledger-class.test.ts` +5 for `getLedgerPaymentClass`/
+`getLedgerPaymentClassMap`, a new `payment-mode-validation.test.ts` +10, the three service
+test files +6 total for client-threading assertions, +3 schema-test additions), and `next
+build` — succeeds; `/sales/invoices*`, `/sales/returns*`, and `/sales/credit-notes*` all
+appear in the route table.
+
+**Not yet done**: live browser click-through (this session ran the automated check suite
+only, consistent with this codebase's own convention of deferring interactive UI
+verification to the user's own session for most features); Git Workflow (push/merge) —
+committed on `feature/payment-mode-integration-sales`, not yet pushed or merged into
+`main`, pending the user's own review given this branch carries a schema migration against
+the shared dev database.
+
+Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
+Rule. **Next Up: #85 (spec 92, Payment Mode Integration — Purchase Documents)**, per the
+Phase 11 table's own stated dependency order — it reuses this feature's
+`assertPaymentModeMatchesLedger`/`getLedgerPaymentClass` directly.

@@ -22,6 +22,7 @@ const SALES_INVOICE_INCLUDE = {
 
 const REFUND_LEDGER_INCLUDE = {
   refundLedger: { select: { id: true, name: true } },
+  paymentMode: { select: { id: true, name: true } },
 } as const;
 
 const ITEM_INCLUDE = { items: true } as const;
@@ -61,7 +62,7 @@ function toCreditNoteListRow(raw: CreditNoteListRowRaw): CreditNoteListRow {
 }
 
 function toCreditNoteDetail(raw: CreditNoteDetailRaw): CreditNoteDetail {
-  const { customer, salesInvoice, refundLedger, items, ...header } = raw;
+  const { customer, salesInvoice, refundLedger, paymentMode, items, ...header } = raw;
   const normalizedHeader: Record<string, unknown> = { ...header };
   for (const field of CREDIT_NOTE_DECIMAL_FIELDS) {
     normalizedHeader[field] = (header as unknown as Record<string, Prisma.Decimal>)[field].toNumber();
@@ -85,6 +86,7 @@ function toCreditNoteDetail(raw: CreditNoteDetailRaw): CreditNoteDetail {
     customer: { id: customer.id, name: customer.ledger.name },
     salesInvoice,
     refundLedger,
+    paymentMode,
     items: normalizedItems,
   };
 }
@@ -134,6 +136,7 @@ export interface CreditNoteHeaderPersistData {
   placeOfSupplyStateCode: string;
   refundMode: "LEDGER_ADJUSTMENT" | "CASH_REFUND";
   refundLedgerId: string | null;
+  paymentModeId: string | null;
   reason: string;
   taxableAmount: number;
   totalCgst: number;

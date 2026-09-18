@@ -76,6 +76,9 @@ const creditNoteBaseSchema = z.object({
   reason: REASON_SCHEMA,
   refundMode: z.enum(REFUND_MODE_VALUES).optional(),
   refundLedgerId: z.uuid("Select a valid refund ledger").optional(),
+  // Required exactly when CASH_REFUND — mirrors refundLedgerId's own
+  // conditional requirement (91-payment-mode-integration-sales.md).
+  paymentModeId: z.uuid("Select a payment mode").optional(),
   lines: z.array(creditNoteLineSchema).min(1, "A credit note must have at least one line"),
 });
 
@@ -85,10 +88,21 @@ function refundLedgerRequirementMet(data: { refundMode?: string; refundLedgerId?
   return data.refundMode !== "CASH_REFUND" || Boolean(data.refundLedgerId);
 }
 
-export const createCreditNoteSchema = creditNoteBaseSchema.refine(refundLedgerRequirementMet, {
-  message: "Select a refund ledger for a cash refund.",
-  path: ["refundLedgerId"],
-});
+/** A payment mode is required whenever CASH_REFUND is explicitly chosen —
+ * mirrors refundLedgerRequirementMet exactly. */
+function paymentModeRequirementMet(data: { refundMode?: string; paymentModeId?: string }): boolean {
+  return data.refundMode !== "CASH_REFUND" || Boolean(data.paymentModeId);
+}
+
+export const createCreditNoteSchema = creditNoteBaseSchema
+  .refine(refundLedgerRequirementMet, {
+    message: "Select a refund ledger for a cash refund.",
+    path: ["refundLedgerId"],
+  })
+  .refine(paymentModeRequirementMet, {
+    message: "Select a payment mode for a cash refund.",
+    path: ["paymentModeId"],
+  });
 
 export type CreateCreditNoteInput = z.infer<typeof createCreditNoteSchema>;
 

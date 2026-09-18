@@ -523,6 +523,12 @@ model PaymentMode {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
+  // 91-93-payment-mode-integration-*.md — the first real consumers of this
+  // master, added alongside their own paymentModeId columns.
+  salesInvoicePayments SalesInvoicePayment[]
+  salesReturns         SalesReturn[]
+  creditNotes          CreditNote[]
+
   @@unique([companyId, name])
   @@index([companyId])
 }
@@ -2476,9 +2482,14 @@ model SalesInvoicePayment {
   ledger         Ledger       @relation(fields: [ledgerId], references: [id])
   amount         Decimal      @db.Decimal(14, 2)
   reference      String?
+  // 91-payment-mode-integration-sales.md — required going forward; existing
+  // rows are backfilled to the seeded "Cash" mode by this column's migration.
+  paymentModeId  String
+  paymentMode    PaymentMode  @relation(fields: [paymentModeId], references: [id])
 
   @@index([salesInvoiceId])
   @@index([ledgerId])
+  @@index([paymentModeId])
 }
 
 // 39-sales-return.md — the physical, quantity-based reversal of a posted
@@ -2524,6 +2535,11 @@ model SalesReturn {
   refundMode      RefundMode        @default(LEDGER_ADJUSTMENT)
   refundLedgerId  String?
   refundLedger    Ledger?           @relation("SalesReturnRefundLedger", fields: [refundLedgerId], references: [id])
+  // 91-payment-mode-integration-sales.md — required exactly when
+  // refundMode is CASH_REFUND, mirroring refundLedgerId's own nullability
+  // (a LEDGER_ADJUSTMENT return never touches a cash/bank ledger at all).
+  paymentModeId   String?
+  paymentMode     PaymentMode?      @relation(fields: [paymentModeId], references: [id])
   status          SalesReturnStatus @default(DRAFT)
   reason          String?
   taxableAmount   Decimal           @db.Decimal(14, 2)
@@ -2544,6 +2560,7 @@ model SalesReturn {
   @@unique([companyId, financialYearId, returnNumber])
   @@index([companyId, salesInvoiceId])
   @@index([companyId, status])
+  @@index([paymentModeId])
 }
 
 model SalesReturnItem {
@@ -2610,6 +2627,10 @@ model CreditNote {
   refundMode             RefundMode       @default(LEDGER_ADJUSTMENT)
   refundLedgerId         String?
   refundLedger           Ledger?          @relation("CreditNoteRefundLedger", fields: [refundLedgerId], references: [id])
+  // 91-payment-mode-integration-sales.md — required exactly when
+  // refundMode is CASH_REFUND, mirroring refundLedgerId's own nullability.
+  paymentModeId          String?
+  paymentMode            PaymentMode?     @relation(fields: [paymentModeId], references: [id])
   status                 CreditNoteStatus @default(DRAFT)
   // Required (unlike SalesReturn's optional reason) — a Credit Note with no
   // linked invoice has no other context explaining why it exists.
@@ -2633,6 +2654,7 @@ model CreditNote {
   @@index([companyId, customerId])
   @@index([companyId, status])
   @@index([salesInvoiceId])
+  @@index([paymentModeId])
 }
 
 model CreditNoteItem {

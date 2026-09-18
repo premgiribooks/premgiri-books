@@ -10,6 +10,7 @@ const CUSTOMER_ID = "1a2b3c4d-5e6f-4789-8abc-def012345678";
 const PRODUCT_ID = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
 const WAREHOUSE_ID = "3c4d5e6f-7081-4901-8bcd-f01234567890";
 const LEDGER_ID = "4d5e6f70-8192-4012-9cde-012345678901";
+const PAYMENT_MODE_ID = "5e6f7081-9203-4123-8def-123456789012";
 
 const VALID_LINE = { productId: PRODUCT_ID, warehouseId: WAREHOUSE_ID, quantity: 5, rate: 100 };
 
@@ -132,13 +133,19 @@ describe("createSalesInvoiceSchema — general shape", () => {
   });
 
   it("accepts a valid payments array", () => {
-    const result = createSalesInvoiceSchema.parse(validInput({ payments: [{ ledgerId: LEDGER_ID, amount: 100 }] }));
+    const result = createSalesInvoiceSchema.parse(validInput({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 100 }] }));
     expect(result.payments).toHaveLength(1);
   });
 
   it("rejects a non-positive payment amount", () => {
     expect(
-      createSalesInvoiceSchema.safeParse(validInput({ payments: [{ ledgerId: LEDGER_ID, amount: 0 }] })).success
+      createSalesInvoiceSchema.safeParse(validInput({ payments: [{ ledgerId: LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 0 }] })).success
+    ).toBe(false);
+  });
+
+  it("rejects a payment line with no paymentModeId", () => {
+    expect(
+      createSalesInvoiceSchema.safeParse(validInput({ payments: [{ ledgerId: LEDGER_ID, amount: 100 }] })).success
     ).toBe(false);
   });
 });

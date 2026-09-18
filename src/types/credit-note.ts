@@ -3,6 +3,8 @@ import type {
   CreditNoteItem as PrismaCreditNoteItem,
 } from "@prisma/client";
 
+import type { PaymentModeOption } from "@/types/payment-mode";
+
 export type { CreditNoteStatus, RefundMode } from "@prisma/client";
 
 type CreditNoteItemDecimalField = "taxableAmount" | "ratePercent" | "cessPercent" | "cgst" | "sgst" | "igst" | "cess" | "totalAmount";
@@ -37,10 +39,16 @@ export interface CreditNoteRefundLedgerSnapshot {
   name: string;
 }
 
+export interface CreditNotePaymentModeSnapshot {
+  id: string;
+  name: string;
+}
+
 export interface CreditNoteDetail extends CreditNote {
   customer: CreditNoteCustomerSnapshot;
   salesInvoice: CreditNoteInvoiceSnapshot | null;
   refundLedger: CreditNoteRefundLedgerSnapshot | null;
+  paymentMode: CreditNotePaymentModeSnapshot | null;
   items: CreditNoteItemDetail[];
 }
 
@@ -76,10 +84,14 @@ export interface CreditNoteInvoiceOption {
   placeOfSupplyStateCode: string;
 }
 
+/** `ledgerClass` (91-payment-mode-integration-sales.md) is this ledger's
+ * three-way classification against the Payment Mode master — mirrors
+ * SalesReturnRefundLedgerOption's identical field. */
 export interface CreditNoteRefundLedgerOption {
   id: string;
   name: string;
   groupName: string;
+  ledgerClass: "CASH" | "BANK" | "NEITHER";
 }
 
 /** The freeform line editor's optional "pick a GST Rate" prefill
@@ -96,6 +108,7 @@ export interface CreditNoteFormOptions {
   customers: CreditNoteCustomerOption[];
   invoices: CreditNoteInvoiceOption[];
   refundLedgers: CreditNoteRefundLedgerOption[];
+  paymentModes: PaymentModeOption[];
   gstRates: CreditNoteGstRateOption[];
   isLedgerMappingComplete: boolean;
 }

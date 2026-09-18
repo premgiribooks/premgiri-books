@@ -16,7 +16,7 @@ vi.mock("@/modules/ledgers/repositories/ledger-repository", () => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
-import { assertLedgersAreCashOrBank, getCashAndBankLedgerIds } from "@/lib/ledger-class";
+import { assertLedgersAreCashOrBank, getCashAndBankLedgerIds, getLedgerPaymentClass, getLedgerPaymentClassMap } from "@/lib/ledger-class";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_COMPANY_ID = "99999999-9999-4999-8999-999999999999";
@@ -159,5 +159,58 @@ describe("getCashAndBankLedgerIds", () => {
     const result = await getCashAndBankLedgerIds(COMPANY_ID);
 
     expect(result.size).toBe(0);
+  });
+});
+
+// 91-payment-mode-integration-sales.md — the three-way classifier
+// assertPaymentModeMatchesLedger checks a PaymentMode.ledgerClass against.
+describe("getLedgerPaymentClass", () => {
+  it("classifies a ledger under the Cash-in-Hand group as CASH", async () => {
+    findLedgersForValidationMock.mockResolvedValue([
+      { id: CASH_LEDGER_ID, name: "Cash", companyId: COMPANY_ID, isActive: true, ledgerGroupId: CASH_GROUP_ID, hasBankAccount: false },
+    ]);
+    await expect(getLedgerPaymentClass({} as never, CASH_LEDGER_ID, COMPANY_ID)).resolves.toBe("CASH");
+  });
+
+  it("classifies a bank-linked ledger outside the Cash-in-Hand group as BANK", async () => {
+    findLedgersForValidationMock.mockResolvedValue([
+      { id: BANK_LEDGER_ID, name: "HDFC Bank", companyId: COMPANY_ID, isActive: true, ledgerGroupId: OTHER_GROUP_ID, hasBankAccount: true },
+    ]);
+    await expect(getLedgerPaymentClass({} as never, BANK_LEDGER_ID, COMPANY_ID)).resolves.toBe("BANK");
+  });
+
+  it("classifies a ledger that is neither Cash-in-Hand nor bank-linked as NEITHER", async () => {
+    findLedgersForValidationMock.mockResolvedValue([
+      { id: INVALID_LEDGER_ID, name: "Sundry Creditor", companyId: COMPANY_ID, isActive: true, ledgerGroupId: OTHER_GROUP_ID, hasBankAccount: false },
+    ]);
+    await expect(getLedgerPaymentClass({} as never, INVALID_LEDGER_ID, COMPANY_ID)).resolves.toBe("NEITHER");
+  });
+
+  it("classifies an unknown ledger id as NEITHER rather than throwing", async () => {
+    findLedgersForValidationMock.mockResolvedValue([]);
+    await expect(getLedgerPaymentClass({} as never, INVALID_LEDGER_ID, COMPANY_ID)).resolves.toBe("NEITHER");
+  });
+
+  it("classifies a cross-company ledger id as NEITHER", async () => {
+    findLedgersForValidationMock.mockResolvedValue([
+      { id: CASH_LEDGER_ID, name: "Cash", companyId: OTHER_COMPANY_ID, isActive: true, ledgerGroupId: CASH_GROUP_ID, hasBankAccount: false },
+    ]);
+    await expect(getLedgerPaymentClass({} as never, CASH_LEDGER_ID, COMPANY_ID)).resolves.toBe("NEITHER");
+  });
+});
+
+describe("getLedgerPaymentClassMap", () => {
+  it("returns every ledger's classification in one map, regardless of active status", async () => {
+    findAllForValidationMock.mockResolvedValue([
+      { id: CASH_LEDGER_ID, name: "Cash", companyId: COMPANY_ID, isActive: true, ledgerGroupId: CASH_GROUP_ID, hasBankAccount: false },
+      { id: BANK_LEDGER_ID, name: "HDFC Bank", companyId: COMPANY_ID, isActive: false, ledgerGroupId: OTHER_GROUP_ID, hasBankAccount: true },
+      { id: INVALID_LEDGER_ID, name: "Sundry Creditor", companyId: COMPANY_ID, isActive: true, ledgerGroupId: OTHER_GROUP_ID, hasBankAccount: false },
+    ]);
+
+    const result = await getLedgerPaymentClassMap(COMPANY_ID);
+
+    expect(result.get(CASH_LEDGER_ID)).toBe("CASH");
+    expect(result.get(BANK_LEDGER_ID)).toBe("BANK");
+    expect(result.get(INVALID_LEDGER_ID)).toBe("NEITHER");
   });
 });

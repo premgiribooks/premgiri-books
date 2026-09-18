@@ -3,6 +3,8 @@ import type {
   SalesReturnItem as PrismaSalesReturnItem,
 } from "@prisma/client";
 
+import type { PaymentModeOption } from "@/types/payment-mode";
+
 export type { SalesReturnStatus, RefundMode, CustomerMode } from "@prisma/client";
 
 type SalesReturnItemDecimalField = "quantity" | "taxableAmount" | "cgst" | "sgst" | "igst" | "cess" | "totalAmount";
@@ -48,9 +50,15 @@ export interface SalesReturnRefundLedgerSnapshot {
   name: string;
 }
 
+export interface SalesReturnPaymentModeSnapshot {
+  id: string;
+  name: string;
+}
+
 export interface SalesReturnDetail extends SalesReturn {
   salesInvoice: SalesReturnInvoiceSnapshot;
   refundLedger: SalesReturnRefundLedgerSnapshot | null;
+  paymentMode: SalesReturnPaymentModeSnapshot | null;
   items: SalesReturnItemDetail[];
 }
 
@@ -105,10 +113,15 @@ export interface ReturnableInvoiceOption {
   customerName: string | null;
 }
 
+/** `ledgerClass` (91-payment-mode-integration-sales.md) is this ledger's
+ * three-way classification against the Payment Mode master — lets the form
+ * auto-select the closest-matching active Payment Mode when the refund
+ * ledger changes, without a server round trip. */
 export interface SalesReturnRefundLedgerOption {
   id: string;
   name: string;
   groupName: string;
+  ledgerClass: "CASH" | "BANK" | "NEITHER";
 }
 
 /** Everything the Sales Return Form needs beyond the picked invoice's own
@@ -118,6 +131,7 @@ export interface SalesReturnRefundLedgerOption {
  * misleading with multiple concurrent drafts in flight. */
 export interface SalesReturnFormOptions {
   refundLedgers: SalesReturnRefundLedgerOption[];
+  paymentModes: PaymentModeOption[];
   isLedgerMappingComplete: boolean;
 }
 

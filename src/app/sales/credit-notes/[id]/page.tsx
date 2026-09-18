@@ -93,6 +93,7 @@ export default async function CreditNoteDetailPage({ params }: CreditNoteDetailP
             <p className="text-sm text-foreground">
               {REFUND_MODE_LABELS[creditNote.refundMode] ?? creditNote.refundMode}
               {creditNote.refundLedger ? ` — ${creditNote.refundLedger.name}` : ""}
+              {creditNote.paymentMode ? ` (${creditNote.paymentMode.name})` : ""}
             </p>
           </div>
           <div>

@@ -1919,17 +1919,24 @@ both clean.
 | Tracker # | Feature                                                | Depends On                                                              | Spec file                                                         | Status |
 | --------- | ------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- | ------ |
 | 83        | Payment Mode Master                                     | Ledger Master                                                             | `context/feature-specs/86-payment-mode-master.md`                 | ✅     |
-| 84        | Payment Mode Integration — Sales Documents              | Payment Mode Master; Sales Invoice; Sales Return                          | `context/feature-specs/91-payment-mode-integration-sales.md`      | ⬜     |
+| 84        | Payment Mode Integration — Sales Documents              | Payment Mode Master; Sales Invoice; Sales Return                          | `context/feature-specs/91-payment-mode-integration-sales.md`      | ✅     |
 | 85        | Payment Mode Integration — Purchase Documents           | Payment Mode Master; #84; Purchase Invoice; Purchase Return               | `context/feature-specs/92-payment-mode-integration-purchase.md`   | ⬜     |
 | 86        | Payment Mode Integration — Manual Vouchers              | Payment Mode Master; #84; Payment/Receipt/Contra Voucher                  | `context/feature-specs/93-payment-mode-integration-manual-vouchers.md` | ⬜     |
 | 87        | Liability Settlement                                    | Trial Balance; Payment Voucher                                            | `context/feature-specs/87-liability-settlement.md`                | ✅     |
 
-Specs 91–93 **drafted 2026-09-14** (documentation only, not yet implemented). Spec
-numbers 91/92/93 in the `context/feature-specs/` directory are distinct from v3's
-91–109 in `context-v3/feature-specs/` — both sequences are per-directory. Drafted in
-dependency order: spec 91 introduces the shared `assertPaymentModeMatchesLedger` helper
-and `getLedgerPaymentClass` classifier that specs 92 and 93 both reuse. Must be
-implemented in order: #84 (spec 91) → #85 (spec 92) → #86 (spec 93).
+Specs 91–93 **drafted 2026-09-14** (documentation only at the time). Spec numbers
+91/92/93 in the `context/feature-specs/` directory are distinct from v3's 91–109 in
+`context-v3/feature-specs/` — both sequences are per-directory. Drafted in dependency
+order: spec 91 introduces the shared `assertPaymentModeMatchesLedger` helper and
+`getLedgerPaymentClass` classifier that specs 92 and 93 both reuse. Must be implemented
+in order: #84 (spec 91) → #85 (spec 92) → #86 (spec 93).
+
+**#84 (spec 91) implemented 2026-09-18** — see `context/progress-tracker.md`'s matching
+dated entry for the full record. `assertPaymentModeMatchesLedger` (`src/lib/
+payment-mode-validation.ts`) and `getLedgerPaymentClass`/`getLedgerPaymentClassMap`
+(`src/lib/ledger-class.ts`) now exist and are ready for #85/#86 to reuse as spec 91
+intended. **Next Up: implement #85 (spec 92, Payment Mode Integration — Purchase
+Documents).**
 
 ## Item #87 (Liability Settlement, spec 87) implemented 2026-09-13
 
@@ -2006,9 +2013,14 @@ Phase Status
 2026-09-13 (`feature/payment-mode-master`, `--no-ff` merged, no conflicts, checks
 re-verified green). Liability Settlement (#87) implemented, reviewed, and merged into
 `main` 2026-09-13 (`feature/liability-settlement`, see above) — it has no ordering
-dependency on #84–#86, per spec 87's own explicit note. Items #84–#86 (Payment Mode
-Integration across Sales/Purchase/Manual Vouchers) remain not yet drafted/implemented.
-See `context/progress-tracker.md`'s Next Up for what comes next.
+dependency on #84–#86, per spec 87's own explicit note. **Payment Mode Integration —
+Sales Documents (#84, spec 91) implemented 2026-09-18** on `feature/payment-mode-
+integration-sales`, code-reviewed and security-reviewed (see
+`context/progress-tracker.md`'s matching dated entry for the full record and both
+reviews' findings/fixes). Items #85–#86 (Payment Mode Integration across Purchase
+Documents and Manual Vouchers) remain not yet implemented — #85 depends on #84's now-
+implemented shared helpers. See `context/progress-tracker.md`'s Next Up for what comes
+next.
 
 ---
 
