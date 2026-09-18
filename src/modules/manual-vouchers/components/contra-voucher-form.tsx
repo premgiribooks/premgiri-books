@@ -18,9 +18,11 @@ import {
   type CreateContraVoucherInput,
 } from "@/modules/manual-vouchers/validation/contra-voucher-schema";
 import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
+import type { PaymentModeOption } from "@/types/payment-mode";
 
 interface ContraVoucherFormProps {
   ledgerOptions: ManualVoucherLedgerOption[];
+  paymentModes: PaymentModeOption[];
 }
 
 function toNumberOrZero(value: number): number {
@@ -29,6 +31,25 @@ function toNumberOrZero(value: number): number {
 
 function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
   return ledgers.map((ledger) => ({ id: ledger.id, label: ledger.name, isActive: true }));
+}
+
+/** The closest-matching active Payment Mode for the source (`fromLedgerId`)
+ * ledger's class (93-payment-mode-integration-manual-vouchers.md's UI
+ * section) — mirrors payment-voucher-form.tsx's identical helper. Both
+ * Contra Voucher sides are guaranteed Cash/Bank, so an "ANY"-class mode
+ * always matches regardless of which side is checked. */
+function closestMatchingPaymentModeId(
+  ledgerClass: "CASH" | "BANK" | "NEITHER",
+  paymentModes: readonly PaymentModeOption[]
+): string | undefined {
+  const exact = paymentModes.find((mode) => mode.ledgerClass === ledgerClass);
+  if (exact) {
+    return exact.id;
+  }
+  if (ledgerClass === "NEITHER") {
+    return undefined;
+  }
+  return paymentModes.find((mode) => mode.ledgerClass === "ANY")?.id;
 }
 
 /**
@@ -42,7 +63,7 @@ function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
  * per spec) computes nothing client-side; the server independently computes
  * and validates the actual balanced entry set.
  */
-export function ContraVoucherForm({ ledgerOptions }: ContraVoucherFormProps) {
+export function ContraVoucherForm({ ledgerOptions, paymentModes }: ContraVoucherFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -50,6 +71,11 @@ export function ContraVoucherForm({ ledgerOptions }: ContraVoucherFormProps) {
     () => toOptions(ledgerOptions.filter((ledger) => ledger.isCashOrBank)),
     [ledgerOptions]
   );
+  const paymentModeOptions = React.useMemo(
+    () => paymentModes.map((mode) => ({ id: mode.id, label: mode.name, isActive: true })),
+    [paymentModes]
+  );
+  const ledgersById = React.useMemo(() => new Map(ledgerOptions.map((ledger) => [ledger.id, ledger])), [ledgerOptions]);
 
   const form = useForm<CreateContraVoucherInput>({
     resolver: zodResolver(createContraVoucherSchema),
@@ -58,10 +84,20 @@ export function ContraVoucherForm({ ledgerOptions }: ContraVoucherFormProps) {
       narration: "",
       fromLedgerId: "",
       toLedgerId: "",
+      paymentModeId: "",
       amount: 0,
     },
   });
-  const { control } = form;
+  const { control, setValue } = form;
+
+  function handleFromLedgerChange(ledgerId: string) {
+    setValue("fromLedgerId", ledgerId, { shouldValidate: true });
+    const ledgerClass = ledgersById.get(ledgerId)?.ledgerClass ?? "NEITHER";
+    const matchedModeId = closestMatchingPaymentModeId(ledgerClass, paymentModes);
+    if (matchedModeId) {
+      setValue("paymentModeId", matchedModeId, { shouldValidate: true });
+    }
+  }
 
   async function handleSubmit(data: CreateContraVoucherInput) {
     setIsSubmitting(true);
@@ -130,7 +166,7 @@ export function ContraVoucherForm({ ledgerOptions }: ContraVoucherFormProps) {
                   <ProductOptionSelector
                     options={cashOrBankOptions}
                     value={field.value || undefined}
-                    onChange={(value) => field.onChange(value ?? "")}
+                    onChange={(value) => handleFromLedgerChange(value ?? "")}
                     allowNone={false}
                     placeholder="Select the source Cash/Bank ledger"
                     emptyLabel="No Cash-in-Hand or bank ledger found"
@@ -155,6 +191,26 @@ export function ContraVoucherForm({ ledgerOptions }: ContraVoucherFormProps) {
                     allowNone={false}
                     placeholder="Select the destination Cash/Bank ledger"
                     emptyLabel="No Cash-in-Hand or bank ledger found"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name="paymentModeId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Transfer Method *</FormLabel>
+                <FormControl>
+                  <ProductOptionSelector
+                    options={paymentModeOptions}
+                    value={field.value || undefined}
+                    onChange={(value) => field.onChange(value ?? "")}
+                    allowNone={false}
+                    placeholder="Select a mode"
                   />
                 </FormControl>
                 <FormMessage />

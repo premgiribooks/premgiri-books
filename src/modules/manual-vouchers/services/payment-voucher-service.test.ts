@@ -9,24 +9,30 @@ const {
   getVoucherMock,
   listVouchersMock,
   assertLedgersAreCashOrBankMock,
+  getLedgerPaymentClassMapMock,
+  assertPaymentModeMatchesLedgerMock,
   ledgerFindManyMock,
   ledgerGroupFindManyMock,
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
   assertPermissionMock,
   getLedgerBalanceMock,
+  listActivePaymentModesMock,
 } = vi.hoisted(() => ({
   postVoucherMock: vi.fn(),
   cancelVoucherMock: vi.fn(),
   getVoucherMock: vi.fn(),
   listVouchersMock: vi.fn(),
   assertLedgersAreCashOrBankMock: vi.fn(),
+  getLedgerPaymentClassMapMock: vi.fn(),
+  assertPaymentModeMatchesLedgerMock: vi.fn(),
   ledgerFindManyMock: vi.fn(),
   ledgerGroupFindManyMock: vi.fn(),
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
   assertPermissionMock: vi.fn(),
   getLedgerBalanceMock: vi.fn(),
+  listActivePaymentModesMock: vi.fn(),
 }));
 
 vi.mock("@/engines/voucher/voucher-engine", () => ({
@@ -40,18 +46,26 @@ vi.mock("@/engines/voucher/voucher-engine", () => ({
 vi.mock("@/engines/voucher/voucher-queries", () => ({
   voucherQueries: { getLedgerBalance: getLedgerBalanceMock },
 }));
-vi.mock("@/lib/ledger-class", () => ({ assertLedgersAreCashOrBank: assertLedgersAreCashOrBankMock }));
+vi.mock("@/lib/ledger-class", () => ({
+  assertLedgersAreCashOrBank: assertLedgersAreCashOrBankMock,
+  getLedgerPaymentClassMap: getLedgerPaymentClassMapMock,
+}));
+vi.mock("@/lib/payment-mode-validation", () => ({ assertPaymentModeMatchesLedger: assertPaymentModeMatchesLedgerMock }));
 vi.mock("@/lib/current-user", () => ({ getCurrentCompanyUser: getCurrentCompanyUserMock }));
 vi.mock("@/lib/current-financial-year", () => ({ getCurrentFinancialYear: getCurrentFinancialYearMock }));
 vi.mock("@/lib/permissions", () => ({ assertPermission: assertPermissionMock }));
 vi.mock("@/modules/ledger-groups/repositories/ledger-group-repository", () => ({
   ledgerGroupRepository: { findMany: ledgerGroupFindManyMock },
 }));
+vi.mock("@/modules/payment-modes/services/payment-mode-service", () => ({
+  paymentModeService: { listActivePaymentModes: listActivePaymentModesMock },
+}));
 vi.mock("@/lib/prisma", () => ({
   prisma: { ledger: { findMany: ledgerFindManyMock } },
 }));
 
 import { AppError } from "@/lib/app-error";
+import { prisma } from "@/lib/prisma";
 import { paymentVoucherService } from "@/modules/manual-vouchers/services/payment-voucher-service";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -60,6 +74,7 @@ const FY_ID = "33333333-3333-4333-8333-333333333333";
 const CASH_LEDGER_ID = "44444444-4444-4444-8444-444444444444";
 const EXPENSE_LEDGER_ID = "55555555-5555-4555-8555-555555555555";
 const VOUCHER_ID = "66666666-6666-4666-8666-666666666666";
+const PAYMENT_MODE_ID = "77777777-7777-4777-8777-777777777777";
 
 const CURRENT_USER = { id: USER_ID, companyId: COMPANY_ID };
 
@@ -79,12 +94,15 @@ beforeEach(() => {
   getVoucherMock.mockReset();
   listVouchersMock.mockReset();
   assertLedgersAreCashOrBankMock.mockReset().mockResolvedValue(undefined);
+  getLedgerPaymentClassMapMock.mockReset().mockResolvedValue(new Map());
+  assertPaymentModeMatchesLedgerMock.mockReset().mockResolvedValue(undefined);
   ledgerFindManyMock.mockReset().mockResolvedValue([]);
   ledgerGroupFindManyMock.mockReset().mockResolvedValue([]);
   getCurrentCompanyUserMock.mockReset().mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockReset().mockResolvedValue({ id: FY_ID });
   assertPermissionMock.mockReset().mockResolvedValue(undefined);
   getLedgerBalanceMock.mockReset();
+  listActivePaymentModesMock.mockReset().mockResolvedValue([]);
 });
 
 describe("postPaymentVoucher — entry shape", () => {
@@ -92,6 +110,7 @@ describe("postPaymentVoucher — entry shape", () => {
     return {
       voucherDate: "2026-09-11",
       creditLedgerId: CASH_LEDGER_ID,
+      paymentModeId: PAYMENT_MODE_ID,
       debitLines: [{ ledgerId: EXPENSE_LEDGER_ID, amount: 500 }],
       ...overrides,
     };
@@ -166,6 +185,7 @@ describe("postPaymentVoucher — Credit-side ledger-class rejection", () => {
       paymentVoucherService.postPaymentVoucher({
         voucherDate: "2026-09-11",
         creditLedgerId: EXPENSE_LEDGER_ID,
+        paymentModeId: PAYMENT_MODE_ID,
         debitLines: [{ ledgerId: CASH_LEDGER_ID, amount: 100 }],
       })
     ).rejects.toThrow("is not a Cash-in-Hand or bank-linked ledger");
@@ -178,6 +198,7 @@ describe("postPaymentVoucher — Credit-side ledger-class rejection", () => {
     await paymentVoucherService.postPaymentVoucher({
       voucherDate: "2026-09-11",
       creditLedgerId: CASH_LEDGER_ID,
+      paymentModeId: PAYMENT_MODE_ID,
       debitLines: [{ ledgerId: EXPENSE_LEDGER_ID, amount: 100 }],
     });
 
@@ -187,6 +208,52 @@ describe("postPaymentVoucher — Credit-side ledger-class rejection", () => {
       [CASH_LEDGER_ID],
       "this payment"
     );
+  });
+});
+
+describe("postPaymentVoucher — Payment Mode validation (93-payment-mode-integration-manual-vouchers.md)", () => {
+  it("validates the payment mode against the Credit (Cash/Bank) ledger via the global prisma client", async () => {
+    postVoucherMock.mockResolvedValue(POSTED_PAYMENT_VOUCHER);
+
+    await paymentVoucherService.postPaymentVoucher({
+      voucherDate: "2026-09-11",
+      creditLedgerId: CASH_LEDGER_ID,
+      paymentModeId: PAYMENT_MODE_ID,
+      debitLines: [{ ledgerId: EXPENSE_LEDGER_ID, amount: 100 }],
+    });
+
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(prisma, PAYMENT_MODE_ID, CASH_LEDGER_ID, COMPANY_ID);
+    expect(postVoucherMock).toHaveBeenCalledWith(COMPANY_ID, expect.objectContaining({ paymentModeId: PAYMENT_MODE_ID }));
+  });
+
+  it("propagates the shared helper's rejection for a mismatched payment mode class", async () => {
+    assertPaymentModeMatchesLedgerMock.mockRejectedValue(
+      new AppError('Payment mode "Cheque" requires a bank-linked ledger.')
+    );
+
+    await expect(
+      paymentVoucherService.postPaymentVoucher({
+        voucherDate: "2026-09-11",
+        creditLedgerId: CASH_LEDGER_ID,
+        paymentModeId: PAYMENT_MODE_ID,
+        debitLines: [{ ledgerId: EXPENSE_LEDGER_ID, amount: 100 }],
+      })
+    ).rejects.toThrow("requires a bank-linked ledger");
+    expect(postVoucherMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing paymentModeId before calling the engine", async () => {
+    const inputMissingMode = {
+      voucherDate: "2026-09-11",
+      creditLedgerId: CASH_LEDGER_ID,
+      debitLines: [{ ledgerId: EXPENSE_LEDGER_ID, amount: 100 }],
+      // A raw/unchecked payload (e.g. a hand-crafted server action call)
+      // can omit a required field even though the Zod-inferred input type
+      // says it can't — this cast simulates that at the type layer.
+    } as unknown as Parameters<typeof paymentVoucherService.postPaymentVoucher>[0];
+
+    await expect(paymentVoucherService.postPaymentVoucher(inputMissingMode)).rejects.toThrow();
+    expect(postVoucherMock).not.toHaveBeenCalled();
   });
 });
 
@@ -274,5 +341,20 @@ describe("getLedgerOutstandingBalance", () => {
     expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "accounting", "view");
     expect(getLedgerBalanceMock).toHaveBeenCalledWith(COMPANY_ID, CASH_LEDGER_ID);
     expect(result).toEqual(balance);
+  });
+});
+
+// Shared by Payment Voucher, Receipt Voucher, and Contra Voucher's forms —
+// mirrors listLedgerOptions's own shared-across-screens posture.
+describe("listPaymentModes", () => {
+  it("asserts accounting/view and maps the shared service's PaymentMode rows down to the picker's option shape", async () => {
+    listActivePaymentModesMock.mockResolvedValue([
+      { id: PAYMENT_MODE_ID, name: "Cash", ledgerClass: "CASH", isActive: true, isSystemDefined: true, companyId: COMPANY_ID },
+    ]);
+
+    const result = await paymentVoucherService.listPaymentModes();
+
+    expect(assertPermissionMock).toHaveBeenCalledWith(CURRENT_USER, "accounting", "view");
+    expect(result).toEqual([{ id: PAYMENT_MODE_ID, name: "Cash", ledgerClass: "CASH" }]);
   });
 });

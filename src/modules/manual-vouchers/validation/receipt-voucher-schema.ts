@@ -31,6 +31,9 @@ export const createReceiptVoucherSchema = z.object({
   voucherDate: VOUCHER_DATE_SCHEMA,
   narration: NARRATION_SCHEMA,
   debitLedgerId: z.uuid("Select the Cash/Bank ledger being received into"),
+  // 93-payment-mode-integration-manual-vouchers.md — required on the
+  // Cash/Bank (Debit) side; validated against debitLedgerId's own class.
+  paymentModeId: z.uuid("Select a payment mode"),
   creditLines: z.array(creditLineSchema).min(1, "At least one credit line is required"),
 });
 

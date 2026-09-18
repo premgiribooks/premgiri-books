@@ -22,9 +22,11 @@ import {
   type CreateReceiptVoucherInput,
 } from "@/modules/manual-vouchers/validation/receipt-voucher-schema";
 import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
+import type { PaymentModeOption } from "@/types/payment-mode";
 
 interface ReceiptVoucherFormProps {
   ledgerOptions: ManualVoucherLedgerOption[];
+  paymentModes: PaymentModeOption[];
 }
 
 function toNumberOrZero(value: number): number {
@@ -33,6 +35,23 @@ function toNumberOrZero(value: number): number {
 
 function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
   return ledgers.map((ledger) => ({ id: ledger.id, label: ledger.name, isActive: true }));
+}
+
+/** The closest-matching active Payment Mode for a given ledger's class
+ * (93-payment-mode-integration-manual-vouchers.md's UI section) — mirrors
+ * payment-voucher-form.tsx's identical helper. */
+function closestMatchingPaymentModeId(
+  ledgerClass: "CASH" | "BANK" | "NEITHER",
+  paymentModes: readonly PaymentModeOption[]
+): string | undefined {
+  const exact = paymentModes.find((mode) => mode.ledgerClass === ledgerClass);
+  if (exact) {
+    return exact.id;
+  }
+  if (ledgerClass === "NEITHER") {
+    return undefined;
+  }
+  return paymentModes.find((mode) => mode.ledgerClass === "ANY")?.id;
 }
 
 /**
@@ -45,7 +64,7 @@ function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
  * own convenience; the server independently computes and validates the
  * actual balanced entry set.
  */
-export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
+export function ReceiptVoucherForm({ ledgerOptions, paymentModes }: ReceiptVoucherFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -54,6 +73,11 @@ export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
     [ledgerOptions]
   );
   const allLedgerOptions = React.useMemo(() => toOptions(ledgerOptions), [ledgerOptions]);
+  const paymentModeOptions = React.useMemo(
+    () => paymentModes.map((mode) => ({ id: mode.id, label: mode.name, isActive: true })),
+    [paymentModes]
+  );
+  const ledgersById = React.useMemo(() => new Map(ledgerOptions.map((ledger) => [ledger.id, ledger])), [ledgerOptions]);
 
   const form = useForm<CreateReceiptVoucherInput>({
     resolver: zodResolver(createReceiptVoucherSchema),
@@ -61,11 +85,21 @@ export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
       voucherDate: new Date().toISOString().slice(0, 10),
       narration: "",
       debitLedgerId: "",
+      paymentModeId: "",
       creditLines: [{ ledgerId: "", amount: 0 }],
     },
   });
-  const { control } = form;
+  const { control, setValue } = form;
   const { fields, append, remove } = useFieldArray({ control, name: "creditLines" });
+
+  function handleDebitLedgerChange(ledgerId: string) {
+    setValue("debitLedgerId", ledgerId, { shouldValidate: true });
+    const ledgerClass = ledgersById.get(ledgerId)?.ledgerClass ?? "NEITHER";
+    const matchedModeId = closestMatchingPaymentModeId(ledgerClass, paymentModes);
+    if (matchedModeId) {
+      setValue("paymentModeId", matchedModeId, { shouldValidate: true });
+    }
+  }
   const creditLines = useWatch({ control, name: "creditLines" });
   const totalAmount = (creditLines ?? []).reduce((sum, line) => sum + (line?.amount || 0), 0);
 
@@ -115,13 +149,33 @@ export function ReceiptVoucherForm({ ledgerOptions }: ReceiptVoucherFormProps) {
                   <ProductOptionSelector
                     options={cashOrBankOptions}
                     value={field.value || undefined}
-                    onChange={(value) => field.onChange(value ?? "")}
+                    onChange={(value) => handleDebitLedgerChange(value ?? "")}
                     allowNone={false}
                     placeholder="Select the Cash/Bank ledger"
                     emptyLabel="No Cash-in-Hand or bank ledger found"
                   />
                 </FormControl>
                 <LedgerOutstandingBalance ledgerId={field.value || undefined} fetchBalance={getLedgerOutstandingBalanceAction} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name="paymentModeId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Mode *</FormLabel>
+                <FormControl>
+                  <ProductOptionSelector
+                    options={paymentModeOptions}
+                    value={field.value || undefined}
+                    onChange={(value) => field.onChange(value ?? "")}
+                    allowNone={false}
+                    placeholder="Select a mode"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

@@ -4,12 +4,14 @@ import { createReceiptVoucherSchema } from "@/modules/manual-vouchers/validation
 
 const LEDGER_A = "11111111-1111-4111-8111-111111111111";
 const LEDGER_B = "22222222-2222-4222-8222-222222222222";
+const PAYMENT_MODE_ID = "33333333-3333-4333-8333-333333333333";
 
 function validInput(overrides: Record<string, unknown> = {}) {
   return {
     voucherDate: "2026-09-11",
     narration: "Received against outstanding balance",
     debitLedgerId: LEDGER_A,
+    paymentModeId: PAYMENT_MODE_ID,
     creditLines: [{ ledgerId: LEDGER_B, amount: 500 }],
     ...overrides,
   };
@@ -42,6 +44,12 @@ describe("createReceiptVoucherSchema", () => {
 
   it("requires a valid uuid debitLedgerId", () => {
     expect(createReceiptVoucherSchema.safeParse(validInput({ debitLedgerId: "not-a-uuid" })).success).toBe(false);
+  });
+
+  // 93-payment-mode-integration-manual-vouchers.md — required on the
+  // Cash/Bank (Debit) side.
+  it("requires a paymentModeId", () => {
+    expect(createReceiptVoucherSchema.safeParse(validInput({ paymentModeId: undefined })).success).toBe(false);
   });
 
   it("rejects zero credit lines", () => {

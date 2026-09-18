@@ -2,6 +2,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
+import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import type { PostedVoucher, VoucherListFilters } from "@/engines/voucher/types";
@@ -74,12 +75,17 @@ export const contraVoucherService = {
 
     const data = createContraVoucherSchema.parse(input);
     await assertLedgersAreCashOrBank(prisma, user.companyId, [data.fromLedgerId, data.toLedgerId], "this contra voucher");
+    // Validated against fromLedgerId (the credited/source side) — see this
+    // schema's own comment: both sides are guaranteed Cash/Bank, so an
+    // "ANY"-class mode always matches regardless of which side is checked.
+    await assertPaymentModeMatchesLedger(prisma, data.paymentModeId, data.fromLedgerId, user.companyId);
 
     return voucherEngine.postVoucher(user.companyId, {
       financialYearId: financialYear.id,
       voucherType: "CONTRA",
       voucherDate: data.voucherDate,
       narration: data.narration,
+      paymentModeId: data.paymentModeId,
       entries: [
         { ledgerId: data.toLedgerId, entryType: "DEBIT", amount: data.amount },
         { ledgerId: data.fromLedgerId, entryType: "CREDIT", amount: data.amount },

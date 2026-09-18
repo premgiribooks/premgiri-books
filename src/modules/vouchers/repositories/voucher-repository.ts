@@ -17,7 +17,12 @@ import { toPaise } from "@/engines/voucher/voucher-validation";
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
-type VoucherWithEntries = PrismaVoucher & { entries: PrismaVoucherEntry[] };
+type VoucherWithEntries = PrismaVoucher & {
+  entries: PrismaVoucherEntry[];
+  paymentMode: { id: string; name: string } | null;
+};
+
+const PAYMENT_MODE_INCLUDE = { paymentMode: { select: { id: true, name: true } } } as const;
 
 // Decimal -> number normalization at the repository boundary (established
 // convention, e.g. ledger-repository.ts's toLedger) — entries are also
@@ -35,6 +40,8 @@ function toPostedVoucher(raw: VoucherWithEntries): PostedVoucher {
     narration: raw.narration,
     referenceType: raw.referenceType,
     referenceId: raw.referenceId,
+    paymentModeId: raw.paymentModeId,
+    paymentMode: raw.paymentMode,
     totalAmount: raw.totalAmount.toNumber(),
     reversalOfId: raw.reversalOfId,
     createdByUserId: raw.createdByUserId,
@@ -131,6 +138,7 @@ export const voucherRepository = {
         narration: input.narration ?? null,
         referenceType: input.referenceType ?? null,
         referenceId: input.referenceId ?? null,
+        paymentModeId: input.paymentModeId ?? null,
         totalAmount,
         createdByUserId: input.createdByUserId ?? null,
         entries: {
@@ -142,7 +150,7 @@ export const voucherRepository = {
           })),
         },
       },
-      include: { entries: true },
+      include: { entries: true, ...PAYMENT_MODE_INCLUDE },
     });
 
     return toPostedVoucher(created);
@@ -174,6 +182,10 @@ export const voucherRepository = {
         narration: `Reversal of ${original.voucherNumber}`,
         totalAmount: original.totalAmount,
         reversalOfId: original.id,
+        // Deliberately NOT carried over from `original` — a reversal is a
+        // system-generated correcting entry, not a fresh manual payment, so
+        // it has no payment mode of its own (mirrors this same function
+        // never carrying over `original`'s narration either).
         entries: {
           create: original.entries.map((entry) => ({
             ledgerId: entry.ledgerId,
@@ -183,7 +195,7 @@ export const voucherRepository = {
           })),
         },
       },
-      include: { entries: true },
+      include: { entries: true, ...PAYMENT_MODE_INCLUDE },
     });
 
     await tx.voucher.update({ where: { id: original.id }, data: { status: "CANCELLED" } });
@@ -192,7 +204,7 @@ export const voucherRepository = {
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<PostedVoucher | null> {
-    const row = await client.voucher.findUnique({ where: { id }, include: { entries: true } });
+    const row = await client.voucher.findUnique({ where: { id }, include: { entries: true, ...PAYMENT_MODE_INCLUDE } });
     return row ? toPostedVoucher(row) : null;
   },
 
@@ -221,7 +233,7 @@ export const voucherRepository = {
   async findMany(companyId: string, filters: VoucherListFilters = {}): Promise<PostedVoucher[]> {
     const rows = await prisma.voucher.findMany({
       where: buildWhere(companyId, filters),
-      include: { entries: true },
+      include: { entries: true, ...PAYMENT_MODE_INCLUDE },
       orderBy: [{ voucherDate: "desc" }, { voucherNumber: "desc" }],
     });
     return rows.map(toPostedVoucher);

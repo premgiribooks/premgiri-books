@@ -24,6 +24,11 @@ export interface PostedVoucher {
   narration: string | null;
   referenceType: string | null;
   referenceId: string | null;
+  // 93-payment-mode-integration-manual-vouchers.md — null for Journal
+  // Vouchers and every auto-posted document voucher; populated only for
+  // manually-created Payment/Receipt/Contra Vouchers.
+  paymentModeId: string | null;
+  paymentMode: { id: string; name: string } | null;
   totalAmount: number;
   reversalOfId: string | null;
   createdByUserId: string | null;

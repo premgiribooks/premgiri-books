@@ -85,6 +85,8 @@ describe("voucherRepository.create", () => {
       narration: null,
       referenceType: null,
       referenceId: null,
+      paymentModeId: null,
+      paymentMode: null,
       totalAmount: decimal(100),
       reversalOfId: null,
       createdByUserId: null,
@@ -144,6 +146,8 @@ describe("voucherRepository.reverse", () => {
     narration: null,
     referenceType: null,
     referenceId: null,
+    paymentModeId: null,
+    paymentMode: null,
     totalAmount: 100,
     reversalOfId: null,
     createdByUserId: null,
@@ -167,6 +171,8 @@ describe("voucherRepository.reverse", () => {
       narration: "Reversal of PMT-0001",
       referenceType: null,
       referenceId: null,
+      paymentModeId: null,
+      paymentMode: null,
       totalAmount: decimal(100),
       reversalOfId: "v-1",
       createdByUserId: null,
@@ -203,6 +209,53 @@ describe("voucherRepository.reverse", () => {
     expect(voucherUpdateMock).toHaveBeenCalledWith({ where: { id: "v-1" }, data: { status: "CANCELLED" } });
     expect(result.entries.map((e) => e.entryType)).toEqual(["CREDIT", "DEBIT"]);
   });
+
+  // 93-payment-mode-integration-manual-vouchers.md: a reversal is a
+  // system-generated correcting entry, not a fresh manual payment, so it
+  // must never inherit the original voucher's own payment mode — pins this
+  // down with a non-null `original.paymentModeId` (the earlier test's fixture
+  // is null throughout, so it can't actually catch a future regression that
+  // starts copying the field over).
+  it("never carries the original voucher's paymentModeId into the reversal", async () => {
+    const originalWithMode: PostedVoucher = {
+      ...original,
+      paymentModeId: "mode-1",
+      paymentMode: { id: "mode-1", name: "Cash" },
+    };
+    voucherCreateMock.mockResolvedValueOnce({
+      id: "v-2",
+      companyId: COMPANY_ID,
+      financialYearId: FY_ID,
+      voucherType: "PAYMENT",
+      voucherNumber: "PMT-0002",
+      voucherDate: originalWithMode.voucherDate,
+      status: "POSTED",
+      narration: "Reversal of PMT-0001",
+      referenceType: null,
+      referenceId: null,
+      paymentModeId: null,
+      paymentMode: null,
+      totalAmount: decimal(100),
+      reversalOfId: "v-1",
+      createdByUserId: null,
+      createdAt: originalWithMode.createdAt,
+      updatedAt: originalWithMode.updatedAt,
+      entries: [
+        { id: "e-3", ledgerId: LEDGER_A, entryType: "CREDIT", amount: decimal(100), lineNumber: 1 },
+        { id: "e-4", ledgerId: LEDGER_B, entryType: "DEBIT", amount: decimal(100), lineNumber: 2 },
+      ],
+    });
+    voucherUpdateMock.mockResolvedValueOnce({});
+
+    await voucherRepository.reverse(fakeTx(), COMPANY_ID, originalWithMode, {
+      documentSequenceId: "seq-1",
+      number: 2,
+      formatted: "PMT-0002",
+    });
+
+    const createData = voucherCreateMock.mock.calls[0][0].data;
+    expect(createData.paymentModeId).toBeUndefined();
+  });
 });
 
 describe("voucherRepository.findById", () => {
@@ -223,6 +276,8 @@ describe("voucherRepository.findById", () => {
       narration: null,
       referenceType: null,
       referenceId: null,
+      paymentModeId: null,
+      paymentMode: null,
       totalAmount: decimal(250),
       reversalOfId: null,
       createdByUserId: null,

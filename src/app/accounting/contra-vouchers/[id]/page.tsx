@@ -71,6 +71,13 @@ export default async function ContraVoucherDetailPage({ params }: ContraVoucherD
           ) : null}
         </div>
 
+        {voucher.paymentMode ? (
+          <div>
+            <p className="text-xs text-muted-foreground">Transfer Method</p>
+            <p className="text-sm text-foreground">{voucher.paymentMode.name}</p>
+          </div>
+        ) : null}
+
         {voucher.narration ? (
           <div>
             <p className="text-xs text-muted-foreground">Narration</p>

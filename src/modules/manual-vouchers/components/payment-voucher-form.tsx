@@ -24,11 +24,14 @@ import {
   type CreatePaymentVoucherInput,
 } from "@/modules/manual-vouchers/validation/payment-voucher-schema";
 import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
+import type { PaymentModeOption } from "@/types/payment-mode";
+import type { PaymentVoucherPrefill } from "@/modules/manual-vouchers/utils/resolve-payment-voucher-prefill";
 
 interface PaymentVoucherFormProps {
   ledgerOptions: ManualVoucherLedgerOption[];
-  /** 87-liability-settlement.md's own prefill — seeds the first Debit line's defaultValues when the New page resolved a valid `debitLedgerId`/`amount` query-param pair. */
-  prefill?: { ledgerId: string; amount: number };
+  paymentModes: PaymentModeOption[];
+  /** 87-liability-settlement.md's own prefill — seeds the first Debit line's defaultValues when the New page resolved a valid `debitLedgerId`/`amount` query-param pair, and (93-payment-mode-integration-manual-vouchers.md) optionally the Payment Mode field when a valid `paymentModeId` hint was also present. */
+  prefill?: PaymentVoucherPrefill;
 }
 
 function toNumberOrZero(value: number): number {
@@ -37,6 +40,26 @@ function toNumberOrZero(value: number): number {
 
 function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
   return ledgers.map((ledger) => ({ id: ledger.id, label: ledger.name, isActive: true }));
+}
+
+/** The closest-matching active Payment Mode for a given ledger's class
+ * (93-payment-mode-integration-manual-vouchers.md's UI section) — an exact
+ * `ledgerClass` match wins over an `ANY` mode, which is the loosest fit.
+ * Mirrors sales-invoice-payment-editor.tsx's identical helper. Returns
+ * `undefined` when nothing matches — the field is simply left for the user
+ * to pick manually, re-validated server-side regardless. */
+function closestMatchingPaymentModeId(
+  ledgerClass: "CASH" | "BANK" | "NEITHER",
+  paymentModes: readonly PaymentModeOption[]
+): string | undefined {
+  const exact = paymentModes.find((mode) => mode.ledgerClass === ledgerClass);
+  if (exact) {
+    return exact.id;
+  }
+  if (ledgerClass === "NEITHER") {
+    return undefined;
+  }
+  return paymentModes.find((mode) => mode.ledgerClass === "ANY")?.id;
 }
 
 /**
@@ -48,7 +71,7 @@ function toOptions(ledgers: ManualVoucherLedgerOption[]): ProductOptionItem[] {
  * user's own convenience; the server independently computes and validates
  * the actual balanced entry set.
  */
-export function PaymentVoucherForm({ ledgerOptions, prefill }: PaymentVoucherFormProps) {
+export function PaymentVoucherForm({ ledgerOptions, paymentModes, prefill }: PaymentVoucherFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -57,6 +80,11 @@ export function PaymentVoucherForm({ ledgerOptions, prefill }: PaymentVoucherFor
     [ledgerOptions]
   );
   const allLedgerOptions = React.useMemo(() => toOptions(ledgerOptions), [ledgerOptions]);
+  const paymentModeOptions = React.useMemo(
+    () => paymentModes.map((mode) => ({ id: mode.id, label: mode.name, isActive: true })),
+    [paymentModes]
+  );
+  const ledgersById = React.useMemo(() => new Map(ledgerOptions.map((ledger) => [ledger.id, ledger])), [ledgerOptions]);
 
   const form = useForm<CreatePaymentVoucherInput>({
     resolver: zodResolver(createPaymentVoucherSchema),
@@ -64,11 +92,21 @@ export function PaymentVoucherForm({ ledgerOptions, prefill }: PaymentVoucherFor
       voucherDate: new Date().toISOString().slice(0, 10),
       narration: "",
       creditLedgerId: "",
+      paymentModeId: prefill?.paymentModeId ?? "",
       debitLines: [{ ledgerId: prefill?.ledgerId ?? "", amount: prefill?.amount ?? 0 }],
     },
   });
-  const { control } = form;
+  const { control, setValue } = form;
   const { fields, append, remove } = useFieldArray({ control, name: "debitLines" });
+
+  function handleCreditLedgerChange(ledgerId: string) {
+    setValue("creditLedgerId", ledgerId, { shouldValidate: true });
+    const ledgerClass = ledgersById.get(ledgerId)?.ledgerClass ?? "NEITHER";
+    const matchedModeId = closestMatchingPaymentModeId(ledgerClass, paymentModes);
+    if (matchedModeId) {
+      setValue("paymentModeId", matchedModeId, { shouldValidate: true });
+    }
+  }
   const debitLines = useWatch({ control, name: "debitLines" });
   const totalAmount = (debitLines ?? []).reduce((sum, line) => sum + (line?.amount || 0), 0);
 
@@ -118,13 +156,33 @@ export function PaymentVoucherForm({ ledgerOptions, prefill }: PaymentVoucherFor
                   <ProductOptionSelector
                     options={cashOrBankOptions}
                     value={field.value || undefined}
-                    onChange={(value) => field.onChange(value ?? "")}
+                    onChange={(value) => handleCreditLedgerChange(value ?? "")}
                     allowNone={false}
                     placeholder="Select the Cash/Bank ledger"
                     emptyLabel="No Cash-in-Hand or bank ledger found"
                   />
                 </FormControl>
                 <LedgerOutstandingBalance ledgerId={field.value || undefined} fetchBalance={getLedgerOutstandingBalanceAction} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={control}
+            name="paymentModeId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Mode *</FormLabel>
+                <FormControl>
+                  <ProductOptionSelector
+                    options={paymentModeOptions}
+                    value={field.value || undefined}
+                    onChange={(value) => field.onChange(value ?? "")}
+                    allowNone={false}
+                    placeholder="Select a mode"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

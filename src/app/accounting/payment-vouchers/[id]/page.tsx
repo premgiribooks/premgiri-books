@@ -70,6 +70,13 @@ export default async function PaymentVoucherDetailPage({ params }: PaymentVouche
           ) : null}
         </div>
 
+        {voucher.paymentMode ? (
+          <div>
+            <p className="text-xs text-muted-foreground">Payment Mode</p>
+            <p className="text-sm text-foreground">{voucher.paymentMode.name}</p>
+          </div>
+        ) : null}
+
         {voucher.narration ? (
           <div>
             <p className="text-xs text-muted-foreground">Narration</p>

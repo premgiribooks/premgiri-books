@@ -9,4 +9,10 @@ export interface ManualVoucherLedgerOption {
   name: string;
   /** Active-and-under-Cash-in-Hand, or carries a BankAccount detail row — the class every manual-voucher screen's restricted side is limited to (src/lib/ledger-class.ts). */
   isCashOrBank: boolean;
+  /** `ledgerClass` (93-payment-mode-integration-manual-vouchers.md) is this
+   * ledger's three-way classification against the Payment Mode master —
+   * lets Payment/Receipt/Contra Voucher's forms auto-select the
+   * closest-matching active Payment Mode when the Cash/Bank ledger changes,
+   * without a server round trip (mirrors SalesInvoicePaymentLedgerOption). */
+  ledgerClass: "CASH" | "BANK" | "NEITHER";
 }

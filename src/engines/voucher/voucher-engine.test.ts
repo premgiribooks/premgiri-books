@@ -95,6 +95,8 @@ function postedVoucher(overrides: Partial<PostedVoucher> = {}): PostedVoucher {
     narration: null,
     referenceType: null,
     referenceId: null,
+    paymentModeId: null,
+    paymentMode: null,
     totalAmount: 100,
     reversalOfId: null,
     createdByUserId: null,

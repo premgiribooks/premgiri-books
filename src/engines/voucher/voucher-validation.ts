@@ -105,6 +105,13 @@ export const postVoucherInputSchema = z
     referenceType: z.string().trim().max(50, "Reference type must be at most 50 characters").optional(),
     referenceId: z.uuid("Reference id must be a valid id").optional(),
     createdByUserId: z.uuid("Created-by user id must be a valid id").optional(),
+    // 93-payment-mode-integration-manual-vouchers.md — a document-level,
+    // optional attribute. Only Payment/Receipt/Contra Voucher's own services
+    // ever pass one (already validated against their Cash/Bank ledger via
+    // assertPaymentModeMatchesLedger before reaching this engine); every
+    // other caller (Journal Voucher, every auto-posted document service)
+    // omits it, leaving the posted Voucher row's paymentModeId null.
+    paymentModeId: z.uuid("Payment mode id must be a valid id").optional(),
     entries: z.array(voucherEntryLineSchema).min(2, "A voucher must have at least 2 entries"),
   })
   .refine((data) => isBalanced(data.entries), {
