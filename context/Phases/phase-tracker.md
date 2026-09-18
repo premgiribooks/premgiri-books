@@ -1944,7 +1944,8 @@ utilities). Code review + security review (parallel subagents) both APPROVE, no
 CRITICAL/HIGH findings — one inherited MEDIUM (pre-existing `ledger-class.ts` gap, not
 introduced here) and one LOW (stale doc comment, fixed). Not yet merged to `main` —
 pending push/PR/merge and the user's own verification. **Next Up: implement #86 (spec 93,
-Payment Mode Integration — Manual Vouchers).**
+Payment Mode Integration — Manual Vouchers).** #85 pushed and merged into `main` (merge
+commit `95ddb36`), re-verified clean against the merged result.
 
 ## Item #87 (Liability Settlement, spec 87) implemented 2026-09-13
 

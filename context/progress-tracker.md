@@ -4820,10 +4820,18 @@ tests passing** (+ tests added for the two new calling-convention assertions and
 new schema negative cases, on top of the existing suite), and `next build` — succeeds;
 `/purchase/invoices*` and `/purchase/returns*` both appear in the route table.
 
-**Not yet done**: push to `origin`, PR, and merge into `main` — still pending, this branch
-has not yet been merged; the follow-up patch migration for the sales-side enum-cast
-landmine (separate task, not blocking this feature); live browser click-through —
-deferred to the user's own session, consistent with this codebase's convention.
+**Pushed `feature/payment-mode-integration-purchase` to `origin`, merged `--no-ff` into
+`main`** (merge commit `95ddb36`, no conflicts) after explicit user confirmation, given
+this branch carries a schema migration already applied against the shared dev database.
+Re-verified against the merged result: `npx prisma generate`, `npx prisma migrate status`
+(schema already up to date — the migration was applied during implementation), `npx tsc
+--noEmit`, `npx eslint src prisma` (0 errors, same 2 pre-existing warnings), `npx vitest
+run` (153 files, 2106 tests), all pass. Pushed `main` to `origin` (`77c40c5..95ddb36`).
+
+**Not yet done**: the follow-up patch migration for the sales-side enum-cast landmine
+(separate task, not blocking this feature); live browser click-through — this session ran
+the automated check suite only, consistent with this codebase's own convention of
+deferring interactive UI verification to the user's own session for most features.
 
 Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
 Rule. **Next Up: #86 (spec 93, Payment Mode Integration — Manual Vouchers)**, per the
