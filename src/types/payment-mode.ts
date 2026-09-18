@@ -11,8 +11,9 @@ export interface PaymentModeListFilters {
 }
 
 /** A Payment Mode picker's option shape — shared by every payment-line
- * dropdown across Sales Invoice, Sales Return, and Credit Note
- * (91-payment-mode-integration-sales.md's UI section). */
+ * dropdown across Sales Invoice, Sales Return, Credit Note
+ * (91-payment-mode-integration-sales.md's UI section), and Purchase Invoice,
+ * Purchase Return (92-payment-mode-integration-purchase.md's UI section). */
 export interface PaymentModeOption {
   id: string;
   name: string;

@@ -72,12 +72,24 @@ const purchaseReturnBaseSchema = z.object({
   reason: REASON_SCHEMA,
   refundMode: z.enum(REFUND_MODE_VALUES).optional(),
   refundLedgerId: z.uuid("Select a valid refund ledger").optional(),
+  // Required exactly when CASH_REFUND — mirrors refundLedgerId's own
+  // conditional requirement (92-payment-mode-integration-purchase.md,
+  // identical to sales-return-schema.ts's own paymentModeId field: a
+  // LEDGER_ADJUSTMENT return never touches a cash/bank ledger at all, so it
+  // has no payment mode to select).
+  paymentModeId: z.uuid("Select a payment mode").optional(),
   lines: z.array(purchaseReturnLineSchema).min(1, "A purchase return must have at least one line"),
 });
 
 /** A refund ledger is required whenever CASH_REFUND is explicitly chosen. */
 function refundLedgerRequirementMet(data: { refundMode?: string; refundLedgerId?: string }): boolean {
   return data.refundMode !== "CASH_REFUND" || Boolean(data.refundLedgerId);
+}
+
+/** A payment mode is required whenever CASH_REFUND is explicitly chosen —
+ * mirrors refundLedgerRequirementMet exactly. */
+function paymentModeRequirementMet(data: { refundMode?: string; paymentModeId?: string }): boolean {
+  return data.refundMode !== "CASH_REFUND" || Boolean(data.paymentModeId);
 }
 
 /** No `purchaseInvoiceItemId` may appear twice within one submission — the
@@ -94,6 +106,10 @@ export const createPurchaseReturnSchema = purchaseReturnBaseSchema
   .refine(refundLedgerRequirementMet, {
     message: "Select a refund ledger for a cash refund.",
     path: ["refundLedgerId"],
+  })
+  .refine(paymentModeRequirementMet, {
+    message: "Select a payment mode for a cash refund.",
+    path: ["paymentModeId"],
   })
   .refine(linesHaveNoDuplicateInvoiceItem, {
     message: "Each invoice line can only appear once — increase its quantity instead of adding it twice.",

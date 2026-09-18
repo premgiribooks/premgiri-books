@@ -26,6 +26,7 @@ const PURCHASE_INVOICE_INCLUDE = {
 
 const REFUND_LEDGER_INCLUDE = {
   refundLedger: { select: { id: true, name: true } },
+  paymentMode: { select: { id: true, name: true } },
 } as const;
 
 const ITEM_INCLUDE = {
@@ -77,7 +78,7 @@ function toPurchaseReturnListRow(raw: PurchaseReturnListRowRaw): PurchaseReturnL
 }
 
 function toPurchaseReturnDetail(raw: PurchaseReturnDetailRaw): PurchaseReturnDetail {
-  const { purchaseInvoice, refundLedger, items, ...header } = raw;
+  const { purchaseInvoice, refundLedger, paymentMode, items, ...header } = raw;
   const normalizedHeader: Record<string, unknown> = { ...header };
   for (const field of PURCHASE_RETURN_DECIMAL_FIELDS) {
     normalizedHeader[field] = (header as unknown as Record<string, Prisma.Decimal>)[field].toNumber();
@@ -116,6 +117,7 @@ function toPurchaseReturnDetail(raw: PurchaseReturnDetailRaw): PurchaseReturnDet
       supplierName: supplierName(purchaseInvoice),
     },
     refundLedger,
+    paymentMode,
     items: normalizedItems,
   };
 }
@@ -163,6 +165,7 @@ export interface PurchaseReturnHeaderPersistData {
   returnDate: Date;
   refundMode: "LEDGER_ADJUSTMENT" | "CASH_REFUND";
   refundLedgerId: string | null;
+  paymentModeId: string | null;
   reason: string | null;
   taxableAmount: number;
   totalCgst: number;

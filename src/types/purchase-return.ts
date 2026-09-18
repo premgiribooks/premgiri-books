@@ -3,6 +3,8 @@ import type {
   PurchaseReturnItem as PrismaPurchaseReturnItem,
 } from "@prisma/client";
 
+import type { PaymentModeOption } from "@/types/payment-mode";
+
 export type { PurchaseReturnStatus, RefundMode } from "@prisma/client";
 
 type PurchaseReturnItemDecimalField = "quantity" | "taxableAmount" | "cgst" | "sgst" | "igst" | "cess" | "totalAmount";
@@ -48,9 +50,15 @@ export interface PurchaseReturnRefundLedgerSnapshot {
   name: string;
 }
 
+export interface PurchaseReturnPaymentModeSnapshot {
+  id: string;
+  name: string;
+}
+
 export interface PurchaseReturnDetail extends PurchaseReturn {
   purchaseInvoice: PurchaseReturnInvoiceSnapshot;
   refundLedger: PurchaseReturnRefundLedgerSnapshot | null;
+  paymentMode: PurchaseReturnPaymentModeSnapshot | null;
   items: PurchaseReturnItemDetail[];
 }
 
@@ -104,10 +112,16 @@ export interface ReturnablePurchaseInvoiceOption {
   supplierName: string;
 }
 
+/** `ledgerClass` (92-payment-mode-integration-purchase.md) is this ledger's
+ * three-way classification against the Payment Mode master — lets the form
+ * auto-select the closest-matching active Payment Mode when the refund
+ * ledger changes, without a server round trip (mirrors
+ * SalesReturnRefundLedgerOption). */
 export interface PurchaseReturnRefundLedgerOption {
   id: string;
   name: string;
   groupName: string;
+  ledgerClass: "CASH" | "BANK" | "NEITHER";
 }
 
 /** Everything the Purchase Return Form needs beyond the picked invoice's own
@@ -117,6 +131,7 @@ export interface PurchaseReturnRefundLedgerOption {
  * preview would be misleading with multiple concurrent drafts in flight. */
 export interface PurchaseReturnFormOptions {
   refundLedgers: PurchaseReturnRefundLedgerOption[];
+  paymentModes: PaymentModeOption[];
   isLedgerMappingComplete: boolean;
 }
 

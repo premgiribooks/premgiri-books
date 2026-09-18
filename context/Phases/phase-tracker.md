@@ -1920,7 +1920,7 @@ both clean.
 | --------- | ------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- | ------ |
 | 83        | Payment Mode Master                                     | Ledger Master                                                             | `context/feature-specs/86-payment-mode-master.md`                 | ✅     |
 | 84        | Payment Mode Integration — Sales Documents              | Payment Mode Master; Sales Invoice; Sales Return                          | `context/feature-specs/91-payment-mode-integration-sales.md`      | ✅     |
-| 85        | Payment Mode Integration — Purchase Documents           | Payment Mode Master; #84; Purchase Invoice; Purchase Return               | `context/feature-specs/92-payment-mode-integration-purchase.md`   | ⬜     |
+| 85        | Payment Mode Integration — Purchase Documents           | Payment Mode Master; #84; Purchase Invoice; Purchase Return               | `context/feature-specs/92-payment-mode-integration-purchase.md`   | ✅     |
 | 86        | Payment Mode Integration — Manual Vouchers              | Payment Mode Master; #84; Payment/Receipt/Contra Voucher                  | `context/feature-specs/93-payment-mode-integration-manual-vouchers.md` | ⬜     |
 | 87        | Liability Settlement                                    | Trial Balance; Payment Voucher                                            | `context/feature-specs/87-liability-settlement.md`                | ✅     |
 
@@ -1935,8 +1935,16 @@ in order: #84 (spec 91) → #85 (spec 92) → #86 (spec 93).
 dated entry for the full record. `assertPaymentModeMatchesLedger` (`src/lib/
 payment-mode-validation.ts`) and `getLedgerPaymentClass`/`getLedgerPaymentClassMap`
 (`src/lib/ledger-class.ts`) now exist and are ready for #85/#86 to reuse as spec 91
-intended. **Next Up: implement #85 (spec 92, Payment Mode Integration — Purchase
-Documents).**
+intended.
+
+**#85 (spec 92) implemented 2026-09-18** on `feature/payment-mode-integration-purchase`
+— see `context/progress-tracker.md`'s matching dated entry for the full record
+(`assertPaymentModeMatchesLedger`/`getLedgerPaymentClass` reused verbatim, no new shared
+utilities). Code review + security review (parallel subagents) both APPROVE, no
+CRITICAL/HIGH findings — one inherited MEDIUM (pre-existing `ledger-class.ts` gap, not
+introduced here) and one LOW (stale doc comment, fixed). Not yet merged to `main` —
+pending push/PR/merge and the user's own verification. **Next Up: implement #86 (spec 93,
+Payment Mode Integration — Manual Vouchers).**
 
 ## Item #87 (Liability Settlement, spec 87) implemented 2026-09-13
 

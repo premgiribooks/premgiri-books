@@ -4700,3 +4700,132 @@ Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker 
 Rule. **Next Up: #85 (spec 92, Payment Mode Integration — Purchase Documents)**, per the
 Phase 11 table's own stated dependency order — it reuses this feature's
 `assertPaymentModeMatchesLedger`/`getLedgerPaymentClass` directly.
+
+## 2026-09-18 — Feature: Payment Mode Integration — Purchase Documents (#85, spec 92)
+
+Per explicit user instruction ("start next"), the next unimplemented item in dependency
+order per `context/Phases/phase-tracker.md`'s Phase 11 table — #84 (spec 91) was already
+✅, #85 was the first remaining ⬜ item. Implemented on a fresh
+`feature/payment-mode-integration-purchase` branch cut from `main` (which already had the
+prior session's small uncommitted UX fix — payment-line ledger/amount defaulting on Sales
+Invoice — committed directly to `main` first, per explicit user confirmation, before this
+branch was cut). Wires the `PaymentMode` master and spec 91's shared
+`assertPaymentModeMatchesLedger`/`getLedgerPaymentClass` helpers into Purchase Invoice's
+and Purchase Return's payment lines — mirrors spec 91's Sales-side implementation exactly,
+as spec 92 itself instructs ("reuses the helper verbatim; do not re-implement").
+
+**Same spec/reality discrepancy as spec 91, resolved the same way**: spec 92 describes
+Purchase Return's refund shape as a separate `PurchaseReturnRefund` model — no such model
+exists. The actual schema (spec 45, already implemented) gives `PurchaseReturn` a single
+nullable `refundLedgerId`, populated only when `refundMode === "CASH_REFUND"`. Implemented
+`paymentModeId` as a single nullable field directly on `PurchaseReturn`, mirroring
+`refundLedgerId`'s own nullability exactly — identical to how spec 91's discrepancy with
+`SalesReturn` was resolved. Purchase Invoice's `PurchaseInvoicePayment.payments[]` did
+match the spec literally (a real array), so `paymentModeId` there is a plain required
+column, backfilled by migration — same as `SalesInvoicePayment`.
+
+**Schema**: `PaymentMode` gains two more back-relation array fields
+(`purchaseInvoicePayments`, `purchaseReturns`). `PurchaseInvoicePayment.paymentModeId` is
+`String` (required, `onDelete: Restrict`). `PurchaseReturn.paymentModeId` is `String?`
+(nullable, `onDelete: SetNull`). Migration
+`20260918155521_payment_mode_integration_purchase` was hand-written (`--create-only`
+equivalent), same "Cash" backfill-plus-pre-existing-company-seed pattern as spec 91's own
+migration.
+
+**New migration bug found and fixed, not present (or at least not triggered) in spec 91's
+already-applied migration**: the pre-existing-company "Cash" seed INSERT
+(`INSERT INTO "PaymentMode" ... SELECT DISTINCT gen_random_uuid()::TEXT, ..., 'CASH', ...`)
+failed applying against this session's own dev database with `ERROR: column "ledgerClass"
+is of type "PaymentModeLedgerClass" but expression is of type text` — Postgres resolves an
+`unknown`-typed string literal to `text` when it must participate in `SELECT DISTINCT`'s
+own equality comparison, which then fails the implicit assignment-cast to the enum type at
+the outer `INSERT`'s target list (a plain `'CASH'` literal without `SELECT DISTINCT` can
+be implicitly cast from `unknown`; once resolved to `text` it cannot). **Fixed** by adding
+an explicit cast, `'CASH'::"PaymentModeLedgerClass"`, in this migration's own INSERT.
+**Not fixed retroactively in `20260918043848_payment_mode_integration_sales`** (already
+applied to the shared dev database and merged into `main` — editing an applied migration's
+SQL breaks its checksum) — flagging here as a latent landmine: if that migration is ever
+run fresh (a new dev database, CI, or a clean production deploy), it will likely fail with
+the identical error. A follow-up patch migration adding the same explicit cast (a no-op
+`ALTER` guarded by existence checks, or corrected via `prisma migrate resolve` on affected
+environments) should be considered before spec 91's migration is ever replayed elsewhere;
+recorded here per the "prefer the documented architecture, record the discrepancy" rule
+since this is a documentation/deployment gap, not a business-logic one. Hit during this
+session's own `prisma migrate deploy` (twice — the second attempt failed differently,
+`column "paymentModeId" ... already exists`, because the first failed attempt's `ALTER
+TABLE ADD COLUMN` statements had already committed individually rather than rolling back
+with the later statement's failure; recovered by manually `ALTER TABLE ... DROP COLUMN`ing
+the partially-added columns, then `prisma migrate resolve --rolled-back` before
+re-applying the corrected migration cleanly).
+
+**Wired into both services** (`purchase-invoice-service.ts`, `purchase-return-service.ts`):
+`assertPaymentModeMatchesLedger` runs against the global `prisma` at
+`createDraft`/`updateDraft` time, and again against the transaction's own `tx` inside
+`postPurchaseInvoice`/`postPurchaseReturn` — same "recompute everything at posting,
+never trust a stale draft-time result" posture as spec 91. Purchase Return's
+`resolvePurchaseReturnInput` gained a parallel `assertRefundPaymentModeProvided` alongside
+the existing `assertRefundLedgerProvided`, checked before `assertRefundLedgerValid` (order
+matters for existing tests: a paymentModeId omission is now caught before an
+invalid-ledger case would otherwise be reached).
+
+**UI**: `PurchaseInvoicePaymentEditor` gained a Payment Mode column per payment line;
+`PurchaseReturnForm` gained a Payment Mode picker alongside the Refund Ledger picker
+(shown only for CASH_REFUND) — both auto-select the closest-matching active Payment Mode
+when the ledger/refund-ledger changes (an exact `ledgerClass` match wins over an `ANY`
+mode), via the same `closestMatchingPaymentModeId` helper duplicated per-component as
+spec 91's own components use — a UX hint only, independently re-validated server-side.
+Deliberately did NOT carry over the prior session's Sales-Invoice-only
+"default new payment line to the selected party's own ledger" UX addition (that was an ad
+hoc enhancement requested separately, outside spec 91/92's own scope, and spec 92 doesn't
+ask for a Purchase equivalent). Purchase Invoice's detail page now shows the payment mode
+name alongside the ledger name; Purchase Return's detail page shows it in parentheses
+after the refund ledger name, mirroring Sales Return's identical display. No print/PDF
+template exists for Purchase Invoice (unlike Sales Invoice), so none was touched.
+
+**Testing**: updated every existing fixture across
+`purchase-invoice-schema.test.ts`/`purchase-invoice-service.test.ts`/
+`purchase-return-schema.test.ts`/`purchase-return-service.test.ts` to carry a
+`paymentModeId` (or, for Purchase Return, the new conditional-requirement refine), added
+the same client-threading assertions spec 91's own review added
+(`toHaveBeenCalledWith(prisma, ...)` / `toHaveBeenCalledWith(FAKE_TX, ...)` for both
+services' draft-time vs. posting-time calls), and added the same negative-schema test for
+Purchase Invoice's unconditionally required `paymentModeId`.
+
+**Code review + security review (parallel subagents) — both APPROVE, no CRITICAL/HIGH
+findings**:
+- **Security review**: verified TOCTOU/transaction-isolation is correct at every posting
+  path (`tx` used inside both `postPurchaseInvoice`/`postPurchaseReturn`, never the global
+  `prisma`), cross-company/object-level authorization is correct (a crafted `paymentModeId`
+  or `ledgerId` from another company is rejected via `companyId` checks at every write
+  path), the raw-SQL migration has no injection risk and cannot cross-assign a Cash mode
+  between companies, and server-side validation is never skipped in favor of the UI's
+  auto-select convenience. Flagged one **MEDIUM**, but it is an *inherited*, pre-existing,
+  already-documented gap in the shared `ledger-class.ts` helper (`ledgerGroupRepository
+  .findMany` reads outside the caller's transaction) — not introduced by this feature, and
+  identical for the already-shipped sales-side code; out of scope to fix here.
+- **Code review**: confirmed the validation wiring, `PurchaseReturn.paymentModeId`
+  nullability handling, and the migration are all correct and consistent with
+  `refundLedgerId`'s own precedent. One **LOW** (non-blocking): `src/types/payment-mode.ts`'s
+  `PaymentModeOption` doc comment still named only Sales Invoice/Sales Return/Credit Note as
+  consumers. **Fixed** — comment now also names Purchase Invoice/Purchase Return.
+- Both reviews independently re-flagged the same migration-landmine note already recorded
+  above (the already-merged `20260918043848_payment_mode_integration_sales` migration
+  lacks the enum-cast fix and would likely fail if ever replayed against a fresh database)
+  — not part of this diff, still an open follow-up for a separate patch migration.
+
+**Verified** (after the doc-comment fix): `npx tsc --noEmit` (0 errors), `npx eslint`
+across every touched file (0 errors; 2 pre-existing warnings, unrelated to this change,
+confirmed present on `main` before this branch), `npx vitest run` — **153 test files, 2106
+tests passing** (+ tests added for the two new calling-convention assertions and the two
+new schema negative cases, on top of the existing suite), and `next build` — succeeds;
+`/purchase/invoices*` and `/purchase/returns*` both appear in the route table.
+
+**Not yet done**: push to `origin`, PR, and merge into `main` — still pending, this branch
+has not yet been merged; the follow-up patch migration for the sales-side enum-cast
+landmine (separate task, not blocking this feature); live browser click-through —
+deferred to the user's own session, consistent with this codebase's convention.
+
+Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
+Rule. **Next Up: #86 (spec 93, Payment Mode Integration — Manual Vouchers)**, per the
+Phase 11 table's own stated dependency order — it reuses the same
+`assertPaymentModeMatchesLedger`/`getLedgerPaymentClass` helpers.

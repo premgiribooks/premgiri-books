@@ -148,6 +148,7 @@ export default async function PurchaseInvoiceDetailPage({ params }: PurchaseInvo
               <TableHeader>
                 <TableRow>
                   <TableHead>Ledger</TableHead>
+                  <TableHead>Payment Mode</TableHead>
                   <TableHead>Reference</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
@@ -156,6 +157,7 @@ export default async function PurchaseInvoiceDetailPage({ params }: PurchaseInvo
                 {purchaseInvoice.payments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell>{payment.ledger.name}</TableCell>
+                    <TableCell>{payment.paymentMode.name}</TableCell>
                     <TableCell>{payment.reference ?? "—"}</TableCell>
                     <TableCell className="text-right font-financial">{payment.amount.toFixed(2)}</TableCell>
                   </TableRow>

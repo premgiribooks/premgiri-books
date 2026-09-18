@@ -5,6 +5,7 @@ import type {
 } from "@prisma/client";
 
 import type { DocumentGroupResult } from "@/engines/gst/types";
+import type { PaymentModeOption } from "@/types/payment-mode";
 
 export type { PurchaseInvoiceStatus } from "@prisma/client";
 
@@ -79,6 +80,7 @@ export interface PurchaseInvoiceItemDetail extends PurchaseInvoiceItem {
 
 export interface PurchaseInvoicePaymentDetail extends PurchaseInvoicePayment {
   ledger: { id: string; name: string };
+  paymentMode: { id: string; name: string };
 }
 
 /** The slice of Supplier a purchase invoice's read-model needs — every
@@ -154,11 +156,16 @@ export interface PurchaseInvoiceWarehouseOption {
 
 /** The payment line's ledger picker options — restricted, server-side, to
  * the Cash-in-Hand group or a BankAccount-linked ledger (44-purchase-invoice.md's
- * Ledger Posting rule) — stricter than Sales Invoice's "any active ledger". */
+ * Ledger Posting rule) — stricter than Sales Invoice's "any active ledger".
+ * `ledgerClass` (92-payment-mode-integration-purchase.md) is this ledger's
+ * three-way classification against the Payment Mode master — lets the form
+ * auto-select the closest-matching active Payment Mode when the ledger
+ * changes, without a server round trip (mirrors SalesInvoicePaymentLedgerOption). */
 export interface PurchaseInvoicePaymentLedgerOption {
   id: string;
   name: string;
   groupName: string;
+  ledgerClass: "CASH" | "BANK" | "NEITHER";
 }
 
 /** Everything the Purchase Invoice Form needs to render its pickers and the
@@ -171,6 +178,7 @@ export interface PurchaseInvoiceFormOptions {
   products: PurchaseInvoiceProductOption[];
   warehouses: PurchaseInvoiceWarehouseOption[];
   paymentLedgers: PurchaseInvoicePaymentLedgerOption[];
+  paymentModes: PaymentModeOption[];
   companyStateCode: string | null;
   nextInvoiceNumber: string;
   isLedgerMappingComplete: boolean;
