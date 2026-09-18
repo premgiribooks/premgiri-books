@@ -44,6 +44,10 @@ interface SalesInvoicePaymentEditorProps {
   paymentLedgers: SalesInvoicePaymentLedgerOption[];
   paymentModes: PaymentModeOption[];
   grandTotal: number;
+  /** The selected (PERMANENT-mode) customer's own Ledger id, if any — a new
+   * payment line defaults to it so recording that customer's payment
+   * against this invoice only requires picking a Payment Mode and amount. */
+  customerLedgerId?: string;
 }
 
 /** Payment-lines editor with a running "Amount Due" display
@@ -54,7 +58,12 @@ interface SalesInvoicePaymentEditorProps {
  * (91-payment-mode-integration-sales.md), auto-selected to the closest match
  * whenever the ledger changes — a UX hint only, independently re-validated
  * server-side. */
-export function SalesInvoicePaymentEditor({ paymentLedgers, paymentModes, grandTotal }: SalesInvoicePaymentEditorProps) {
+export function SalesInvoicePaymentEditor({
+  paymentLedgers,
+  paymentModes,
+  grandTotal,
+  customerLedgerId,
+}: SalesInvoicePaymentEditorProps) {
   const { control, setValue } = useFormContext<CreateSalesInvoiceInput>();
   const { fields, append, remove } = useFieldArray({ control, name: "payments" });
   const payments = useWatch({ control, name: "payments" });
@@ -193,7 +202,21 @@ export function SalesInvoicePaymentEditor({ paymentLedgers, paymentModes, grandT
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append({ ledgerId: "", paymentModeId: "", amount: 0, reference: undefined })}
+          onClick={() => {
+            const ledgerId = customerLedgerId && ledgersById.has(customerLedgerId) ? customerLedgerId : "";
+            const ledgerClass = ledgerId ? ledgersById.get(ledgerId)?.ledgerClass ?? "NEITHER" : "NEITHER";
+            append({
+              ledgerId,
+              paymentModeId: ledgerId ? closestMatchingPaymentModeId(ledgerClass, paymentModes) ?? "" : "",
+              // Defaults a new line to whatever is still unpaid — for a
+              // single full payment this already completes the invoice;
+              // splitting across modes just means lowering it manually.
+              // Never negative (an already-overpaid draft, however that
+              // happened, shouldn't default a new line below zero).
+              amount: Math.max(0, Math.round(amountDue * 100) / 100),
+              reference: undefined,
+            });
+          }}
         >
           <Plus size={16} />
           Add Payment

@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Lets the dev server's HMR/webpack assets be requested from this
+  // reverse-proxied host too (e.g. a tunnel/proxy fronting `next dev`) —
+  // dev-only, has no effect on `next build`/`next start`.
+  allowedDevOrigins: ["public.premgiribooks.com"],
   // Electron packages the app as a standalone Node server (see electron/server.ts)
   // instead of running `next start` against a full node_modules install.
   output: "standalone",

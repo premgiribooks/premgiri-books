@@ -443,6 +443,7 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
             paymentLedgers={options.paymentLedgers}
             paymentModes={options.paymentModes}
             grandTotal={preview.totals.grandTotal}
+            customerLedgerId={selectedCustomerLedgerId}
           />
         </FormSection>
 
