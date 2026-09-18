@@ -31,6 +31,20 @@ const REFUND_MODE_LABELS: Record<RefundMode, string> = {
   CASH_REFUND: "Cash Refund",
 };
 
+function closestMatchingPaymentModeId(
+  ledgerClass: "CASH" | "BANK" | "NEITHER",
+  paymentModes: CreditNoteFormOptions["paymentModes"]
+): string | undefined {
+  const exact = paymentModes.find((mode) => mode.ledgerClass === ledgerClass);
+  if (exact) {
+    return exact.id;
+  }
+  if (ledgerClass === "NEITHER") {
+    return undefined;
+  }
+  return paymentModes.find((mode) => mode.ledgerClass === "ANY")?.id;
+}
+
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -60,6 +74,7 @@ export function CreditNoteForm({ options, creditNote }: CreditNoteFormProps) {
       reason: creditNote?.reason ?? "",
       refundMode: creditNote?.refundMode ?? "LEDGER_ADJUSTMENT",
       refundLedgerId: creditNote?.refundLedgerId ?? undefined,
+      paymentModeId: creditNote?.paymentModeId ?? undefined,
       lines: creditNote
         ? creditNote.items.map((item) => ({
             description: item.description,
@@ -73,6 +88,17 @@ export function CreditNoteForm({ options, creditNote }: CreditNoteFormProps) {
 
   const refundMode = useWatch({ control: form.control, name: "refundMode" });
   const salesInvoiceId = useWatch({ control: form.control, name: "salesInvoiceId" });
+
+  const refundLedgersById = React.useMemo(() => new Map(options.refundLedgers.map((ledger) => [ledger.id, ledger])), [options.refundLedgers]);
+
+  function handleRefundLedgerChange(ledgerId: string) {
+    form.setValue("refundLedgerId", ledgerId, { shouldValidate: true });
+    const ledgerClass = refundLedgersById.get(ledgerId)?.ledgerClass ?? "NEITHER";
+    const matchedModeId = closestMatchingPaymentModeId(ledgerClass, options.paymentModes);
+    if (matchedModeId) {
+      form.setValue("paymentModeId", matchedModeId, { shouldValidate: true });
+    }
+  }
 
   function applyInvoicePrefill(invoiceId: string | undefined) {
     form.setValue("salesInvoiceId", invoiceId, { shouldValidate: true });
@@ -241,11 +267,35 @@ export function CreditNoteForm({ options, creditNote }: CreditNoteFormProps) {
                     <SearchableSelect
                       options={options.refundLedgers}
                       value={field.value || undefined}
-                      onChange={(next) => field.onChange(next ?? "")}
+                      onChange={(next) => handleRefundLedgerChange(next ?? "")}
                       getOptionId={(ledger) => ledger.id}
                       getOptionLabel={(ledger) => `${ledger.name} (${ledger.groupName})`}
                       allowNone={false}
                       placeholder="Select a ledger"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : null}
+
+          {refundMode === "CASH_REFUND" ? (
+            <FormField
+              control={form.control}
+              name="paymentModeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Mode *</FormLabel>
+                  <FormControl>
+                    <SearchableSelect
+                      options={options.paymentModes}
+                      value={field.value || undefined}
+                      onChange={(next) => field.onChange(next ?? "")}
+                      getOptionId={(mode) => mode.id}
+                      getOptionLabel={(mode) => mode.name}
+                      allowNone={false}
+                      placeholder="Select a payment mode"
                     />
                   </FormControl>
                   <FormMessage />

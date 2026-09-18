@@ -88,6 +88,7 @@ export default async function SalesReturnDetailPage({ params }: SalesReturnDetai
             <p className="text-sm text-foreground">
               {REFUND_MODE_LABELS[salesReturn.refundMode] ?? salesReturn.refundMode}
               {salesReturn.refundLedger ? ` — ${salesReturn.refundLedger.name}` : ""}
+              {salesReturn.paymentMode ? ` (${salesReturn.paymentMode.name})` : ""}
             </p>
           </div>
           <div>

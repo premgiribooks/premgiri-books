@@ -7,6 +7,7 @@ import type {
 
 import type { PriceSource } from "@/engines/pricing/types";
 import type { DocumentGroupResult } from "@/engines/gst/types";
+import type { PaymentModeOption } from "@/types/payment-mode";
 
 export type { SalesInvoiceStatus, CustomerMode } from "@prisma/client";
 
@@ -82,6 +83,7 @@ export interface SalesInvoiceItemDetail extends SalesInvoiceItem {
 
 export interface SalesInvoicePaymentDetail extends SalesInvoicePayment {
   ledger: { id: string; name: string };
+  paymentMode: { id: string; name: string };
 }
 
 /** The slice of Customer a sales invoice's read-model needs — null for
@@ -156,11 +158,16 @@ export interface SalesInvoiceWarehouseOption {
 }
 
 /** The payment line's ledger picker options — any active company Ledger,
- * per this spec's "no new mapping needed for cash/bank" decision. */
+ * per this spec's "no new mapping needed for cash/bank" decision.
+ * `ledgerClass` (91-payment-mode-integration-sales.md) is this ledger's
+ * three-way classification against the Payment Mode master — lets the form
+ * auto-select the closest-matching active Payment Mode when the ledger
+ * changes, without a server round trip. */
 export interface SalesInvoicePaymentLedgerOption {
   id: string;
   name: string;
   groupName: string;
+  ledgerClass: "CASH" | "BANK" | "NEITHER";
 }
 
 /** Everything the Sales Invoice Form needs to render its pickers and the
@@ -173,6 +180,7 @@ export interface SalesInvoiceFormOptions {
   products: SalesInvoiceProductOption[];
   warehouses: SalesInvoiceWarehouseOption[];
   paymentLedgers: SalesInvoicePaymentLedgerOption[];
+  paymentModes: PaymentModeOption[];
   companyStateCode: string | null;
   nextInvoiceNumber: string;
   isLedgerMappingComplete: boolean;

@@ -120,7 +120,7 @@ export function SalesInvoicePrintView({ salesInvoice }: SalesInvoicePrintViewPro
           {salesInvoice.payments.map((payment) => (
             <div key={payment.id} className="flex justify-between">
               <span>
-                {payment.ledger.name}
+                {payment.ledger.name} — {payment.paymentMode.name}
                 {payment.reference ? ` (${payment.reference})` : ""}
               </span>
               <span>{payment.amount.toFixed(2)}</span>

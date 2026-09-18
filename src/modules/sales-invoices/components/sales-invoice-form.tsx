@@ -126,7 +126,12 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
             }))
           : [{ productId: "", warehouseId: "", quantity: 1, rate: 0, isTaxOverridden: false }],
       payments: salesInvoice
-        ? salesInvoice.payments.map((payment) => ({ ledgerId: payment.ledgerId, amount: payment.amount, reference: payment.reference ?? undefined }))
+        ? salesInvoice.payments.map((payment) => ({
+            ledgerId: payment.ledgerId,
+            paymentModeId: payment.paymentModeId,
+            amount: payment.amount,
+            reference: payment.reference ?? undefined,
+          }))
         : [],
     },
   });
@@ -434,7 +439,11 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
         </div>
 
         <FormSection title="Payments" columns={1}>
-          <SalesInvoicePaymentEditor paymentLedgers={options.paymentLedgers} grandTotal={preview.totals.grandTotal} />
+          <SalesInvoicePaymentEditor
+            paymentLedgers={options.paymentLedgers}
+            paymentModes={options.paymentModes}
+            grandTotal={preview.totals.grandTotal}
+          />
         </FormSection>
 
         <div className="flex justify-end gap-2">

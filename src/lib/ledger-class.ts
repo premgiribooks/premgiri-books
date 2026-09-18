@@ -10,13 +10,28 @@ import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
 /**
- * The Cash-in-Hand-subtree-or-bank-linked classification test itself, shared
- * by `assertLedgersAreCashOrBank` (throwing) and `getCashAndBankLedgerIds`
- * (67-cash-flow.md's plain id-set equivalent) so the rule lives in exactly
- * one place.
+ * The three-way ledger classification named (but deliberately not built) by
+ * 86-payment-mode-master.md's Project Context, extracted here for
+ * 91-payment-mode-integration-sales.md's `assertPaymentModeMatchesLedger` —
+ * the first real consumer.
  */
+export type LedgerPaymentClass = "CASH" | "BANK" | "NEITHER";
+
+/**
+ * The classification test itself, shared by `assertLedgersAreCashOrBank`
+ * (throwing), `getCashAndBankLedgerIds` (67-cash-flow.md's plain id-set
+ * equivalent), and `getLedgerPaymentClass` below, so the rule lives in
+ * exactly one place.
+ */
+function classifyLedger(ledgerGroupId: string, hasBankAccount: boolean, cashGroupIds: Set<string>): LedgerPaymentClass {
+  if (cashGroupIds.has(ledgerGroupId)) {
+    return "CASH";
+  }
+  return hasBankAccount ? "BANK" : "NEITHER";
+}
+
 function isCashOrBankClass(ledgerGroupId: string, hasBankAccount: boolean, cashGroupIds: Set<string>): boolean {
-  return cashGroupIds.has(ledgerGroupId) || hasBankAccount;
+  return classifyLedger(ledgerGroupId, hasBankAccount, cashGroupIds) !== "NEITHER";
 }
 
 /**
@@ -99,4 +114,70 @@ export async function getCashAndBankLedgerIds(companyId: string): Promise<Set<st
     }
   }
   return result;
+}
+
+/**
+ * 91-payment-mode-integration-sales.md's Module Responsibilities: the
+ * three-way classification (`CASH` vs. `BANK` vs. `NEITHER`) a payment
+ * line's chosen `PaymentMode.ledgerClass` is checked against, via
+ * `assertPaymentModeMatchesLedger`. A ledger not found (wrong company, or no
+ * such id) classifies as `NEITHER` — callers that need "ledger exists" as a
+ * distinct condition check that first, exactly like every other ledger
+ * reference check in this codebase.
+ *
+ * Takes the caller's own `client` (never the global `prisma` singleton) so
+ * the LEDGER ROW ITSELF is read inside a posting-time call's own transaction
+ * snapshot — mirrors `assertLedgersAreCashOrBank`'s own signature and its
+ * "never trust an outside-transaction read" rationale
+ * (sales-invoice-service.ts's `verifyPermanentCustomer` doc comment, a prior
+ * security review finding). Deviates from spec 91's own literal
+ * `(paymentModeId, ledgerId, companyId)` signature for
+ * `assertPaymentModeMatchesLedger`, which omitted a client parameter
+ * entirely — recorded in progress-tracker.md.
+ *
+ * **Known, pre-existing limitation, inherited rather than introduced here**:
+ * `ledgerGroupRepository.findMany` (used to resolve the Cash-in-Hand group
+ * subtree) has no `client` parameter and always reads through the global
+ * `prisma` singleton — `assertLedgersAreCashOrBank` has carried this same gap
+ * since it was written. In practice this means only the ledger row's own
+ * `ledgerGroupId`/`hasBankAccount` are guaranteed to reflect the calling
+ * transaction's snapshot; the ledger-GROUP hierarchy itself is read outside
+ * it, so a concurrent Ledger Groups restructuring landing mid-transaction is
+ * not fully isolated. Not fixed here (would mean threading `client` through
+ * `ledgerGroupRepository.findMany` and every existing caller) — flagged by
+ * security review, recorded here rather than silently overclaimed.
+ */
+export async function getLedgerPaymentClass(
+  client: PrismaClientOrTransaction,
+  ledgerId: string,
+  companyId: string
+): Promise<LedgerPaymentClass> {
+  const [groups, ledgers] = await Promise.all([
+    ledgerGroupRepository.findMany(companyId),
+    ledgerRepository.findLedgersForValidation(client, [ledgerId]),
+  ]);
+  const ledger = ledgers.find((candidate) => candidate.id === ledgerId);
+  if (!ledger || ledger.companyId !== companyId) {
+    return "NEITHER";
+  }
+  const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
+  return classifyLedger(ledger.ledgerGroupId, ledger.hasBankAccount, cashGroupIds);
+}
+
+/**
+ * The company-wide equivalent of `getLedgerPaymentClass`, mirroring
+ * `getCashAndBankLedgerIds`'s own single-query shape — used to annotate a
+ * payment/refund ledger picker's options so the UI can auto-select the
+ * closest-matching active Payment Mode when the ledger changes
+ * (91-payment-mode-integration-sales.md's UI section), without a per-ledger
+ * round trip.
+ */
+export async function getLedgerPaymentClassMap(companyId: string): Promise<Map<string, LedgerPaymentClass>> {
+  const [groups, ledgers] = await Promise.all([
+    ledgerGroupRepository.findMany(companyId),
+    ledgerRepository.findAllForValidation(companyId),
+  ]);
+  const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
+
+  return new Map(ledgers.map((ledger) => [ledger.id, classifyLedger(ledger.ledgerGroupId, ledger.hasBankAccount, cashGroupIds)]));
 }

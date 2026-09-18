@@ -27,6 +27,7 @@ const {
   cancelVoucherMock,
   listSelectableCustomersMock,
   listSelectableGstRatesMock,
+  assertPaymentModeMatchesLedgerMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -51,6 +52,7 @@ const {
   cancelVoucherMock: vi.fn(),
   listSelectableCustomersMock: vi.fn(),
   listSelectableGstRatesMock: vi.fn(),
+  assertPaymentModeMatchesLedgerMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -98,8 +100,10 @@ vi.mock("@/modules/gst-rates/services/gst-rate-service", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: { $transaction: (fn: (tx: unknown) => unknown) => fn(FAKE_TX) },
 }));
+vi.mock("@/lib/payment-mode-validation", () => ({ assertPaymentModeMatchesLedger: assertPaymentModeMatchesLedgerMock }));
 
 import { AppError } from "@/lib/app-error";
+import { prisma } from "@/lib/prisma";
 import { creditNoteService } from "@/modules/credit-notes/services/credit-note-service";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -111,6 +115,7 @@ const CUSTOMER_LEDGER_ID = "55555555-5555-4555-8555-555555555555";
 const INVOICE_ID = "88888888-8888-4888-8888-888888888888";
 const REFUND_LEDGER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const VOUCHER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const PAYMENT_MODE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const NOTE_ID = "note-1";
 const COMPANY_STATE_CODE = "27";
 
@@ -150,6 +155,8 @@ function creditNoteRow(overrides: Record<string, unknown> = {}) {
     refundMode: "LEDGER_ADJUSTMENT",
     refundLedgerId: null,
     refundLedger: null,
+    paymentModeId: null,
+    paymentMode: null,
     status: "DRAFT",
     reason: "Price correction",
     taxableAmount: 100,
@@ -216,10 +223,12 @@ beforeEach(() => {
   cancelVoucherMock.mockReset();
   listSelectableCustomersMock.mockReset();
   listSelectableGstRatesMock.mockReset();
+  assertPaymentModeMatchesLedgerMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue({ id: FY_ID });
   assertPermissionMock.mockResolvedValue(undefined);
+  assertPaymentModeMatchesLedgerMock.mockResolvedValue(undefined);
   findCustomerForCreditNoteMock.mockResolvedValue(CUSTOMER);
   findCompanyStateCodeMock.mockResolvedValue(COMPANY_STATE_CODE);
   getSettingsMock.mockResolvedValue(COMPLETE_SETTINGS);
@@ -340,12 +349,14 @@ describe("createDraft", () => {
 
     it("accepts CASH_REFUND with an active refundLedgerId", async () => {
       findRefundLedgerForCreditNoteMock.mockResolvedValueOnce({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: true });
-      await creditNoteService.createDraft(validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }));
+      await creditNoteService.createDraft(
+        validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+      );
       expect(createMock).toHaveBeenCalledWith(
         FAKE_TX,
         COMPANY_ID,
         FY_ID,
-        expect.objectContaining({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }),
+        expect.objectContaining({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID }),
         expect.any(Array),
         USER_ID
       );
@@ -354,8 +365,22 @@ describe("createDraft", () => {
     it("rejects an inactive refund ledger", async () => {
       findRefundLedgerForCreditNoteMock.mockResolvedValueOnce({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: false });
       await expect(
-        creditNoteService.createDraft(validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }))
+        creditNoteService.createDraft(
+          validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+        )
       ).rejects.toThrow("inactive");
+    });
+
+    // Code review finding: verify assertPaymentModeMatchesLedger is
+    // validated against the global `prisma` singleton at draft-save time —
+    // the counterpart posting-time assertion below confirms the
+    // transaction-scoped `tx` is used instead.
+    it("validates the payment mode against the refund ledger using the global prisma client, not a transaction", async () => {
+      findRefundLedgerForCreditNoteMock.mockResolvedValueOnce({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: true });
+      await creditNoteService.createDraft(
+        validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+      );
+      expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(prisma, PAYMENT_MODE_ID, REFUND_LEDGER_ID, COMPANY_ID);
     });
   });
 });
@@ -398,7 +423,7 @@ describe("postCreditNote — orchestration and ledger entries", () => {
   });
 
   it("CASH_REFUND credits the refund ledger instead of the customer ledger", async () => {
-    const row = creditNoteRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID });
+    const row = creditNoteRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     findRefundLedgerForCreditNoteMock.mockResolvedValueOnce({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: true });
 
@@ -407,6 +432,19 @@ describe("postCreditNote — orchestration and ledger entries", () => {
     const entries = postVoucherMock.mock.calls[0][1].entries;
     expect(entries).toEqual(expect.arrayContaining([{ ledgerId: REFUND_LEDGER_ID, entryType: "CREDIT", amount: 118 }]));
     expect(entries.some((e: { ledgerId: string }) => e.ledgerId === CUSTOMER_LEDGER_ID)).toBe(false);
+  });
+
+  // Code review finding: posting must re-validate the payment mode against
+  // the refund ledger INSIDE the posting transaction (FAKE_TX), never the
+  // outside-transaction global `prisma`.
+  it("validates the payment mode against the refund ledger using the posting transaction, not the global prisma client", async () => {
+    const row = creditNoteRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+    findRefundLedgerForCreditNoteMock.mockResolvedValueOnce({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: true });
+
+    await creditNoteService.postCreditNote(NOTE_ID);
+
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(FAKE_TX, PAYMENT_MODE_ID, REFUND_LEDGER_ID, COMPANY_ID);
   });
 
   it("never calls the Inventory Engine (no stock movement)", async () => {
@@ -436,7 +474,7 @@ describe("postCreditNote — orchestration and ledger entries", () => {
   });
 
   it("rejects posting when a CASH_REFUND's refundLedgerId was deactivated in the meantime", async () => {
-    const row = creditNoteRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID });
+    const row = creditNoteRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     findRefundLedgerForCreditNoteMock.mockResolvedValueOnce({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: false });
 

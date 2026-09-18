@@ -3,6 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import { getLedgerPaymentClassMap } from "@/lib/ledger-class";
+import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
@@ -14,6 +16,7 @@ import type { VoucherEntryLineInput } from "@/engines/voucher/voucher-validation
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { assertSalesLedgerMappingComplete, isSalesLedgerMappingComplete } from "@/modules/company/utils/sales-ledger-mapping";
 import { customerService } from "@/modules/customers/services/customer-service";
+import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
 import {
   creditNoteRepository,
   type CreditNoteHeaderPersistData,
@@ -60,6 +63,7 @@ const CANNOT_CANCEL_MESSAGE = "Only a posted credit note can be cancelled.";
 const REFUND_LEDGER_REQUIRED_MESSAGE = "Select a refund ledger for a cash refund.";
 const REFUND_LEDGER_NOT_FOUND_MESSAGE = "Selected refund ledger not found.";
 const REFUND_LEDGER_INACTIVE_MESSAGE = "Selected refund ledger is inactive and cannot be posted to.";
+const REFUND_PAYMENT_MODE_REQUIRED_MESSAGE = "Select a payment mode for a cash refund.";
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -134,6 +138,12 @@ function assertRefundLedgerProvided(refundMode: RefundMode, refundLedgerId: stri
   }
 }
 
+function assertRefundPaymentModeProvided(refundMode: RefundMode, paymentModeId: string | undefined): void {
+  if (refundMode === "CASH_REFUND" && !paymentModeId) {
+    throw new AppError(REFUND_PAYMENT_MODE_REQUIRED_MESSAGE);
+  }
+}
+
 async function assertRefundLedgerActive(
   client: PrismaClientOrTransaction,
   companyId: string,
@@ -191,6 +201,7 @@ function buildHeaderPersistData(
   fields: CreditNoteHeaderFields,
   refundMode: RefundMode,
   refundLedgerId: string | null,
+  paymentModeId: string | null,
   totals: CreditNoteTotals
 ): CreditNoteHeaderPersistData {
   return {
@@ -200,6 +211,7 @@ function buildHeaderPersistData(
     placeOfSupplyStateCode: fields.placeOfSupplyStateCode,
     refundMode,
     refundLedgerId: refundMode === "CASH_REFUND" ? refundLedgerId : null,
+    paymentModeId: refundMode === "CASH_REFUND" ? paymentModeId : null,
     reason: fields.reason,
     ...totals,
   };
@@ -228,8 +240,10 @@ async function resolveCreditNoteInput(
 
   const refundMode: RefundMode = data.refundMode ?? "LEDGER_ADJUSTMENT";
   assertRefundLedgerProvided(refundMode, data.refundLedgerId);
+  assertRefundPaymentModeProvided(refundMode, data.paymentModeId);
   if (refundMode === "CASH_REFUND") {
     await assertRefundLedgerActive(client, companyId, data.refundLedgerId as string);
+    await assertPaymentModeMatchesLedger(client, data.paymentModeId as string, data.refundLedgerId as string, companyId);
   }
 
   const supplyType = await resolveSupplyType(companyId, data.placeOfSupplyStateCode);
@@ -311,10 +325,12 @@ export const creditNoteService = {
 
     const financialYear = await getCurrentFinancialYear();
 
-    const [customers, invoices, refundLedgers, gstRates, settings] = await Promise.all([
+    const [customers, invoices, refundLedgers, ledgerClassById, paymentModes, gstRates, settings] = await Promise.all([
       customerService.listSelectableCustomers(),
       financialYear ? creditNoteRepository.findPostedInvoicesForPicker(user.companyId, financialYear.id) : Promise.resolve<CreditNoteInvoiceOption[]>([]),
       creditNoteRepository.findSelectableRefundLedgers(user.companyId),
+      getLedgerPaymentClassMap(user.companyId),
+      paymentModeService.listActivePaymentModes(),
       gstRateService.listSelectableGstRates(),
       companySettingsService.getSettings(user.companyId),
     ]);
@@ -322,7 +338,8 @@ export const creditNoteService = {
     return {
       customers: customers.map((customer) => ({ id: customer.id, name: customer.ledger.name })),
       invoices,
-      refundLedgers,
+      refundLedgers: refundLedgers.map((ledger) => ({ ...ledger, ledgerClass: ledgerClassById.get(ledger.id) ?? "NEITHER" })),
+      paymentModes: paymentModes.map((mode) => ({ id: mode.id, name: mode.name, ledgerClass: mode.ledgerClass })),
       gstRates: gstRates.map((rate) => ({ id: rate.id, name: rate.name, ratePercent: rate.ratePercent, cessPercent: rate.cessPercent })),
       isLedgerMappingComplete: isSalesLedgerMappingComplete(settings),
     };
@@ -345,6 +362,7 @@ export const creditNoteService = {
       },
       resolved.refundMode,
       data.refundLedgerId ?? null,
+      data.paymentModeId ?? null,
       resolved.totals
     );
 
@@ -378,6 +396,7 @@ export const creditNoteService = {
       },
       resolved.refundMode,
       data.refundLedgerId ?? null,
+      data.paymentModeId ?? null,
       resolved.totals
     );
 
@@ -429,6 +448,7 @@ export const creditNoteService = {
 
       if (current.refundMode === "CASH_REFUND") {
         await assertRefundLedgerActive(tx, user.companyId, current.refundLedgerId as string);
+        await assertPaymentModeMatchesLedger(tx, current.paymentModeId as string, current.refundLedgerId as string, user.companyId);
       }
 
       // Step 2: recompute every line's tax fresh via the GST Engine.
@@ -484,6 +504,7 @@ export const creditNoteService = {
         },
         current.refundMode,
         current.refundLedgerId,
+        current.paymentModeId,
         totals
       );
       const posted = await creditNoteRepository.replaceItemsAndPost(tx, id, user.companyId, header, lines, generated, voucher.id);

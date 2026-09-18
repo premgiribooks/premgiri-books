@@ -98,7 +98,7 @@ export function buildSalesInvoiceHtml(salesInvoice: SalesInvoiceDetail): string 
       ${salesInvoice.payments
         .map(
           (payment) =>
-            `<div class="totals-row"><span>${escapeHtml(payment.ledger.name)}${
+            `<div class="totals-row"><span>${escapeHtml(payment.ledger.name)} — ${escapeHtml(payment.paymentMode.name)}${
               payment.reference ? ` (${escapeHtml(payment.reference)})` : ""
             }</span><span>${payment.amount.toFixed(2)}</span></div>`
         )

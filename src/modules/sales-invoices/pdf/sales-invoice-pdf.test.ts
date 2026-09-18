@@ -74,7 +74,18 @@ function buildFixture(overrides: Partial<SalesInvoiceDetail> = {}): SalesInvoice
         warehouse: { id: "wh-1", name: "Main Warehouse", code: "MAIN", isActive: true },
       },
     ],
-    payments: [{ id: "pay-1", salesInvoiceId: "inv-1", ledgerId: "ledger-cash", amount: 1180, reference: null, ledger: { id: "ledger-cash", name: "Cash-in-Hand" } }],
+    payments: [
+      {
+        id: "pay-1",
+        salesInvoiceId: "inv-1",
+        ledgerId: "ledger-cash",
+        paymentModeId: "mode-cash",
+        amount: 1180,
+        reference: null,
+        ledger: { id: "ledger-cash", name: "Cash-in-Hand" },
+        paymentMode: { id: "mode-cash", name: "Cash" },
+      },
+    ],
     ...overrides,
   };
 }

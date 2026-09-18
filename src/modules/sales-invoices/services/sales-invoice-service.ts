@@ -3,9 +3,11 @@ import { Prisma, type CompanySettings } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import { getLedgerPaymentClassMap } from "@/lib/ledger-class";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError, isUniqueConstraintError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
+import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
 import { gstEngine } from "@/engines/gst/gst-engine";
@@ -24,6 +26,7 @@ import {
 import { customerService } from "@/modules/customers/services/customer-service";
 import { deliveryChallanService } from "@/modules/delivery-challans/services/delivery-challan-service";
 import { ledgerService } from "@/modules/ledgers/services/ledger-service";
+import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
 import { salesOrderService } from "@/modules/sales-orders/services/sales-order-service";
 import {
   salesInvoiceRepository,
@@ -439,9 +442,24 @@ function toHeaderPersistData(
 function toPaymentPersistData(payments: readonly SalesInvoicePaymentInput[]): SalesInvoicePaymentPersistData[] {
   return payments.map((payment) => ({
     ledgerId: payment.ledgerId,
+    paymentModeId: payment.paymentModeId,
     amount: payment.amount,
     reference: payment.reference ?? null,
   }));
+}
+
+/** 91-payment-mode-integration-sales.md's Business Rules: every payment
+ * line's `paymentModeId` must match its own `ledgerId`'s class, checked at
+ * every write path (never only client-side). Runs the checks in parallel —
+ * each line's ledger/mode pair is independent. */
+async function assertPaymentModesMatchLedgers(
+  client: PrismaClientOrTransaction,
+  companyId: string,
+  payments: readonly { ledgerId: string; paymentModeId: string }[]
+): Promise<void> {
+  await Promise.all(
+    payments.map((payment) => assertPaymentModeMatchesLedger(client, payment.paymentModeId, payment.ledgerId, companyId))
+  );
 }
 
 function sumPayments(payments: readonly { amount: number }[]): number {
@@ -777,19 +795,22 @@ export const salesInvoiceService = {
 
     const financialYear = await requireFinancialYear();
 
-    const [customers, products, warehouses, paymentLedgers, companyStateCode, settings, preview] = await Promise.all([
-      customerService.listSelectableCustomers(),
-      salesInvoiceRepository.findInvoiceableProducts(user.companyId),
-      salesInvoiceRepository.findSelectableWarehouses(user.companyId),
-      ledgerService.listSelectableLedgers(),
-      salesInvoiceRepository.findCompanyStateCode(user.companyId),
-      companySettingsService.getSettings(user.companyId),
-      documentNumberEngine.previewNextNumber({
-        companyId: user.companyId,
-        financialYearId: financialYear.id,
-        documentType: "SALES_INVOICE",
-      }),
-    ]);
+    const [customers, products, warehouses, paymentLedgers, ledgerClassById, paymentModes, companyStateCode, settings, preview] =
+      await Promise.all([
+        customerService.listSelectableCustomers(),
+        salesInvoiceRepository.findInvoiceableProducts(user.companyId),
+        salesInvoiceRepository.findSelectableWarehouses(user.companyId),
+        ledgerService.listSelectableLedgers(),
+        getLedgerPaymentClassMap(user.companyId),
+        paymentModeService.listActivePaymentModes(),
+        salesInvoiceRepository.findCompanyStateCode(user.companyId),
+        companySettingsService.getSettings(user.companyId),
+        documentNumberEngine.previewNextNumber({
+          companyId: user.companyId,
+          financialYearId: financialYear.id,
+          documentType: "SALES_INVOICE",
+        }),
+      ]);
 
     return {
       customers: customers.map((customer) => ({
@@ -805,7 +826,9 @@ export const salesInvoiceService = {
         id: ledger.id,
         name: ledger.name,
         groupName: ledger.ledgerGroup.name,
+        ledgerClass: ledgerClassById.get(ledger.id) ?? "NEITHER",
       })),
+      paymentModes: paymentModes.map((mode) => ({ id: mode.id, name: mode.name, ledgerClass: mode.ledgerClass })),
       companyStateCode,
       nextInvoiceNumber: preview.formatted,
       isLedgerMappingComplete: isSalesLedgerMappingComplete(settings),
@@ -926,6 +949,7 @@ export const salesInvoiceService = {
     const built = buildSalesInvoice(data.lines, productsById, supplyType, true, user.id);
     const amountPaid = sumPayments(data.payments ?? []);
     assertPaymentsWithinTotal(data.customerMode, amountPaid, built.header.grandTotal);
+    await assertPaymentModesMatchLedgers(prisma, user.companyId, data.payments ?? []);
 
     return persistNewSalesInvoice(
       user.companyId,
@@ -975,6 +999,7 @@ export const salesInvoiceService = {
     const built = buildSalesInvoice(data.lines, productsById, supplyType, true, user.id);
     const amountPaid = sumPayments(data.payments ?? []);
     assertPaymentsWithinTotal(data.customerMode, amountPaid, built.header.grandTotal);
+    await assertPaymentModesMatchLedgers(prisma, user.companyId, data.payments ?? []);
 
     const updated = await runInTransaction((tx) =>
       salesInvoiceRepository.replaceItemsAndUpdate(
@@ -1102,9 +1127,11 @@ export const salesInvoiceService = {
 
         const paymentsPersist: SalesInvoicePaymentPersistData[] = current.payments.map((payment) => ({
           ledgerId: payment.ledgerId,
+          paymentModeId: payment.paymentModeId,
           amount: payment.amount,
           reference: payment.reference ?? null,
         }));
+        await assertPaymentModesMatchLedgers(tx, user.companyId, paymentsPersist);
         const paidTotal = sumPayments(paymentsPersist);
         const leavesUnpaidBalance = toPaise(built.header.grandTotal) - toPaise(paidTotal) > 0;
 
