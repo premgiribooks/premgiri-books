@@ -2,6 +2,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
+import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import { toPaise } from "@/engines/voucher/voucher-validation";
@@ -81,6 +82,7 @@ export const receiptVoucherService = {
 
     const data = createReceiptVoucherSchema.parse(input);
     await assertLedgersAreCashOrBank(prisma, user.companyId, [data.debitLedgerId], "this receipt");
+    await assertPaymentModeMatchesLedger(prisma, data.paymentModeId, data.debitLedgerId, user.companyId);
 
     const totalAmount = sumAmounts(data.creditLines.map((line) => line.amount));
 
@@ -89,6 +91,7 @@ export const receiptVoucherService = {
       voucherType: "RECEIPT",
       voucherDate: data.voucherDate,
       narration: data.narration,
+      paymentModeId: data.paymentModeId,
       entries: [
         { ledgerId: data.debitLedgerId, entryType: "DEBIT", amount: totalAmount },
         ...data.creditLines.map((line) => ({

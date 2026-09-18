@@ -25,6 +25,12 @@ export const createContraVoucherSchema = z
     narration: NARRATION_SCHEMA,
     fromLedgerId: z.uuid("Select the Cash/Bank ledger funds are moving from"),
     toLedgerId: z.uuid("Select the Cash/Bank ledger funds are moving to"),
+    // 93-payment-mode-integration-manual-vouchers.md — one mode for the
+    // whole voucher (the transfer mechanism), validated against fromLedgerId
+    // (the credited/source side, mirroring Payment Voucher's own
+    // creditLedgerId convention — both sides are guaranteed Cash/Bank, so an
+    // "ANY"-class mode always matches regardless of which side is checked).
+    paymentModeId: z.uuid("Select a payment mode"),
     amount: z
       .number("Amount must be a number")
       .positive("Amount must be greater than zero")

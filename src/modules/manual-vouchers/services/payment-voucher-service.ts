@@ -1,7 +1,8 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
-import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
+import { assertLedgersAreCashOrBank, getLedgerPaymentClassMap } from "@/lib/ledger-class";
+import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
@@ -15,7 +16,9 @@ import {
   createPaymentVoucherSchema,
   type CreatePaymentVoucherInput,
 } from "@/modules/manual-vouchers/validation/payment-voucher-schema";
+import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
 import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
+import type { PaymentModeOption } from "@/types/payment-mode";
 
 const NOT_FOUND_MESSAGE = "Payment voucher not found.";
 const NO_FINANCIAL_YEAR_MESSAGE = "Select a financial year before working with payment vouchers.";
@@ -82,13 +85,14 @@ export const paymentVoucherService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, MODULE, "view");
 
-    const [ledgers, groups] = await Promise.all([
+    const [ledgers, groups, ledgerClassById] = await Promise.all([
       prisma.ledger.findMany({
         where: { companyId: user.companyId, isActive: true },
         select: { id: true, name: true, ledgerGroupId: true, bankAccount: { select: { id: true } } },
         orderBy: { name: "asc" },
       }),
       ledgerGroupRepository.findMany(user.companyId),
+      getLedgerPaymentClassMap(user.companyId),
     ]);
     const cashGroupIds = getGroupSubtreeIds(groups, [CASH_IN_HAND_GROUP_NAME]);
 
@@ -96,7 +100,22 @@ export const paymentVoucherService = {
       id: ledger.id,
       name: ledger.name,
       isCashOrBank: cashGroupIds.has(ledger.ledgerGroupId) || ledger.bankAccount !== null,
+      ledgerClass: ledgerClassById.get(ledger.id) ?? "NEITHER",
     }));
+  },
+
+  /**
+   * The Create form's Payment Mode picker options — every active company
+   * Payment Mode (93-payment-mode-integration-manual-vouchers.md's UI
+   * section). Shared by Payment Voucher, Receipt Voucher, and Contra
+   * Voucher's forms, exactly like `listLedgerOptions` above already is.
+   */
+  async listPaymentModes(): Promise<PaymentModeOption[]> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, MODULE, "view");
+
+    const modes = await paymentModeService.listActivePaymentModes();
+    return modes.map((mode) => ({ id: mode.id, name: mode.name, ledgerClass: mode.ledgerClass }));
   },
 
   /**
@@ -130,6 +149,7 @@ export const paymentVoucherService = {
 
     const data = createPaymentVoucherSchema.parse(input);
     await assertLedgersAreCashOrBank(prisma, user.companyId, [data.creditLedgerId], "this payment");
+    await assertPaymentModeMatchesLedger(prisma, data.paymentModeId, data.creditLedgerId, user.companyId);
 
     const totalAmount = sumAmounts(data.debitLines.map((line) => line.amount));
 
@@ -138,6 +158,7 @@ export const paymentVoucherService = {
       voucherType: "PAYMENT",
       voucherDate: data.voucherDate,
       narration: data.narration,
+      paymentModeId: data.paymentModeId,
       entries: [
         { ledgerId: data.creditLedgerId, entryType: "CREDIT", amount: totalAmount },
         ...data.debitLines.map((line) => ({

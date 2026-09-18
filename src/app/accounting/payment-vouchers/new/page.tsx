@@ -22,8 +22,9 @@ export default async function NewPaymentVoucherPage({ searchParams }: NewPayment
     redirect("/accounting/payment-vouchers");
   }
 
-  const [ledgerOptions, isAdmin] = await Promise.all([
+  const [ledgerOptions, paymentModes, isAdmin] = await Promise.all([
     paymentVoucherService.listLedgerOptions(),
+    paymentVoucherService.listPaymentModes(),
     isCurrentUserCompanyAdmin(),
   ]);
 
@@ -31,7 +32,9 @@ export default async function NewPaymentVoucherPage({ searchParams }: NewPayment
   const prefill = resolvePaymentVoucherPrefill(
     ledgerOptions,
     firstValue(resolvedParams.debitLedgerId),
-    firstValue(resolvedParams.amount)
+    firstValue(resolvedParams.amount),
+    paymentModes,
+    firstValue(resolvedParams.paymentModeId)
   );
 
   return (
@@ -44,7 +47,7 @@ export default async function NewPaymentVoucherPage({ searchParams }: NewPayment
           </p>
         </div>
 
-        <PaymentVoucherForm ledgerOptions={ledgerOptions} prefill={prefill} />
+        <PaymentVoucherForm ledgerOptions={ledgerOptions} paymentModes={paymentModes} prefill={prefill} />
       </div>
     </AppShell>
   );

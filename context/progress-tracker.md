@@ -4837,3 +4837,156 @@ Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker 
 Rule. **Next Up: #86 (spec 93, Payment Mode Integration — Manual Vouchers)**, per the
 Phase 11 table's own stated dependency order — it reuses the same
 `assertPaymentModeMatchesLedger`/`getLedgerPaymentClass` helpers.
+
+## 2026-09-18 — Feature: Payment Mode Integration — Manual Vouchers (#86, spec 93) — final Payment Mode Integration spec
+
+Per explicit user instruction ("start next"), implemented the last item in the Payment
+Mode Integration sequence — #84 (spec 91, Sales) and #85 (spec 92, Purchase) were already
+✅. Implemented on a fresh `feature/payment-mode-integration-manual-vouchers` branch cut
+from `main`. Unlike #84/#85, this spec's target isn't a document's own payment-line table
+— it's the shared `Voucher` model itself, since Payment/Receipt/Contra Voucher *are*
+Vouchers with no separate schema of their own (52/53/54-*-voucher.md's own Goal
+sections). Journal Voucher is explicitly excluded (spec 93's own note: arbitrary
+double-entry, no cash-movement semantics), as are every auto-posted document voucher
+(SALES, PURCHASE, etc.) — those already carry their own mode on the source document's
+payment line (specs 91/92), not at the voucher level.
+
+**Schema**: `Voucher.paymentModeId` (`String?`, `onDelete: SetNull`) — nullable by design,
+per spec's own three listed reasons (Journal has none; auto-posted vouchers record mode on
+the source document instead; only manual Payment/Receipt/Contra Vouchers populate it).
+`PaymentMode` gains a `vouchers Voucher[]` back-relation. Migration
+`20260918163417_payment_mode_integration_manual_vouchers` needed no backfill at all (unlike
+#84/#85's Cash-mode backfills) — existing rows correctly stay `NULL` as accurate historical
+records — so it applied cleanly on the first attempt, with none of the enum-cast issue
+spec 92's migration hit (no data-carrying `INSERT`/`UPDATE` here to trigger it).
+
+**Voucher Engine layer** (shared by every voucher-posting caller in the codebase, not just
+manual vouchers): `postVoucherInputSchema` (`voucher-validation.ts`) gained an optional
+`paymentModeId`; `PostedVoucher` (`types.ts`) gained `paymentModeId: string | null` and a
+nested `paymentMode: {id, name} | null` (mirrors `SalesInvoicePaymentDetail`'s own embedded
+relation pattern, rather than making every consumer build its own id-to-name lookup map).
+`voucher-repository.ts`'s `create`/`findById`/`findMany` now include `paymentMode`;
+`reverse()` deliberately does NOT carry the original voucher's `paymentModeId` forward into
+the reversal — a reversal is a system-generated correcting entry, not a fresh manual
+payment, mirroring this same function's existing choice not to carry over the original's
+narration either. Every other existing caller of `postVoucher`
+(sales/purchase/return/credit-note/debit-note/payroll services) is unaffected — the field
+is optional and they simply never pass it, so their posted vouchers' `paymentModeId` stays
+`null`, exactly as spec 93 requires.
+
+**Business-rule decision for Contra Voucher, not fully spelled out by the spec, recorded
+here**: spec 93 states "one `paymentModeId` for the whole voucher... `ledgerClass = "ANY"`
+is always valid" but doesn't say which of the two Cash/Bank sides (`fromLedgerId`/
+`toLedgerId`) the mode is actually validated against — Contra has no single canonical
+ledger the way Payment Voucher's `creditLedgerId`/Receipt Voucher's `debitLedgerId` do.
+Chose `fromLedgerId` (the credited/source side) as the validated side, since it plays the
+same structural role Payment Voucher's own `creditLedgerId` does (the side money leaves) —
+reuses `assertPaymentModeMatchesLedger` verbatim against a single ledger id, per spec's
+explicit "no new shared utilities, reuse unchanged" instruction, rather than inventing a
+new two-ledger validation shape. Because both Contra sides are already guaranteed
+Cash/Bank by `assertLedgersAreCashOrBank`, an `ANY`-class mode is always valid regardless
+of which side is checked, matching the spec's own stated invariant exactly.
+
+**Wired into all three manual-voucher services**: `payment-voucher-service.ts` validates
+`paymentModeId` against `creditLedgerId`; `receipt-voucher-service.ts` against
+`debitLedgerId`; `contra-voucher-service.ts` against `fromLedgerId` (see above) — all three
+via the global `prisma` (these services post directly, with no separate draft/post-time
+split the way Sales/Purchase Invoice have, so there is only ever one validation point per
+call, immediately before `voucherEngine.postVoucher`). `payment-voucher-service.ts` also
+gained `listPaymentModes()` (thin delegate to `paymentModeService.listActivePaymentModes()`,
+mapped to the picker's `{id, name, ledgerClass}` shape) and extended `listLedgerOptions()`
+with a per-ledger `ledgerClass` (via `getLedgerPaymentClassMap`, already used by #84/#85) —
+both shared across all three manual-voucher screens exactly like `listLedgerOptions()`
+itself already was, per that method's own existing "shared by Payment Voucher and Receipt
+Voucher's forms" precedent, now extended to Contra Voucher too.
+
+**Liability Settlement prefill extended, not just documented**: `PaymentVoucherPrefill`
+(`resolve-payment-voucher-prefill.ts`) gained an optional `paymentModeId`, resolved from a
+new optional `paymentModeId` query param (validated against the caller's own active
+`paymentModes` list, mirroring the existing `debitLedgerId` validation's "must be a member
+of the caller's own scoped list" pattern) — a missing or invalid param simply omits the
+field rather than rejecting the whole prefill. `liability-settlement-table.tsx`'s own
+"Settle" link is UNCHANGED — `LiabilitySettlementRow` has no natural payment-mode concept
+(a liability ledger's outstanding balance, not a specific payment), so per spec's own
+framing ("if absent (existing Liability Settlement links)..."), this is forward-compatible
+scaffolding for a future caller, not a requirement to invent a payment mode for Liability
+Settlement's own rows. Absent the hint, `PaymentVoucherForm`'s own closest-match auto-select
+(new for this spec) takes over once the user picks a Credit ledger, same as Payment/Receipt/
+Contra's own baseline UX.
+
+**UI**: `PaymentVoucherForm`/`ReceiptVoucherForm` gained a Payment Mode dropdown next to
+their respective Cash/Bank ledger picker, auto-selecting the closest-matching active mode
+on ledger change (the same `closestMatchingPaymentModeId` helper duplicated per-component,
+matching #84/#85's own established pattern rather than extracting a shared one — this
+codebase's specs have consistently chosen per-component duplication over a shared UI
+helper for this exact logic). `ContraVoucherForm` gained one header-level dropdown labeled
+"Transfer Method" (per spec's exact wording), validated against `fromLedgerId`'s class on
+change. `JournalVoucherForm` is untouched — no payment mode field, per spec's explicit
+"must not render a payment mode picker" rule. All three non-Journal detail pages
+(`payment-vouchers/[id]`, `receipt-vouchers/[id]`, `contra-vouchers/[id]`) now show the
+payment mode name (Contra Voucher's labeled "Transfer Method" there too, for consistency
+with its own form).
+
+**Testing**: added `paymentModeId` to every existing Payment/Receipt/Contra Voucher
+service and schema test fixture; added the calling-convention assertions (`toHaveBeenCalledWith(prisma, ...)`)
+this codebase's own established pattern for every payment-mode integration; added
+Contra's own ANY-class-always-valid test per spec's explicit Testing Requirements line;
+added negative-schema tests for each schema's newly-required `paymentModeId`; extended
+`resolve-payment-voucher-prefill.test.ts` with the new optional-param behavior (present,
+absent, and invalid-mode-id cases, matching spec's own Testing Requirements: "missing/
+invalid param falls back to form default, no crash"). No regression test was needed for
+"auto-posted vouchers stay null" — every existing sales/purchase/etc. service test already
+asserts its own `postVoucher` call shape via `expect.objectContaining`, which doesn't
+assert the ABSENCE of `paymentModeId`, but since those services never read or set it, no
+existing test's assumptions changed; this is structurally guaranteed by the field being
+optional and untouched by any of those call sites, not something a new test needed to
+re-prove per file.
+
+**Code review + security review (parallel subagents) — both APPROVE, no CRITICAL/HIGH
+findings**:
+- **Code review**: one MEDIUM (non-blocking, fixed): the `reverse()` "paymentModeId is
+  never carried into the reversal" behavior was correct in the shipped code, but the only
+  test covering it used an `original` fixture whose `paymentModeId` was already `null`,
+  so the test couldn't actually catch a future regression that started copying the field
+  over. **Fixed** — added a second `voucherRepository.reverse` test using a
+  non-null `original.paymentModeId`, asserting the reversal's own `create` call omits it.
+  Everything else (Contra's single-sided validation, the shared engine/repository's
+  backward compatibility with every other voucher-posting caller, the migration, the
+  prefill helper) verified sound with no changes needed.
+- **Security review**: one MEDIUM, **not fixed, recorded as a cross-cutting pre-existing
+  gap** — all three manual-voucher services call `assertPaymentModeMatchesLedger` against
+  the global `prisma` (not the write transaction) before `voucherEngine.postVoucher` opens
+  its own transaction, leaving a narrow TOCTOU window where a payment mode deactivated
+  between the check and the post could theoretically slip through. This is the exact same
+  pattern already merged and accepted in #84/#85's own *create* paths (`credit-note
+  -service.ts`, `sales-return-service.ts`, `purchase-return-service.ts` all do the same
+  thing) — notably, those modules' own *update* paths already pass `tx` instead of
+  `prisma` for this same check, so the codebase already knows the tighter pattern; the
+  create paths (including this new manual-voucher code) just don't use it anywhere yet.
+  Manual vouchers are no worse than the merged precedent (single-shot post, no
+  draft-then-confirm split). **Follow-up recommended** (spans all four modules, not just
+  this one): thread `tx` through `assertLedgersAreCashOrBank`/`assertPaymentModeMatchesLedger`
+  on every create path, matching each module's own update-path convention. One LOW was
+  investigated and closed as no finding: Contra's single-sided (`fromLedgerId`-only)
+  payment-mode validation cannot be bypassed via `toLedgerId`, since
+  `assertLedgersAreCashOrBank` already independently guarantees both sides are
+  company-owned, active, and Cash-or-Bank before the payment-mode check ever runs — worst
+  case is a labeling nuance, not an authorization or integrity gap.
+
+**Verified** (after the code-review fix): `npx tsc --noEmit` (0 errors, whole project),
+`npx eslint` across every touched file (0 errors), `npx vitest run` — **153 test files,
+2124 tests passing** (+1 for the strengthened reversal test), and `next build` —
+succeeds; `/accounting/payment-vouchers*`, `/accounting/receipt-vouchers*`, and
+`/accounting/contra-vouchers*` all appear in the route table.
+
+**Not yet done**: push to `origin`, PR, and merge into `main` — still pending; the
+cross-cutting TOCTOU follow-up noted above (separate task, not blocking this feature);
+live browser click-through — deferred to the user's own session, consistent with this
+codebase's convention.
+
+Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
+Rule. **This was the last item in the Payment Mode Integration sequence (#84/#85/#86,
+specs 91/92/93)** — once merged, every payment/receipt event in the system carries a
+structured Payment Mode end-to-end. Next Up: the next unimplemented item in
+`context/Phases/phase-tracker.md`'s own phase order (to be determined at that time — no
+further Payment Mode Integration work remains scheduled).

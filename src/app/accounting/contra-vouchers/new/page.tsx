@@ -13,8 +13,9 @@ export default async function NewContraVoucherPage() {
     redirect("/accounting/contra-vouchers");
   }
 
-  const [ledgerOptions, isAdmin] = await Promise.all([
+  const [ledgerOptions, paymentModes, isAdmin] = await Promise.all([
     paymentVoucherService.listLedgerOptions(),
+    paymentVoucherService.listPaymentModes(),
     isCurrentUserCompanyAdmin(),
   ]);
 
@@ -28,7 +29,7 @@ export default async function NewContraVoucherPage() {
           </p>
         </div>
 
-        <ContraVoucherForm ledgerOptions={ledgerOptions} />
+        <ContraVoucherForm ledgerOptions={ledgerOptions} paymentModes={paymentModes} />
       </div>
     </AppShell>
   );

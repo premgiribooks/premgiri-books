@@ -530,6 +530,7 @@ model PaymentMode {
   creditNotes             CreditNote[]
   purchaseInvoicePayments PurchaseInvoicePayment[]
   purchaseReturns         PurchaseReturn[]
+  vouchers                Voucher[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -1449,6 +1450,15 @@ model Voucher {
   // leave both null.
   referenceType   String?
   referenceId     String?
+  // 93-payment-mode-integration-manual-vouchers.md — a document-level
+  // attribute, not a per-entry one. Nullable: null for Journal Vouchers
+  // (excluded from this spec — arbitrary double-entry, no cash-movement
+  // semantics) and for every auto-posted document voucher (SALES, PURCHASE,
+  // etc.) — those record their own mode on the source document's payment
+  // line instead (SalesInvoicePayment/PurchaseInvoicePayment, specs 91/92).
+  // Only manually-created Payment/Receipt/Contra Vouchers populate this.
+  paymentModeId   String?
+  paymentMode     PaymentMode?  @relation(fields: [paymentModeId], references: [id])
   // Sum of debit entries (== credit sum) — denormalized for list rendering
   // only, never used in balance computation (entries are the truth).
   totalAmount     Decimal       @db.Decimal(14, 2)
@@ -1475,6 +1485,7 @@ model Voucher {
   @@index([companyId, voucherDate])
   @@index([companyId, voucherType])
   @@index([referenceType, referenceId])
+  @@index([paymentModeId])
 }
 
 // No companyId here — reachable only through its Voucher; every query joins

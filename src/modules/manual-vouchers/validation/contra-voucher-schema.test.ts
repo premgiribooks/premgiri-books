@@ -4,6 +4,7 @@ import { createContraVoucherSchema } from "@/modules/manual-vouchers/validation/
 
 const LEDGER_A = "11111111-1111-4111-8111-111111111111";
 const LEDGER_B = "22222222-2222-4222-8222-222222222222";
+const PAYMENT_MODE_ID = "33333333-3333-4333-8333-333333333333";
 
 function validInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -11,6 +12,7 @@ function validInput(overrides: Record<string, unknown> = {}) {
     narration: "Cash deposited into bank",
     fromLedgerId: LEDGER_A,
     toLedgerId: LEDGER_B,
+    paymentModeId: PAYMENT_MODE_ID,
     amount: 500,
     ...overrides,
   };
@@ -39,6 +41,12 @@ describe("createContraVoucherSchema", () => {
 
   it("requires a valid uuid toLedgerId", () => {
     expect(createContraVoucherSchema.safeParse(validInput({ toLedgerId: "not-a-uuid" })).success).toBe(false);
+  });
+
+  // 93-payment-mode-integration-manual-vouchers.md — one mode for the
+  // whole voucher, required.
+  it("requires a paymentModeId", () => {
+    expect(createContraVoucherSchema.safeParse(validInput({ paymentModeId: undefined })).success).toBe(false);
   });
 
   it("rejects a zero or negative amount", () => {
