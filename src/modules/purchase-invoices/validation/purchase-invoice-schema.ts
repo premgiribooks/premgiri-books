@@ -153,6 +153,9 @@ export type PurchaseInvoiceLineInput = z.infer<typeof purchaseInvoiceLineSchema>
 
 export const purchaseInvoicePaymentSchema = z.object({
   ledgerId: z.uuid("Select a valid ledger"),
+  // 92-payment-mode-integration-purchase.md — required going forward,
+  // mirrors sales-invoice-schema.ts's identical field exactly.
+  paymentModeId: z.uuid("Select a payment mode"),
   amount: z
     .number("Amount must be a number")
     .positive("Amount must be greater than zero")

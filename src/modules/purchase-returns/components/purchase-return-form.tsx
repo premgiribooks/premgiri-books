@@ -19,6 +19,7 @@ import { numericFieldWidth } from "@/lib/utils";
 import { createPurchaseReturnDraftAction, updatePurchaseReturnDraftAction } from "@/modules/purchase-returns/actions/purchase-return-actions";
 import { isValidCalendarDate, REFUND_MODE_VALUES } from "@/modules/purchase-returns/validation/purchase-return-schema";
 import type { PurchaseReturnDetail, PurchaseReturnFormOptions, ReturnablePurchaseInvoiceDetail } from "@/types/purchase-return";
+import type { PaymentModeOption } from "@/types/payment-mode";
 
 const LIST_PATH = "/purchase/returns";
 
@@ -40,11 +41,30 @@ const headerFormSchema = z
     reason: z.string().max(500, "Reason must be at most 500 characters").optional(),
     refundMode: z.enum(REFUND_MODE_VALUES),
     refundLedgerId: z.string().optional(),
+    paymentModeId: z.string().optional(),
   })
   .refine((data) => data.refundMode !== "CASH_REFUND" || Boolean(data.refundLedgerId), {
     message: "Select a refund ledger for a cash refund.",
     path: ["refundLedgerId"],
+  })
+  .refine((data) => data.refundMode !== "CASH_REFUND" || Boolean(data.paymentModeId), {
+    message: "Select a payment mode for a cash refund.",
+    path: ["paymentModeId"],
   });
+
+function closestMatchingPaymentModeId(
+  ledgerClass: "CASH" | "BANK" | "NEITHER",
+  paymentModes: readonly PaymentModeOption[]
+): string | undefined {
+  const exact = paymentModes.find((mode) => mode.ledgerClass === ledgerClass);
+  if (exact) {
+    return exact.id;
+  }
+  if (ledgerClass === "NEITHER") {
+    return undefined;
+  }
+  return paymentModes.find((mode) => mode.ledgerClass === "ANY")?.id;
+}
 
 type HeaderFormValues = z.infer<typeof headerFormSchema>;
 
@@ -108,10 +128,22 @@ export function PurchaseReturnForm({ invoice, options, purchaseReturn }: Purchas
       reason: purchaseReturn?.reason ?? "",
       refundMode: purchaseReturn?.refundMode ?? "LEDGER_ADJUSTMENT",
       refundLedgerId: purchaseReturn?.refundLedgerId ?? undefined,
+      paymentModeId: purchaseReturn?.paymentModeId ?? undefined,
     },
   });
 
   const refundMode = useWatch({ control: form.control, name: "refundMode" });
+
+  const refundLedgersById = React.useMemo(() => new Map(options.refundLedgers.map((ledger) => [ledger.id, ledger])), [options.refundLedgers]);
+
+  function handleRefundLedgerChange(ledgerId: string) {
+    form.setValue("refundLedgerId", ledgerId, { shouldValidate: true });
+    const ledgerClass = refundLedgersById.get(ledgerId)?.ledgerClass ?? "NEITHER";
+    const matchedModeId = closestMatchingPaymentModeId(ledgerClass, options.paymentModes);
+    if (matchedModeId) {
+      form.setValue("paymentModeId", matchedModeId, { shouldValidate: true });
+    }
+  }
 
   function updateLine(id: string, update: Partial<LineState>) {
     setLineStates((prev) => ({ ...prev, [id]: { ...prev[id], ...update } }));
@@ -136,6 +168,7 @@ export function PurchaseReturnForm({ invoice, options, purchaseReturn }: Purchas
       reason: headerValues.reason || undefined,
       refundMode: headerValues.refundMode,
       refundLedgerId: headerValues.refundMode === "CASH_REFUND" ? headerValues.refundLedgerId : undefined,
+      paymentModeId: headerValues.refundMode === "CASH_REFUND" ? headerValues.paymentModeId : undefined,
       lines,
     };
 
@@ -227,10 +260,34 @@ export function PurchaseReturnForm({ invoice, options, purchaseReturn }: Purchas
                     <SearchableSelect
                       options={options.refundLedgers}
                       value={field.value || undefined}
-                      onChange={(next) => field.onChange(next ?? "")}
+                      onChange={(next) => handleRefundLedgerChange(next ?? "")}
                       getOptionId={(ledger) => ledger.id}
                       getOptionLabel={(ledger) => `${ledger.name} (${ledger.groupName})`}
                       placeholder="Select a ledger"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : null}
+
+          {refundMode === "CASH_REFUND" ? (
+            <FormField
+              control={form.control}
+              name="paymentModeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Mode *</FormLabel>
+                  <FormControl>
+                    <SearchableSelect
+                      options={options.paymentModes}
+                      value={field.value || undefined}
+                      onChange={(next) => field.onChange(next ?? "")}
+                      getOptionId={(mode) => mode.id}
+                      getOptionLabel={(mode) => mode.name}
+                      allowNone={false}
+                      placeholder="Select a payment mode"
                     />
                   </FormControl>
                   <FormMessage />

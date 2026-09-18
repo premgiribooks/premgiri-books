@@ -116,7 +116,12 @@ export function PurchaseInvoiceForm({ options, purchaseInvoice, goodsReceiptNote
             }))
           : [{ productId: "", warehouseId: "", quantity: 1, rate: 0, isTaxOverridden: false }],
       payments: purchaseInvoice
-        ? purchaseInvoice.payments.map((payment) => ({ ledgerId: payment.ledgerId, amount: payment.amount, reference: payment.reference ?? undefined }))
+        ? purchaseInvoice.payments.map((payment) => ({
+            ledgerId: payment.ledgerId,
+            paymentModeId: payment.paymentModeId,
+            amount: payment.amount,
+            reference: payment.reference ?? undefined,
+          }))
         : [],
     },
   });
@@ -347,7 +352,11 @@ export function PurchaseInvoiceForm({ options, purchaseInvoice, goodsReceiptNote
         </div>
 
         <FormSection title="Payments" columns={1}>
-          <PurchaseInvoicePaymentEditor paymentLedgers={options.paymentLedgers} grandTotal={preview.totals.grandTotal} />
+          <PurchaseInvoicePaymentEditor
+            paymentLedgers={options.paymentLedgers}
+            paymentModes={options.paymentModes}
+            grandTotal={preview.totals.grandTotal}
+          />
         </FormSection>
 
         <div className="flex justify-end gap-2">

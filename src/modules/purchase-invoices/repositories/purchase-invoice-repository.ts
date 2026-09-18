@@ -41,7 +41,7 @@ const ITEM_INCLUDE = {
 } as const;
 
 const PAYMENT_INCLUDE = {
-  payments: { include: { ledger: { select: { id: true, name: true } } } },
+  payments: { include: { ledger: { select: { id: true, name: true } }, paymentMode: { select: { id: true, name: true } } } },
 } as const;
 
 type PurchaseInvoiceListRowRaw = Prisma.PurchaseInvoiceGetPayload<{
@@ -236,6 +236,7 @@ export interface PurchaseInvoiceHeaderPersistData {
 
 export interface PurchaseInvoicePaymentPersistData {
   ledgerId: string;
+  paymentModeId: string;
   amount: number;
   reference: string | null;
 }

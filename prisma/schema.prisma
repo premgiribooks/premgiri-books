@@ -525,9 +525,11 @@ model PaymentMode {
 
   // 91-93-payment-mode-integration-*.md — the first real consumers of this
   // master, added alongside their own paymentModeId columns.
-  salesInvoicePayments SalesInvoicePayment[]
-  salesReturns         SalesReturn[]
-  creditNotes          CreditNote[]
+  salesInvoicePayments    SalesInvoicePayment[]
+  salesReturns            SalesReturn[]
+  creditNotes             CreditNote[]
+  purchaseInvoicePayments PurchaseInvoicePayment[]
+  purchaseReturns         PurchaseReturn[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -2142,9 +2144,15 @@ model PurchaseInvoicePayment {
   ledger            Ledger          @relation(fields: [ledgerId], references: [id])
   amount            Decimal         @db.Decimal(14, 2)
   reference         String?
+  // 92-payment-mode-integration-purchase.md — required going forward;
+  // existing rows are backfilled to the seeded "Cash" mode by this column's
+  // migration. Mirrors SalesInvoicePayment.paymentModeId exactly.
+  paymentModeId     String
+  paymentMode       PaymentMode     @relation(fields: [paymentModeId], references: [id])
 
   @@index([purchaseInvoiceId])
   @@index([ledgerId])
+  @@index([paymentModeId])
 }
 
 // 45-purchase-return.md — the physical, quantity-based reversal of a POSTED
@@ -2176,6 +2184,12 @@ model PurchaseReturn {
   refundMode        RefundMode           @default(LEDGER_ADJUSTMENT)
   refundLedgerId    String?
   refundLedger      Ledger?              @relation("PurchaseReturnRefundLedger", fields: [refundLedgerId], references: [id])
+  // 92-payment-mode-integration-purchase.md — required exactly when
+  // refundMode is CASH_REFUND, mirroring refundLedgerId's own nullability
+  // and SalesReturn.paymentModeId exactly (a LEDGER_ADJUSTMENT return never
+  // touches a cash/bank ledger at all).
+  paymentModeId     String?
+  paymentMode       PaymentMode?         @relation(fields: [paymentModeId], references: [id])
   status            PurchaseReturnStatus @default(DRAFT)
   reason            String?
   taxableAmount     Decimal              @db.Decimal(14, 2)
@@ -2196,6 +2210,7 @@ model PurchaseReturn {
   @@unique([companyId, financialYearId, returnNumber])
   @@index([companyId, purchaseInvoiceId])
   @@index([companyId, status])
+  @@index([paymentModeId])
 }
 
 model PurchaseReturnItem {

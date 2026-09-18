@@ -37,6 +37,7 @@ const {
   cancelVoucherMock,
   recordMovementsMock,
   getLedgerBalanceMock,
+  assertPaymentModeMatchesLedgerMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -70,6 +71,7 @@ const {
   cancelVoucherMock: vi.fn(),
   recordMovementsMock: vi.fn(),
   getLedgerBalanceMock: vi.fn(),
+  assertPaymentModeMatchesLedgerMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -96,6 +98,7 @@ vi.mock("@/modules/purchase-invoices/repositories/purchase-invoice-repository", 
 vi.mock("@/lib/current-user", () => ({ getCurrentCompanyUser: getCurrentCompanyUserMock }));
 vi.mock("@/lib/current-financial-year", () => ({ getCurrentFinancialYear: getCurrentFinancialYearMock }));
 vi.mock("@/lib/permissions", () => ({ assertPermission: assertPermissionMock }));
+vi.mock("@/lib/payment-mode-validation", () => ({ assertPaymentModeMatchesLedger: assertPaymentModeMatchesLedgerMock }));
 
 vi.mock("@/engines/document-number/document-number-engine", () => ({
   documentNumberEngine: {
@@ -141,6 +144,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { AppError } from "@/lib/app-error";
+import { prisma } from "@/lib/prisma";
 import { purchaseInvoiceService } from "@/modules/purchase-invoices/services/purchase-invoice-service";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -154,6 +158,7 @@ const WAREHOUSE_ID = "66666666-6666-4666-8666-666666666666";
 const LEDGER_ID = "77777777-7777-4777-8777-777777777777";
 const VOUCHER_ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const GRN_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const PAYMENT_MODE_ID = "fffffff1-ffff-4fff-8fff-fffffffffff1";
 
 const PURCHASE_GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const TAXES_GROUP_ID = "10000000-0000-4000-8000-000000000002";
@@ -334,10 +339,12 @@ beforeEach(() => {
   cancelVoucherMock.mockReset();
   recordMovementsMock.mockReset();
   getLedgerBalanceMock.mockReset();
+  assertPaymentModeMatchesLedgerMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
   assertPermissionMock.mockResolvedValue(undefined);
+  assertPaymentModeMatchesLedgerMock.mockResolvedValue(undefined);
   findSupplierForInvoiceMock.mockResolvedValue(ACTIVE_SUPPLIER);
   findCompanyStateCodeMock.mockResolvedValue("27");
   findProductsForLinesMock.mockResolvedValue([PRODUCT]);
@@ -373,7 +380,7 @@ describe("createDraft", () => {
 
   it("rejects an overpayment against the freshly computed grand total", async () => {
     await expect(
-      purchaseInvoiceService.createDraft(validInput({ payments: [{ ledgerId: CASH_LEDGER_ID, amount: 100000 }] }))
+      purchaseInvoiceService.createDraft(validInput({ payments: [{ ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 100000 }] }))
     ).rejects.toThrow("cannot exceed the invoice's grand total");
   });
 
@@ -384,14 +391,24 @@ describe("createDraft", () => {
 
   it("rejects a payment ledger that is neither Cash-in-Hand nor bank-linked", async () => {
     await expect(
-      purchaseInvoiceService.createDraft(validInput({ payments: [{ ledgerId: INVALID_PAYMENT_LEDGER_ID, amount: 50 }] }))
+      purchaseInvoiceService.createDraft(validInput({ payments: [{ ledgerId: INVALID_PAYMENT_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 50 }] }))
     ).rejects.toThrow("is not a Cash-in-Hand or bank-linked ledger");
   });
 
   it("accepts a bank-linked payment ledger", async () => {
     await expect(
-      purchaseInvoiceService.createDraft(validInput({ payments: [{ ledgerId: BANK_LEDGER_ID, amount: 50 }] }))
+      purchaseInvoiceService.createDraft(validInput({ payments: [{ ledgerId: BANK_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 50 }] }))
     ).resolves.toBeDefined();
+  });
+
+  // Mirrors sales-invoice-service.test.ts's identical assertion (code review
+  // finding): assertPaymentModeMatchesLedger must be validated against the
+  // global `prisma` singleton at draft-save time, never a stale transaction.
+  it("validates each payment's mode against its ledger via the global prisma client, not a transaction", async () => {
+    await purchaseInvoiceService.createDraft(
+      validInput({ payments: [{ ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 50 }] })
+    );
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(prisma, PAYMENT_MODE_ID, CASH_LEDGER_ID, COMPANY_ID);
   });
 
   it("every rejection is an AppError", async () => {
@@ -518,7 +535,7 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
   });
 
   it("posts no supplier-ledger entry when payments cover the grand total exactly", async () => {
-    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, amount: 236 }] });
+    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 236 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
 
     await purchaseInvoiceService.postPurchaseInvoice("pinv-1");
@@ -528,8 +545,21 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
     expect(entries).toEqual(expect.arrayContaining([{ ledgerId: CASH_LEDGER_ID, entryType: "CREDIT", amount: 236 }]));
   });
 
+  // Mirrors sales-invoice-service.test.ts's identical assertion (code review
+  // finding): posting must re-validate each payment's mode against its
+  // ledger INSIDE the same transaction as the rest of posting (FAKE_TX),
+  // never through the outside-transaction global `prisma`.
+  it("validates each payment's mode against its ledger using the posting transaction, not the global prisma client", async () => {
+    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 236 }] });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+
+    await purchaseInvoiceService.postPurchaseInvoice("pinv-1");
+
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(FAKE_TX, PAYMENT_MODE_ID, CASH_LEDGER_ID, COMPANY_ID);
+  });
+
   it("splits a partial payment between the payment ledger and the supplier's remainder, balanced", async () => {
-    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, amount: 100 }] });
+    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 100 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
 
     await purchaseInvoiceService.postPurchaseInvoice("pinv-1");
@@ -551,8 +581,8 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
   it("splits a payment across two different ledgers plus the supplier's remainder, balanced", async () => {
     const row = invoiceRow({
       payments: [
-        { ledgerId: CASH_LEDGER_ID, amount: 100 },
-        { ledgerId: BANK_LEDGER_ID, amount: 50 },
+        { ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 100 },
+        { ledgerId: BANK_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 50 },
       ],
     });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
@@ -575,7 +605,7 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
   });
 
   it("rejects an overpayment, validated against the freshly recomputed total", async () => {
-    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, amount: 500 }] });
+    const row = invoiceRow({ payments: [{ ledgerId: CASH_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 500 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     await expect(purchaseInvoiceService.postPurchaseInvoice("pinv-1")).rejects.toThrow(
       "Total payments cannot exceed the invoice's grand total."
@@ -584,7 +614,7 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
   });
 
   it("rejects a payment ledger that is neither Cash-in-Hand nor bank-linked at posting", async () => {
-    const row = invoiceRow({ payments: [{ ledgerId: INVALID_PAYMENT_LEDGER_ID, amount: 50 }] });
+    const row = invoiceRow({ payments: [{ ledgerId: INVALID_PAYMENT_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID, amount: 50 }] });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     await expect(purchaseInvoiceService.postPurchaseInvoice("pinv-1")).rejects.toThrow(
       "is not a Cash-in-Hand or bank-linked ledger"

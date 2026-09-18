@@ -30,6 +30,7 @@ const {
   postVoucherMock,
   cancelVoucherMock,
   recordMovementsMock,
+  assertPaymentModeMatchesLedgerMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -55,6 +56,7 @@ const {
   postVoucherMock: vi.fn(),
   cancelVoucherMock: vi.fn(),
   recordMovementsMock: vi.fn(),
+  assertPaymentModeMatchesLedgerMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -78,6 +80,7 @@ vi.mock("@/modules/purchase-returns/repositories/purchase-return-repository", ()
 vi.mock("@/lib/current-user", () => ({ getCurrentCompanyUser: getCurrentCompanyUserMock }));
 vi.mock("@/lib/current-financial-year", () => ({ getCurrentFinancialYear: getCurrentFinancialYearMock }));
 vi.mock("@/lib/permissions", () => ({ assertPermission: assertPermissionMock }));
+vi.mock("@/lib/payment-mode-validation", () => ({ assertPaymentModeMatchesLedger: assertPaymentModeMatchesLedgerMock }));
 
 vi.mock("@/engines/document-number/document-number-engine", () => ({
   documentNumberEngine: { ensureSequence: ensureSequenceMock, generateNumber: generateNumberMock },
@@ -106,6 +109,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { AppError } from "@/lib/app-error";
+import { prisma } from "@/lib/prisma";
 import { purchaseReturnService } from "@/modules/purchase-returns/services/purchase-return-service";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
@@ -120,6 +124,7 @@ const INVOICE_ID = "88888888-8888-4888-8888-888888888888";
 const ITEM_ID = "99999999-9999-4999-8999-999999999999";
 const VOUCHER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const RETURN_ID = "pret-1";
+const PAYMENT_MODE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 const PURCHASE_GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const TAXES_GROUP_ID = "10000000-0000-4000-8000-000000000002";
@@ -229,6 +234,8 @@ function purchaseReturnRow(overrides: Record<string, unknown> = {}) {
     refundMode: "LEDGER_ADJUSTMENT",
     refundLedgerId: null,
     refundLedger: null,
+    paymentModeId: null,
+    paymentMode: null,
     status: "DRAFT",
     reason: null,
     taxableAmount: 200,
@@ -322,10 +329,12 @@ beforeEach(() => {
   postVoucherMock.mockReset();
   cancelVoucherMock.mockReset();
   recordMovementsMock.mockReset();
+  assertPaymentModeMatchesLedgerMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
   assertPermissionMock.mockResolvedValue(undefined);
+  assertPaymentModeMatchesLedgerMock.mockResolvedValue(undefined);
   findPurchaseInvoiceForReturnMock.mockResolvedValue(invoiceForReturn());
   sumPostedReturnedQuantitiesMock.mockResolvedValue(new Map());
   findSupplierLedgerIdMock.mockResolvedValue(SUPPLIER_LEDGER_ID);
@@ -421,13 +430,23 @@ describe("createDraft", () => {
     );
   });
 
+  // 92-payment-mode-integration-purchase.md — mirrors
+  // sales-return-service.test.ts's identical assertion.
+  it("requires a paymentModeId when CASH_REFUND is explicitly chosen", async () => {
+    await expect(
+      purchaseReturnService.createDraft(validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }))
+    ).rejects.toThrow("Select a payment mode for a cash refund.");
+  });
+
   it("accepts CASH_REFUND with a Cash-in-Hand refund ledger", async () => {
-    await purchaseReturnService.createDraft(validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }));
+    await purchaseReturnService.createDraft(
+      validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+    );
     expect(createMock).toHaveBeenCalledWith(
       FAKE_TX,
       COMPANY_ID,
       FY_ID,
-      expect.objectContaining({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }),
+      expect.objectContaining({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID }),
       expect.any(Array),
       USER_ID
     );
@@ -438,22 +457,36 @@ describe("createDraft", () => {
       ledgerInfo(BANK_REFUND_LEDGER_ID, OTHER_GROUP_ID, { hasBankAccount: true })
     );
     await purchaseReturnService.createDraft(
-      validInput({ refundMode: "CASH_REFUND", refundLedgerId: BANK_REFUND_LEDGER_ID })
+      validInput({ refundMode: "CASH_REFUND", refundLedgerId: BANK_REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
     );
     expect(createMock).toHaveBeenCalled();
+  });
+
+  // Code review finding: verify assertPaymentModeMatchesLedger is validated
+  // against the global `prisma` singleton at draft-save time, mirroring
+  // sales-return-service.test.ts's identical assertion.
+  it("validates the payment mode against the refund ledger via the global prisma client, not a transaction", async () => {
+    await purchaseReturnService.createDraft(
+      validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+    );
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(prisma, PAYMENT_MODE_ID, REFUND_LEDGER_ID, COMPANY_ID);
   });
 
   it("rejects a refund ledger that is neither Cash-in-Hand nor bank-linked", async () => {
     findRefundLedgerForReturnMock.mockResolvedValueOnce(ledgerInfo(INVALID_REFUND_LEDGER_ID, OTHER_GROUP_ID));
     await expect(
-      purchaseReturnService.createDraft(validInput({ refundMode: "CASH_REFUND", refundLedgerId: INVALID_REFUND_LEDGER_ID }))
+      purchaseReturnService.createDraft(
+        validInput({ refundMode: "CASH_REFUND", refundLedgerId: INVALID_REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+      )
     ).rejects.toThrow("is not a Cash-in-Hand or bank-linked ledger");
   });
 
   it("rejects an inactive refund ledger", async () => {
     findRefundLedgerForReturnMock.mockResolvedValueOnce(ledgerInfo(REFUND_LEDGER_ID, CASH_GROUP_ID, { isActive: false }));
     await expect(
-      purchaseReturnService.createDraft(validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID }))
+      purchaseReturnService.createDraft(
+        validInput({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID })
+      )
     ).rejects.toThrow("inactive");
   });
 });
@@ -548,7 +581,7 @@ describe("postPurchaseReturn — orchestration and ledger entries", () => {
   });
 
   it("CASH_REFUND debits the refund ledger instead of the supplier ledger", async () => {
-    const row = purchaseReturnRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID });
+    const row = purchaseReturnRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
 
     await purchaseReturnService.postPurchaseReturn(RETURN_ID);
@@ -556,6 +589,19 @@ describe("postPurchaseReturn — orchestration and ledger entries", () => {
     const entries = postVoucherMock.mock.calls[0][1].entries;
     expect(entries).toEqual(expect.arrayContaining([{ ledgerId: REFUND_LEDGER_ID, entryType: "DEBIT", amount: 236 }]));
     expect(entries.some((e: { ledgerId: string }) => e.ledgerId === SUPPLIER_LEDGER_ID)).toBe(false);
+  });
+
+  // Code review finding: posting must re-validate the payment mode against
+  // the refund ledger INSIDE the same transaction as the rest of posting
+  // (FAKE_TX), never through the outside-transaction global `prisma` —
+  // mirrors sales-return-service.test.ts's identical assertion.
+  it("validates the payment mode against the refund ledger using the posting transaction, not the global prisma client", async () => {
+    const row = purchaseReturnRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID });
+    findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+
+    await purchaseReturnService.postPurchaseReturn(RETURN_ID);
+
+    expect(assertPaymentModeMatchesLedgerMock).toHaveBeenCalledWith(FAKE_TX, PAYMENT_MODE_ID, REFUND_LEDGER_ID, COMPANY_ID);
   });
 
   it("re-validates returnable quantity inside the posting transaction (concurrency guard)", async () => {
@@ -582,7 +628,7 @@ describe("postPurchaseReturn — orchestration and ledger entries", () => {
   });
 
   it("rejects posting when a CASH_REFUND's refundLedgerId was deactivated in the meantime", async () => {
-    const row = purchaseReturnRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID });
+    const row = purchaseReturnRow({ refundMode: "CASH_REFUND", refundLedgerId: REFUND_LEDGER_ID, paymentModeId: PAYMENT_MODE_ID });
     findByIdMock.mockResolvedValueOnce(row).mockResolvedValueOnce(row);
     findRefundLedgerForReturnMock.mockResolvedValueOnce(ledgerInfo(REFUND_LEDGER_ID, CASH_GROUP_ID, { isActive: false }));
 
