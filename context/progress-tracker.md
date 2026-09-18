@@ -4684,12 +4684,17 @@ test files +6 total for client-threading assertions, +3 schema-test additions), 
 build` — succeeds; `/sales/invoices*`, `/sales/returns*`, and `/sales/credit-notes*` all
 appear in the route table.
 
-**Not yet done**: live browser click-through (this session ran the automated check suite
-only, consistent with this codebase's own convention of deferring interactive UI
-verification to the user's own session for most features); Git Workflow (push/merge) —
-committed on `feature/payment-mode-integration-sales`, not yet pushed or merged into
-`main`, pending the user's own review given this branch carries a schema migration against
-the shared dev database.
+**Pushed `feature/payment-mode-integration-sales` to `origin`, merged `--no-ff` into
+`main`** (commit `93293d0`, no conflicts) after explicit user confirmation, given this
+branch carries a schema migration against the shared dev database. Re-verified against
+the merged result: `npx prisma generate`, `npx tsc --noEmit`, `npx eslint src prisma` (0
+errors, same 2 pre-existing warnings), `npx vitest run` (153 files, 2099 tests), all pass.
+Local feature branch left in place (its deletion was blocked by the session's own
+destructive-git-action safety classifier) — harmless to delete manually later.
+
+**Not yet done**: live browser click-through — this session ran the automated check
+suite only, consistent with this codebase's own convention of deferring interactive UI
+verification to the user's own session for most features.
 
 Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
 Rule. **Next Up: #85 (spec 92, Payment Mode Integration — Purchase Documents)**, per the
