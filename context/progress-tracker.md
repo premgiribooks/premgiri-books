@@ -5407,3 +5407,100 @@ build` (all existing `.../export` routes unchanged in the table — PDF rides th
 **This closes out feature-spec 78 (PDF Generation) in full, with no remaining open scope**:
 all 29 report screens now offer both Excel and PDF export, all 10 in-scope documents have
 working PDF downloads, and Purchase Invoice remains permanently excluded.
+
+---
+
+## 2026-09-19 — Sales Invoice PDF redesigned into a full standard GST tax invoice
+
+Per explicit user request, with two reference images of typical Indian GST tax invoices and
+an exhaustive field list (company name/address/GSTIN, invoice number/date, customer
+details/address/GSTIN, Sr No/description/HSN/unit/qty/rate/discount/gross amount, total qty,
+subtotal/discount/taxable amount, CGST/SGST/roundoff/grand total, company bank details,
+amount in words, remark, signature area, company logo). The prior template (spec 78's Sales
+Invoice reference slice) had none of the seller/bank/logo/amount-in-words sections a real Tax
+Invoice needs — this was a genuine feature addition, not a cosmetic tweak, requiring new data
+plumbing before any layout work:
+
+- **`src/lib/number-to-words.ts`** (new) — hand-rolled Indian-numbering-system (Crore/Lakh/
+  Thousand, not Western Million/Billion grouping) integer-to-words + `amountToWords`; no such
+  utility existed anywhere in the codebase and none of the researched npm alternatives were
+  worth a new dependency for ~90 lines of bounded arithmetic.
+- **`src/modules/company/services/company-logo-service.ts`** gained `readCompanyLogoAsDataUri`
+  — reads the stored Company Logo (a public path under `public/uploads/logos/`) off local
+  disk and returns a base64 data URI, since Puppeteer needs every asset self-contained
+  (78-pdf-generation.md's Assets rule already established this for the shared core). Only
+  `path.basename(logoPath)` is ever joined onto the fixed upload directory, never the raw
+  stored value — confirmed by both review agents to neutralize path traversal on both POSIX
+  and Windows semantics.
+- **`src/types/sales-invoice.ts` + the repository's Prisma selects/mapping functions**
+  widened: `SalesInvoiceProductSnapshot` gained `hsnCode`/`unitSymbol` (mirroring
+  quotation-repository.ts's/sales-order-repository.ts's existing select shape for the same
+  two fields), `SalesInvoiceCustomerOption` gained `gstin`/full address fields for a
+  PERMANENT customer (the `quickCustomer*` fields already covered QUICK/WALK_IN). Two other
+  call sites construting this same shared type (`sales-invoice-service.ts`'s New Invoice form
+  picker, `sales/invoices/page.tsx`'s filter-bar picker) needed the same 6 fields added purely
+  to satisfy the widened type — both already had the data in hand (`CustomerWithLedger`), no
+  new query.
+- **`src/app/sales/invoices/[id]/pdf/route.ts`** now also resolves `companyService.getCompany`
+  and the company's first active bank account before building the PDF. Paper size switched
+  A5→A4 to fit the richer layout.
+- **`src/modules/sales-invoices/pdf/sales-invoice-pdf.ts`** fully rewritten:
+  `buildSalesInvoiceHtml` now takes `{ salesInvoice, company, bankAccount, logoDataUri }`
+  instead of just the invoice, rendering seller block (logo/address/GSTIN)/buyer block
+  (address/GSTIN)/items table (Sr/HSN/Unit/Qty/Rate/Discount/Amount)/Total Qty/totals/Amount
+  in Words/Bank Details/signature area, styled by a new invoice-local stylesheet layered on
+  top of the shared `PRINT_STYLESHEET` (kept separate so no other document PDF is affected).
+
+**Two fields from the user's list don't exist in the data model and weren't fabricated**:
+"terms of delivery" has no schema field anywhere (`narration` — reused for "Remarks" per the
+user's separate ask — is the closest free-text field); bank "branch address" doesn't exist,
+only a plain `branchName` string (`BankAccount` has no address column). Both gaps were
+surfaced to the user rather than inventing placeholder data.
+
+**Deliberate scope decisions**: `SalesInvoicePrintView` (the on-screen browser Print
+component) was left untouched — it and the downloaded PDF were previously kept visually
+identical by design (spec 78's own stated intent); they now diverge until/unless the user
+asks for the Print View to be updated too. The prior template's "Paid" totals row and
+"Payments" section (per-payment ledger/mode/reference/amount) were dropped entirely — a legal
+Tax Invoice isn't a payment receipt, and neither reference image nor the user's field list
+included them.
+
+**A live rendered preview was generated and visually inspected** (a throwaway Puppeteer script
+run via `tsx`, output as PNG, viewed, then deleted along with its outputs — nothing committed)
+before calling this done, per this session's own UI/frontend verification practice; two
+polish passes came out of that look (a more prominent "Tax Invoice" title, an actual
+bordered signature line above "Authorised Signatory" rather than bare text).
+
+**Code review: APPROVE, 0 CRITICAL/HIGH** — 1 MEDIUM fixed (the bank-account resolution
+helper's `catch {}` was swallowing every error, not just the intended permission-denial case,
+with zero logging — narrowed to swallow only `AuthorizationError` silently, and added
+`logger.warn` for anything else, so a genuine infrastructure failure degrading every
+invoice's bank-details section is no longer invisible) plus 2 LOW doc/test-coverage notes
+fixed (documented the deliberate Paid/Payments removal in the function's own doc comment
+with a new negative test; this tracker entry itself resolves the LOW about a dangling
+`progress-tracker.md` cross-reference). **Security review: 0 CRITICAL/HIGH** — independently
+converged on the identical MEDIUM (same fix applied once), traced and confirmed
+`companyService.getCompany`'s tenant-scoping composes safely with
+`salesInvoiceService.getSalesInvoice`'s own check (no cross-tenant path), confirmed every new
+template field is escaped, and confirmed the logo path-traversal guard holds on both POSIX
+and Windows semantics via a live test. **1 LOW accepted as a follow-up, not fixed**: every
+company's logo lives in one shared flat directory (`public/uploads/logos/`, a pre-existing
+storage convention this diff did not introduce), isolated only by unguessable UUID filenames
+rather than real per-tenant storage scoping — not currently exploitable (no discovery vector
+exists for one company to learn another's logo filename), but this diff is what first makes
+the file's *contents* consumer-facing (embedded into every downloaded invoice PDF, versus
+previously only an `<img src>` URL on the company's own profile page) — worth hardening to a
+per-`companyId` subdirectory if logo storage is revisited.
+
+Re-verified after all fixes: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors,
+same 2 pre-existing unrelated warnings), `npx vitest run` (216 files, **2859 tests** — 28
+new), `next build` (clean, no new routes — same `[id]/pdf` route, richer output).
+
+**Open follow-ups, not yet scheduled**: (1) update `SalesInvoicePrintView` to match if the
+user wants the on-screen preview and downloaded PDF visually identical again; (2) per-tenant
+logo storage isolation (the LOW security-review note above); (3) Indian-style comma digit
+grouping (e.g. "3,500.00") on invoice amounts, matching both reference images, was
+deliberately NOT added — every other financial document/report in this app already uses plain
+`.toFixed(2)` with no thousand separators, and introducing one new formatting convention for
+this single document alone was judged a bigger inconsistency than the gap it would close;
+worth a deliberate, app-wide decision if the user wants it.

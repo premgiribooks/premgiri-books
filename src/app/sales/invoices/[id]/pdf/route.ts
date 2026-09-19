@@ -4,8 +4,12 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError } from "@/lib/current-user";
 import { logger } from "@/lib/logger";
 import { renderHtmlToPdf } from "@/lib/pdf-generation";
+import { bankAccountService } from "@/modules/bank-accounts/services/bank-account-service";
+import { companyService } from "@/modules/company/services/company-service";
+import { readCompanyLogoAsDataUri } from "@/modules/company/services/company-logo-service";
 import { buildSalesInvoiceHtml } from "@/modules/sales-invoices/pdf/sales-invoice-pdf";
 import { salesInvoiceService } from "@/modules/sales-invoices/services/sales-invoice-service";
+import type { BankAccountWithLedger } from "@/types/bank-account";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -16,12 +20,39 @@ function downloadFilename(invoiceNumber: string): string {
 }
 
 /**
+ * The company's own bank account is optional polish on the printed
+ * invoice, not core to the document — a user with `sales`/`view` but no
+ * `accounting`/`view` permission can still download their own invoice, so
+ * a missing-permission or no-accounts-configured outcome just omits that
+ * section rather than blocking the whole PDF. This module has no "primary
+ * account" flag, so the first active one is used. Only the EXPECTED
+ * `AuthorizationError` case is swallowed silently; any other failure (a
+ * real DB/infrastructure error) is logged — a code-review finding on this
+ * same feature caught the original version silently swallowing every
+ * error with no observability at all, matching the exact anti-pattern the
+ * route's own outer catch block already documents having fixed once.
+ */
+async function resolveBankAccountForInvoice(): Promise<BankAccountWithLedger | null> {
+  try {
+    const bankAccounts = await bankAccountService.listBankAccounts({ status: "active" });
+    return bankAccounts[0] ?? null;
+  } catch (error) {
+    if (!(error instanceof AuthorizationError)) {
+      logger.warn({ err: error }, "Failed to resolve a bank account for a Sales Invoice PDF — omitting the section");
+    }
+    return null;
+  }
+}
+
+/**
  * Delivers a Sales Invoice as a downloadable PDF — a thin Route Handler
  * with no business logic of its own (code-standards.md's Business Logic
  * rule): `salesInvoiceService.getSalesInvoice` re-checks its own
  * `sales`/`view` permission and company scoping exactly as the detail page
- * does, `buildSalesInvoiceHtml` renders the already-loaded document, and
- * `renderHtmlToPdf` turns it into a buffer (78-pdf-generation.md).
+ * does, `companyService.getCompany` re-checks its own session scoping for
+ * the seller block, `buildSalesInvoiceHtml` renders the already-loaded
+ * document, and `renderHtmlToPdf` turns it into a buffer
+ * (78-pdf-generation.md).
  */
 export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { id } = await params;
@@ -41,8 +72,14 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
       return NextResponse.json({ error: "A draft sales invoice cannot be downloaded as a PDF." }, { status: 400 });
     }
 
-    const html = buildSalesInvoiceHtml(salesInvoice);
-    const pdf = await renderHtmlToPdf(html, { format: "A5" });
+    const [company, bankAccount] = await Promise.all([
+      companyService.getCompany(salesInvoice.companyId),
+      resolveBankAccountForInvoice(),
+    ]);
+    const logoDataUri = await readCompanyLogoAsDataUri(company?.logo ?? null);
+
+    const html = buildSalesInvoiceHtml({ salesInvoice, company, bankAccount, logoDataUri });
+    const pdf = await renderHtmlToPdf(html, { format: "A4" });
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

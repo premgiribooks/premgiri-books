@@ -19,7 +19,22 @@ type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
 const CUSTOMER_INCLUDE = {
   customer: {
-    select: { id: true, isActive: true, creditLimit: true, ledgerId: true, ledger: { select: { name: true } } },
+    select: {
+      id: true,
+      isActive: true,
+      creditLimit: true,
+      ledgerId: true,
+      ledger: { select: { name: true } },
+      // gstin/address: needed by the printed PDF's "Bill To" block for a
+      // PERMANENT customer (78-pdf-generation.md) — not previously
+      // selected since no prior reader needed them.
+      gstin: true,
+      addressLine1: true,
+      addressLine2: true,
+      city: true,
+      state: true,
+      pinCode: true,
+    },
   },
 } as const;
 
@@ -34,7 +49,20 @@ const DELIVERY_CHALLAN_INCLUDE = {
 const ITEM_INCLUDE = {
   items: {
     include: {
-      product: { select: { id: true, name: true, productCode: true, isActive: true } },
+      product: {
+        select: {
+          id: true,
+          name: true,
+          productCode: true,
+          isActive: true,
+          // unit/hsnCode: needed by the printed PDF's item table (a Tax
+          // Invoice must show each line's HSN/SAC code and unit) — mirrors
+          // quotation-repository.ts's/sales-order-repository.ts's identical
+          // select shape.
+          unit: { select: { symbol: true } },
+          hsnCode: { select: { code: true } },
+        },
+      },
       warehouse: { select: { id: true, name: true, code: true, isActive: true } },
     },
   },
@@ -100,6 +128,12 @@ function toCustomerOption(
     creditLimit: Prisma.Decimal | null;
     ledgerId: string;
     ledger: { name: string };
+    gstin: string | null;
+    addressLine1: string | null;
+    addressLine2: string | null;
+    city: string | null;
+    state: string | null;
+    pinCode: string | null;
   } | null
 ): SalesInvoiceCustomerOption | null {
   if (!raw) {
@@ -111,6 +145,12 @@ function toCustomerOption(
     isActive: raw.isActive,
     creditLimit: raw.creditLimit ? raw.creditLimit.toNumber() : null,
     ledgerId: raw.ledgerId,
+    gstin: raw.gstin,
+    addressLine1: raw.addressLine1,
+    addressLine2: raw.addressLine2,
+    city: raw.city,
+    state: raw.state,
+    pinCode: raw.pinCode,
   };
 }
 
@@ -150,7 +190,18 @@ function toSalesInvoiceDetail(raw: SalesInvoiceDetailRaw): SalesInvoiceDetail {
         const value = (item as unknown as Record<string, Prisma.Decimal | null>)[field];
         line[field] = value ? value.toNumber() : null;
       }
-      return { ...(line as unknown as SalesInvoiceItemDetail), product: item.product, warehouse: item.warehouse };
+      return {
+        ...(line as unknown as SalesInvoiceItemDetail),
+        product: {
+          id: item.product.id,
+          name: item.product.name,
+          productCode: item.product.productCode,
+          isActive: item.product.isActive,
+          unitSymbol: item.product.unit.symbol,
+          hsnCode: item.product.hsnCode?.code ?? null,
+        },
+        warehouse: item.warehouse,
+      };
     });
 
   const normalizedPayments = payments.map((payment) => ({

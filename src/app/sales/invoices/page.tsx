@@ -88,6 +88,12 @@ export default async function SalesInvoiceListPage({ searchParams }: SalesInvoic
             isActive: customer.isActive,
             creditLimit: customer.creditLimit,
             ledgerId: customer.ledgerId,
+            gstin: customer.gstin,
+            addressLine1: customer.addressLine1,
+            addressLine2: customer.addressLine2,
+            city: customer.city,
+            state: customer.state,
+            pinCode: customer.pinCode,
           }))}
         />
 

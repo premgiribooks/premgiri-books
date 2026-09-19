@@ -29,7 +29,7 @@ function baseItem(overrides: Partial<SalesInvoiceItemDetail> = {}): SalesInvoice
     overriddenCess: null,
     overrideReason: null,
     overriddenByUserId: null,
-    product: { id: "prod-1", name: "Widget", productCode: "WID-001", isActive: true },
+    product: { id: "prod-1", name: "Widget", productCode: "WID-001", isActive: true, hsnCode: null, unitSymbol: "Nos" },
     warehouse: { id: "wh-1", name: "Main Warehouse", code: "MAIN", isActive: true },
     ...overrides,
   };
@@ -47,7 +47,21 @@ describe("customerDisplayName", () => {
 
   it("uses the linked customer's name when present", () => {
     const name = customerDisplayName(
-      baseInvoice({ customer: { id: "c1", name: "Acme Traders", isActive: true, creditLimit: null, ledgerId: "l1" } })
+      baseInvoice({
+        customer: {
+          id: "c1",
+          name: "Acme Traders",
+          isActive: true,
+          creditLimit: null,
+          ledgerId: "l1",
+          gstin: null,
+          addressLine1: null,
+          addressLine2: null,
+          city: null,
+          state: null,
+          pinCode: null,
+        },
+      })
     );
     expect(name).toBe("Acme Traders");
   });

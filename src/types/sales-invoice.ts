@@ -60,12 +60,16 @@ export interface SalesInvoicePayment extends Omit<PrismaSalesInvoicePayment, "am
 }
 
 /** The slice of Product a sales invoice line's read-model needs — mirrors
- * SalesOrderProductSnapshot. */
+ * SalesOrderProductSnapshot, extended with `hsnCode`/`unitSymbol` for the
+ * printed PDF's standard tax-invoice item table (a Tax Invoice must show
+ * each line's HSN/SAC code and unit, per GST invoicing convention). */
 export interface SalesInvoiceProductSnapshot {
   id: string;
   name: string;
   productCode: string;
   isActive: boolean;
+  hsnCode: string | null;
+  unitSymbol: string;
 }
 
 /** The slice of Warehouse a sales invoice line's read-model needs. */
@@ -87,7 +91,11 @@ export interface SalesInvoicePaymentDetail extends SalesInvoicePayment {
 }
 
 /** The slice of Customer a sales invoice's read-model needs — null for
- * QUICK/WALK_IN invoices (no Customer row). */
+ * QUICK/WALK_IN invoices (no Customer row). `gstin`/address fields are
+ * extended here (beyond what the Create/Edit form's own picker needs) for
+ * the printed PDF's "Bill To" block — a permanent customer's own stored
+ * GSTIN/address, mirroring the `quickCustomer*` fields already carried on
+ * `SalesInvoiceDetail` for a QUICK/WALK_IN sale. */
 export interface SalesInvoiceCustomerOption {
   id: string;
   name: string;
@@ -97,6 +105,12 @@ export interface SalesInvoiceCustomerOption {
    * this customer's current outstanding balance (voucherQueries.getLedgerBalance)
    * without a second customer-id-keyed lookup. */
   ledgerId: string;
+  gstin: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  pinCode: string | null;
 }
 
 export interface SalesInvoiceSalesOrderSnapshot {
