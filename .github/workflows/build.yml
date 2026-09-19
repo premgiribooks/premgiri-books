@@ -63,4 +63,4 @@ jobs:
       # Prisma Client construction at import time, not a live connection.
       - run: pnpm run build
         env:
-          DATABASE_URL: "postgresql://user:password@localhost:5432/premgiri_books?schema=public"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

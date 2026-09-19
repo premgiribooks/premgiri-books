@@ -1,0 +1,121 @@
+name: Build and Deploy
+
+# Deploys the Next.js standalone server to the Termux webserver on every
+# push to main. This is separate from release.yml (which packages the
+# Electron desktop app) — this workflow only ships the web-server build.
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    # Runs on the self-hosted runner registered on CHE-RL-LTP14 rather than
+    # a GitHub-hosted runner — this machine can reach the Termux host on
+    # the local network, which a GitHub-hosted cloud runner cannot. Matched
+    # by the automatic "self-hosted"/"Windows" labels rather than the
+    # runner's name (only labels are used for runs-on matching); narrow
+    # this to a custom label instead if a second self-hosted runner is ever
+    # registered for this repo.
+    runs-on: [self-hosted, Windows]
+    # Existing steps below are written as POSIX shell (cp -r, heredocs).
+    # CHE-RL-LTP14 has Git Bash/MSYS2 on PATH (confirmed: `uname -a` reports
+    # MINGW64), so run everything through bash instead of the Windows
+    # default of PowerShell.
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate
+
+      - name: Build Next.js standalone server
+        # Runs next build + prepare-standalone.mjs directly (skips
+        # scripts/build-electron.mjs from `pnpm build`, which bundles the
+        # unrelated Electron desktop entrypoints). prepare-standalone.mjs
+        # already copies public/ and .next/static into .next/standalone
+        # and dereferences pnpm's symlinks, so the standalone folder is
+        # fully self-contained afterwards.
+        run: |
+          pnpm exec next build
+          node scripts/prepare-standalone.mjs
+        env:
+          # Only needed to satisfy Prisma Client construction at import
+          # time during the build, not a live connection (see build.yml).
+          # The real DATABASE_URL is written to the server's .env below
+          # and used at runtime.
+          DATABASE_URL: "postgresql://user:password@localhost:5432/premgiri_books?schema=public"
+
+      - name: Prepare deployment folder
+        run: |
+          mkdir deploy
+          cp -r .next/standalone/. deploy/
+
+      - name: Ensure remote app directory exists
+        # scp itself won't create a missing target directory, and this
+        # keeps folder setup out of your hands entirely — nothing to
+        # create by hand on the phone before the first deploy.
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.TERMUX_HOST }}
+          username: ${{ secrets.TERMUX_USER }}
+          password: ${{ secrets.TERMUX_PASSWORD }}
+          port: 8022
+          script: mkdir -p ~/next-app
+
+      - name: Upload build to webserver
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TERMUX_HOST }}
+          username: ${{ secrets.TERMUX_USER }}
+          password: ${{ secrets.TERMUX_PASSWORD }}
+          port: 8022
+          source: "deploy/*"
+          target: "~/next-app"
+          strip_components: 1
+
+      - name: Write runtime .env, rebuild native deps, and restart app
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.TERMUX_HOST }}
+          username: ${{ secrets.TERMUX_USER }}
+          password: ${{ secrets.TERMUX_PASSWORD }}
+          port: 8022
+          envs: DATABASE_URL,SEED_ADMIN_PASSWORD,SEED_SUPER_ADMIN_PASSWORD
+          script: |
+            cat > ~/next-app/.env <<ENVEOF
+            PORT=8903
+            DATABASE_URL=$DATABASE_URL
+            SEED_ADMIN_PASSWORD=$SEED_ADMIN_PASSWORD
+            SEED_SUPER_ADMIN_PASSWORD=$SEED_SUPER_ADMIN_PASSWORD
+            ENVEOF
+            cd ~/next-app
+            # argon2 is a native addon; the copy above carries whatever
+            # binary the build machine (Windows/x64) produced, which won't
+            # load on Termux's Android/aarch64 userland. Rebuilding it here
+            # compiles a binary for the phone's own architecture using
+            # Termux's toolchain (clang/make/python must be installed).
+            npm rebuild argon2 --build-from-source
+            pm2 restart premgiri-books || pm2 start server.js --name premgiri-books
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
+          SEED_SUPER_ADMIN_PASSWORD: ${{ secrets.SEED_SUPER_ADMIN_PASSWORD }}
