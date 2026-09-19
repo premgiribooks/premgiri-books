@@ -1,0 +1,27 @@
+name: Test Self Hosted Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Test runner
+        shell: powershell
+        run: |
+          Write-Host "Runner is working"
+          Write-Host "Computer: $env:COMPUTERNAME"
+          Write-Host "User: $env:USERNAME"
+
+      - name: Test Node
+        shell: powershell
+        run: |
+          node --version
+          npm --version
+
+      - name: Test pnpm
+        shell: powershell
+        run: |
+          pnpm --version
