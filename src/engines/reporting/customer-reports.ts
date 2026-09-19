@@ -1,4 +1,4 @@
-import type { BalanceType, VoucherType } from "@prisma/client";
+import type { BalanceType, CustomerType, VoucherType } from "@prisma/client";
 
 import { buildPartyWiseSalesReport } from "@/engines/reporting/sales-reports";
 import type { LedgerStatementResult, TrialBalanceResult } from "@/engines/voucher/types";
@@ -192,4 +192,147 @@ export function buildCustomerDirectory(customers: readonly CustomerReportRow[]):
   }));
 
   return { rows };
+}
+
+/**
+ * "RETAIL" -> "Retail" — duplicated locally rather than imported from
+ * customer-type-badge.tsx's own `CUSTOMER_TYPE_LABELS` (a UI component
+ * module, out of reach for this pure-function engine layer with no
+ * component/Prisma imports of its own), mirroring humanizeVoucherType's
+ * identical per-file duplication convention above.
+ */
+function humanizeCustomerType(customerType: CustomerType): string {
+  return customerType.charAt(0) + customerType.slice(1).toLowerCase();
+}
+
+type CustomerOutstandingExportRow = Record<string, string | number | Date | null>;
+
+const CUSTOMER_OUTSTANDING_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "customerName", header: "Customer", type: "string" },
+  { key: "customerType", header: "Type", type: "string" },
+  { key: "outstandingBalance", header: "Outstanding Balance", type: "currency" },
+  { key: "creditLimit", header: "Credit Limit", type: "currency" },
+  { key: "overLimit", header: "Over Limit", type: "string" },
+];
+
+/** Mirrors customer-outstanding-table.tsx's own presentation exactly: `false` (not over limit) renders blank, `null` (no credit limit set, not applicable) renders "—", and only `true` prints a label. */
+function overLimitLabel(isOverLimit: boolean | null): string {
+  if (isOverLimit === null) {
+    return "—";
+  }
+  return isOverLimit ? "Over Limit" : "";
+}
+
+/**
+ * Flattens buildCustomerOutstandingReport's flat row list into the
+ * rows-plus-optional-totals-footer shape src/lib/excel-export.ts's shared
+ * contract understands, mirroring customer-outstanding-table.tsx's own
+ * column set exactly. No totals footer — the on-screen table has none (an
+ * Outstanding Balance total across customers isn't a figure that table
+ * surfaces), so none is invented here either.
+ */
+export function toCustomerOutstandingExportTable(report: CustomerOutstandingReport): ReportExportTable[] {
+  const rows: CustomerOutstandingExportRow[] = report.rows.map((row) => ({
+    customerName: row.customerName,
+    customerType: humanizeCustomerType(row.customerType),
+    outstandingBalance: row.outstandingBalance,
+    creditLimit: row.creditLimit,
+    overLimit: overLimitLabel(row.isOverLimit),
+  }));
+
+  return [
+    {
+      sheetName: "Customer Outstanding",
+      columns: CUSTOMER_OUTSTANDING_EXPORT_COLUMNS,
+      rows,
+    },
+  ];
+}
+
+type CustomerDirectoryExportRow = Record<string, string | number | Date | null>;
+
+const CUSTOMER_DIRECTORY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "displayName", header: "Name", type: "string" },
+  { key: "customerType", header: "Type", type: "string" },
+  { key: "mobileNumber", header: "Mobile", type: "string" },
+  { key: "gstin", header: "GSTIN", type: "string" },
+  { key: "cityState", header: "City / State", type: "string" },
+  { key: "status", header: "Status", type: "string" },
+];
+
+/**
+ * Flattens buildCustomerDirectory's flat row list into
+ * src/lib/excel-export.ts's shared contract, mirroring
+ * customer-directory-table.tsx's own column set exactly — City and State
+ * combined into a single "City / State" column, matching the on-screen
+ * table's own presentation. No totals footer — a contact directory has
+ * nothing to sum.
+ */
+export function toCustomerDirectoryExportTable(report: CustomerDirectoryReport): ReportExportTable[] {
+  const rows: CustomerDirectoryExportRow[] = report.rows.map((row) => ({
+    displayName: row.displayName,
+    customerType: humanizeCustomerType(row.customerType),
+    mobileNumber: row.mobileNumber ?? "",
+    gstin: row.gstin ?? "",
+    cityState: [row.city, row.state].filter(Boolean).join(", "),
+    status: row.isActive ? "Active" : "Inactive",
+  }));
+
+  return [
+    {
+      sheetName: "Customer Directory",
+      columns: CUSTOMER_DIRECTORY_EXPORT_COLUMNS,
+      rows,
+    },
+  ];
+}
+
+type CustomerSalesSummaryExportRow = Record<string, string | number | Date | null>;
+
+const CUSTOMER_SALES_SUMMARY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "customerName", header: "Customer", type: "string" },
+  { key: "invoiceCount", header: "Invoice Count", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+];
+
+/**
+ * Flattens buildCustomerSalesSummary's own `PartyWiseSalesReport` into
+ * src/lib/excel-export.ts's shared contract, mirroring
+ * party-wise-sales-table.tsx's own column set exactly. `buildCustomerSalesSummary`
+ * already excludes the Walk-in/Quick-Customer synthetic buckets before this
+ * point (Business Rules #3 above), so every row reaching this function is a
+ * real Customer — no groupType badge column is needed here, unlike the
+ * on-screen table's own conditional badge (which only ever renders for the
+ * buckets this report never contains). Self-contained on purpose: this
+ * duplicates the Sales module's own identical `PartyWiseSalesReport` ->
+ * export-table flattening in sales-reports.ts rather than importing it,
+ * matching this file's own established small-duplication convention (see
+ * signedOpening/humanizeVoucherType above). The totals footer is copied
+ * straight from `report.totals`, never re-summed.
+ */
+export function toCustomerSalesSummaryExportTable(report: PartyWiseSalesReport): ReportExportTable[] {
+  const rows: CustomerSalesSummaryExportRow[] = report.rows.map((row) => ({
+    customerName: row.customerName,
+    invoiceCount: row.invoiceCount,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalTax,
+    grandTotal: row.grandTotal,
+  }));
+
+  return [
+    {
+      sheetName: "Customer Sales Summary",
+      columns: CUSTOMER_SALES_SUMMARY_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        customerName: "Period Total",
+        invoiceCount: report.totals.invoiceCount,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        grandTotal: report.totals.grandTotal,
+      },
+    },
+  ];
 }

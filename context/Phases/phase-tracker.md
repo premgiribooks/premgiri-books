@@ -2535,6 +2535,66 @@ as usual:
 > Warehouses, HSN Codes, GST Rates, Margin Profiles, Price Lists,
 > Employees).
 
+> **Excel Export extended to 13 more reports, implemented 2026-09-19**
+> (still spec 77), continuing the same user request. Wired the established
+> `toXExportTable` → Route Handler → `ReportExportButton downloadUrl`
+> pattern onto **Customer Outstanding/Directory/Sales-Summary**,
+> **Supplier Outstanding/Directory/Purchase-Summary**, **Sales
+> Item-wise/Party-wise/Returns**, **Purchase Item-wise/Party-wise/Returns**,
+> and **Profit & Loss/Cash Flow**. Built by 5 parallel agents grouped by
+> engine-file ownership (Customer, Supplier, Sales, Purchase,
+> Profit&Loss/Cash-Flow) — all 5 hit a mid-task session rate limit and
+> stopped early; each had already produced substantial, structurally sound
+> work (every `toXExportTable` function, all 13 `route.ts` files, and 11 of
+> 13 `route.test.ts` files), so rather than re-running agents I finished the
+> leftover gaps directly: wrote the missing tests for 3 already-implemented
+> `sales-reports.ts` export functions (imported in the test file but never
+> exercised), wrote the one missing `route.test.ts`
+> (`purchase/returns/export`), and wired `downloadUrl` into the 9 page.tsx
+> files the agents hadn't reached yet. Two report pairs share an underlying
+> type — Sales Party-wise/Customer Sales Summary both shape a
+> `PartyWiseSalesReport`, Purchase Party-wise/Supplier Purchase Summary both
+> shape a `PartyWisePurchaseReport` — each pair's two independently-written
+> export functions were deliberately left as small, self-contained
+> duplicates (matching this codebase's own `signedOpening`/
+> `humanizeVoucherType` precedent) rather than cross-importing, to avoid a
+> parallel-agent ordering dependency.
+>
+> Code review: 0 CRITICAL/HIGH, 1 MEDIUM fixed — the Sales module's own
+> `toItemWiseSalesExportTable`/`toPartyWiseSalesExportTable` totals footers
+> used the label `"Total"` while every sibling covering the identical
+> report shape (`toCustomerSalesSummaryExportTable`,
+> `toPartyWisePurchaseExportTable`, `toSupplierPurchaseSummaryExportTable`,
+> `toItemWisePurchaseExportTable`) and both reports' own on-screen tables
+> use `"Period Total"` — relabeled both for consistency, fixed the two
+> affected test assertions. 1 LOW fixed — `customers/sales-summary` and
+> `suppliers/purchase-summary`'s `downloadFilename` helpers were the only 2
+> of 13 that skipped the `[^a-zA-Z0-9._-]` sanitization every other
+> date-range route applies (not exploitable today, since both dates are
+> already Zod-validated to `YYYY-MM-DD` before reaching the filename, but
+> fixed for consistency and to avoid the gap propagating to a future,
+> less-constrained route). Security review: 0 CRITICAL/HIGH/MEDIUM/LOW —
+> independently confirmed permission checks, cross-company isolation
+> (including the optional productId/warehouseId/customerId/supplierId
+> filters on the item-wise/party-wise reports), formula-injection
+> sanitizer reuse, error-message safety, and filename safety across all 13
+> routes.
+>
+> Re-verified after both fixes: `npx tsc --noEmit` (0 errors), `npx eslint
+> src prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx
+> vitest run` (185 files, **2439 tests** — 143 new since the prior batch),
+> `next build` (all 19 `.../export` routes now present across every
+> shipped report). Not yet committed as of this entry — commit follows
+> immediately after.
+>
+> **Next Up** (same user request, remaining scope): Excel Export for GST
+> reports, Inventory reports (current-stock/ledger/low-stock/valuation),
+> and Employee reports (directory/attendance-summary/payroll-register/
+> salary-register) — the last ~9 report screens; then Excel Import
+> extended to the remaining masters (Categories, Brands, Units,
+> Warehouses, HSN Codes, GST Rates, Margin Profiles, Price Lists,
+> Employees).
+
 ---
 
 # Future Roadmap

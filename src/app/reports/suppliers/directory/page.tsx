@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { SupplierDirectoryTable } from "@/modules/reports/suppliers/components/supplier-directory-table";
 import { SupplierReportFilterBar } from "@/modules/reports/suppliers/components/supplier-report-filter-bar";
 import { supplierReportService } from "@/modules/reports/suppliers/services/supplier-report-service";
@@ -38,12 +39,17 @@ export default async function SupplierDirectoryPage({ searchParams }: SupplierDi
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ status });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Supplier Directory</h1>
-          <p className="text-sm text-muted-foreground">Every supplier&apos;s contact and GST details.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Supplier Directory</h1>
+            <p className="text-sm text-muted-foreground">Every supplier&apos;s contact and GST details.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/suppliers/directory/export?${exportParams.toString()}`} />
         </div>
 
         <SupplierReportFilterBar showStatus />

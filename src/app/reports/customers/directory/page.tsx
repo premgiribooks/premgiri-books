@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { CustomerDirectoryTable } from "@/modules/reports/customers/components/customer-directory-table";
 import { CustomerReportFilterBar } from "@/modules/reports/customers/components/customer-report-filter-bar";
 import { customerReportService } from "@/modules/reports/customers/services/customer-report-service";
@@ -42,12 +43,23 @@ export default async function CustomerDirectoryPage({ searchParams }: CustomerDi
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams();
+  if (customerType) {
+    exportParams.set("customerType", customerType);
+  }
+  if (status !== "active") {
+    exportParams.set("status", status);
+  }
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Customer Directory</h1>
-          <p className="text-sm text-muted-foreground">Every customer&apos;s contact and GST details.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Customer Directory</h1>
+            <p className="text-sm text-muted-foreground">Every customer&apos;s contact and GST details.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/customers/directory/export?${exportParams.toString()}`} />
         </div>
 
         <CustomerReportFilterBar showCustomerType showStatus />

@@ -5,6 +5,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { PartyWiseSalesTable } from "@/modules/reports/sales/components/party-wise-sales-table";
 import { SalesReportFilterBar } from "@/modules/reports/sales/components/sales-report-filter-bar";
 import { salesReportService } from "@/modules/reports/sales/services/sales-report-service";
@@ -55,14 +56,19 @@ export default async function PartyWiseSalesPage({ searchParams }: PartyWiseSale
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ dateFrom, dateTo });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Party-wise Sales Summary</h1>
-          <p className="text-sm text-muted-foreground">
-            Sales value grouped by customer, with Walk-in and unconverted Quick Customer sales as their own labeled rows.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Party-wise Sales Summary</h1>
+            <p className="text-sm text-muted-foreground">
+              Sales value grouped by customer, with Walk-in and unconverted Quick Customer sales as their own labeled rows.
+            </p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/sales/party-wise/export?${exportParams.toString()}`} />
         </div>
 
         <SalesReportFilterBar />

@@ -5,11 +5,15 @@ import {
   buildCustomerOutstandingReport,
   buildCustomerSalesSummary,
   buildCustomerStatement,
+  toCustomerDirectoryExportTable,
+  toCustomerOutstandingExportTable,
+  toCustomerSalesSummaryExportTable,
   toCustomerStatementExportTable,
 } from "@/engines/reporting/customer-reports";
 import type { LedgerStatementResult, TrialBalanceResult } from "@/engines/voucher/types";
 import type { PartyWiseSalesAggregateRow } from "@/types/sales-invoice";
-import type { CustomerReportRow, CustomerStatementReport } from "@/types/customer-report";
+import type { PartyWiseSalesReport } from "@/types/sales-report";
+import type { CustomerDirectoryReport, CustomerOutstandingReport, CustomerReportRow, CustomerStatementReport } from "@/types/customer-report";
 
 function customerRow(overrides: Partial<CustomerReportRow> = {}): CustomerReportRow {
   return {
@@ -316,5 +320,167 @@ describe("buildCustomerDirectory", () => {
         isActive: true,
       },
     ]);
+  });
+});
+
+describe("toCustomerOutstandingExportTable", () => {
+  function outstandingReport(overrides: Partial<CustomerOutstandingReport["rows"][number]> = {}): CustomerOutstandingReport {
+    return {
+      rows: [
+        {
+          customerId: "cust-1",
+          customerName: "Acme Retail",
+          customerType: "RETAIL",
+          outstandingBalance: 3000,
+          creditLimit: 2000,
+          isOverLimit: true,
+          ...overrides,
+        },
+      ],
+    };
+  }
+
+  it("maps each row to customer-outstanding-table.tsx's own column set, humanizing the customer type", () => {
+    const tables = toCustomerOutstandingExportTable(outstandingReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Customer Outstanding");
+    expect(tables[0].rows).toEqual([
+      {
+        customerName: "Acme Retail",
+        customerType: "Retail",
+        outstandingBalance: 3000,
+        creditLimit: 2000,
+        overLimit: "Over Limit",
+      },
+    ]);
+  });
+
+  it("renders Over Limit as blank when false and as '—' (not applicable) when null, matching the on-screen table", () => {
+    const notOverLimit = toCustomerOutstandingExportTable(outstandingReport({ isOverLimit: false }));
+    expect(notOverLimit[0].rows[0].overLimit).toBe("");
+
+    const notApplicable = toCustomerOutstandingExportTable(outstandingReport({ creditLimit: null, isOverLimit: null }));
+    expect(notApplicable[0].rows[0].overLimit).toBe("—");
+  });
+
+  it("carries a null creditLimit through unchanged rather than inventing a zero", () => {
+    const tables = toCustomerOutstandingExportTable(outstandingReport({ creditLimit: null, isOverLimit: null }));
+    expect(tables[0].rows[0].creditLimit).toBeNull();
+  });
+
+  it("has no totals footer, matching customer-outstanding-table.tsx having none", () => {
+    const tables = toCustomerOutstandingExportTable(outstandingReport());
+    expect(tables[0].totals).toBeUndefined();
+  });
+});
+
+describe("toCustomerDirectoryExportTable", () => {
+  function directoryReport(overrides: Partial<CustomerDirectoryReport["rows"][number]> = {}): CustomerDirectoryReport {
+    return {
+      rows: [
+        {
+          id: "cust-1",
+          displayName: "Acme Retail",
+          customerType: "WHOLESALE",
+          mobileNumber: "9876543210",
+          gstin: "27ABCDE1234F1Z5",
+          city: "Pune",
+          state: "Maharashtra",
+          isActive: true,
+          ...overrides,
+        },
+      ],
+    };
+  }
+
+  it("maps each row to customer-directory-table.tsx's own column set, combining City and State into one column", () => {
+    const tables = toCustomerDirectoryExportTable(directoryReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Customer Directory");
+    expect(tables[0].rows).toEqual([
+      {
+        displayName: "Acme Retail",
+        customerType: "Wholesale",
+        mobileNumber: "9876543210",
+        gstin: "27ABCDE1234F1Z5",
+        cityState: "Pune, Maharashtra",
+        status: "Active",
+      },
+    ]);
+  });
+
+  it("falls back to empty strings for missing mobile/GSTIN/city/state, and labels inactive customers", () => {
+    const tables = toCustomerDirectoryExportTable(
+      directoryReport({ mobileNumber: null, gstin: null, city: null, state: null, isActive: false })
+    );
+
+    expect(tables[0].rows[0]).toEqual({
+      displayName: "Acme Retail",
+      customerType: "Wholesale",
+      mobileNumber: "",
+      gstin: "",
+      cityState: "",
+      status: "Inactive",
+    });
+  });
+
+  it("has no totals footer, matching customer-directory-table.tsx having none", () => {
+    const tables = toCustomerDirectoryExportTable(directoryReport());
+    expect(tables[0].totals).toBeUndefined();
+  });
+});
+
+describe("toCustomerSalesSummaryExportTable", () => {
+  function salesSummaryReport(): PartyWiseSalesReport {
+    return {
+      rows: [
+        {
+          groupType: "CUSTOMER",
+          customerId: "cust-1",
+          customerMode: "PERMANENT",
+          customerName: "Acme Retail",
+          invoiceCount: 2,
+          taxableAmount: 1000,
+          totalTax: 180,
+          grandTotal: 1180,
+        },
+      ],
+      totals: {
+        invoiceCount: 2,
+        taxableAmount: 1000,
+        totalTax: 180,
+        grandTotal: 1180,
+      },
+    };
+  }
+
+  it("maps each row to party-wise-sales-table.tsx's own column set", () => {
+    const tables = toCustomerSalesSummaryExportTable(salesSummaryReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Customer Sales Summary");
+    expect(tables[0].rows).toEqual([
+      {
+        customerName: "Acme Retail",
+        invoiceCount: 2,
+        taxableAmount: 1000,
+        totalTax: 180,
+        grandTotal: 1180,
+      },
+    ]);
+  });
+
+  it("carries the Period Total totals footer straight from report.totals — never re-summed", () => {
+    const tables = toCustomerSalesSummaryExportTable(salesSummaryReport());
+
+    expect(tables[0].totals).toEqual({
+      customerName: "Period Total",
+      invoiceCount: 2,
+      taxableAmount: 1000,
+      totalTax: 180,
+      grandTotal: 1180,
+    });
   });
 });

@@ -5,6 +5,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { PurchaseReportFilterBar } from "@/modules/reports/purchase/components/purchase-report-filter-bar";
 import { PurchaseReturnSummaryTable } from "@/modules/reports/purchase/components/purchase-return-summary-table";
 import { purchaseReportService } from "@/modules/reports/purchase/services/purchase-report-service";
@@ -69,12 +70,19 @@ export default async function PurchaseReturnSummaryPage({ searchParams }: Purcha
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ dateFrom, dateTo });
+  if (supplierId) exportParams.set("supplierId", supplierId);
+  if (status) exportParams.set("status", status);
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Purchase Return Summary</h1>
-          <p className="text-sm text-muted-foreground">Every Purchase Return within the selected date range, POSTED by default.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Purchase Return Summary</h1>
+            <p className="text-sm text-muted-foreground">Every Purchase Return within the selected date range, POSTED by default.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/purchase/returns/export?${exportParams.toString()}`} />
         </div>
 
         <PurchaseReportFilterBar suppliers={suppliers} statusOptions={PURCHASE_RETURN_STATUS_VALUES} />

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerGroup } from "@prisma/client";
 
-import { buildCashFlowReport } from "@/engines/reporting/cash-flow";
-import type { CashLedgerMovement, CategorizableEntry } from "@/engines/reporting/types";
+import { buildCashFlowReport, toCashFlowExportTable } from "@/engines/reporting/cash-flow";
+import type { CashFlowReport, CashLedgerMovement, CategorizableEntry } from "@/engines/reporting/types";
 
 function group(overrides: Partial<LedgerGroup> & Pick<LedgerGroup, "id" | "name" | "natureType">): LedgerGroup {
   return {
@@ -143,3 +143,42 @@ describe("buildCashFlowReport", () => {
 function round(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+describe("toCashFlowExportTable", () => {
+  it("builds a single sheet with the three activity rows, a reconciliation row, and the net change as the totals footer", () => {
+    const report: CashFlowReport = {
+      operating: 100,
+      investing: -1000,
+      financing: 2000,
+      netChangeInCash: 1100,
+      reconciles: true,
+    };
+
+    const tables = toCashFlowExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Cash Flow");
+    expect(tables[0].rows).toEqual([
+      { particulars: "Net Cash from Operating Activities", amount: 100 },
+      { particulars: "Net Cash from Investing Activities", amount: -1000 },
+      { particulars: "Net Cash from Financing Activities", amount: 2000 },
+      { particulars: "Reconciled", amount: null },
+    ]);
+    expect(tables[0].totals).toEqual({ particulars: "Net Increase in Cash", amount: 1100 });
+  });
+
+  it("labels the footer 'Net Decrease in Cash' and flags the reconciliation row when reconciles is false", () => {
+    const report: CashFlowReport = {
+      operating: 0,
+      investing: 0,
+      financing: 0,
+      netChangeInCash: -50,
+      reconciles: false,
+    };
+
+    const tables = toCashFlowExportTable(report);
+
+    expect(tables[0].rows[3]).toEqual({ particulars: "Not reconciled — data-integrity check failed", amount: null });
+    expect(tables[0].totals).toEqual({ particulars: "Net Decrease in Cash", amount: -50 });
+  });
+});

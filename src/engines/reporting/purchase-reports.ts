@@ -1,11 +1,12 @@
 import { PURCHASE_INVOICE_STATUS_LABELS } from "@/modules/purchase-invoices/components/purchase-invoice-status-badge";
 import { toPaise } from "@/modules/purchase-invoices/utils/purchase-invoice-calculations";
+import { PURCHASE_RETURN_STATUS_LABELS } from "@/modules/purchase-returns/components/purchase-return-status-badge";
 import type {
   ItemWisePurchaseAggregateRow,
   PartyWisePurchaseAggregateRow,
   PurchaseInvoiceListRow,
 } from "@/types/purchase-invoice";
-import type { PurchaseReturnListRow } from "@/types/purchase-return";
+import type { PurchaseReturnListRow, RefundMode } from "@/types/purchase-return";
 import type {
   ItemWisePurchaseReport,
   ItemWisePurchaseRow,
@@ -217,6 +218,160 @@ export function toPurchaseRegisterExportTable(report: PurchaseRegisterReport): R
         totalTax: report.totals.totalTax,
         grandTotal: report.totals.grandTotal,
         amountPaid: report.totals.amountPaid,
+        status: null,
+      },
+    },
+  ];
+}
+
+type ItemWisePurchaseExportRow = Record<string, string | number | null>;
+
+const ITEM_WISE_PURCHASE_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "productName", header: "Product", type: "string" },
+  { key: "productCode", header: "Product Code", type: "string" },
+  { key: "quantity", header: "Quantity Purchased", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "totalValue", header: "Total Value", type: "currency" },
+  { key: "invoiceCount", header: "Invoice Count", type: "number" },
+];
+
+/**
+ * Flattens buildItemWisePurchaseReport's report into the single-sheet shape
+ * src/lib/excel-export.ts's shared contract understands — mirrors
+ * toPurchaseRegisterExportTable above. Row shape mirrors
+ * item-wise-purchase-table.tsx's own on-screen render exactly, splitting its
+ * two-line Product cell (name + code) into two columns. `invoiceCount` is
+ * included per row but excluded from the totals footer, same as
+ * buildItemWisePurchaseReport's own totals (Business Rules #2 — summing
+ * per-product invoice counts would double-count an invoice carrying more
+ * than one product line). The totals footer is otherwise copied straight
+ * from `report.totals`, never re-summed.
+ */
+export function toItemWisePurchaseExportTable(report: ItemWisePurchaseReport): ReportExportTable[] {
+  const rows: ItemWisePurchaseExportRow[] = report.rows.map((row) => ({
+    productName: row.productName,
+    productCode: row.productCode,
+    quantity: row.quantity,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalTax,
+    totalValue: row.totalValue,
+    invoiceCount: row.invoiceCount,
+  }));
+
+  return [
+    {
+      sheetName: "Item-wise Purchases",
+      columns: ITEM_WISE_PURCHASE_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        productName: "Period Total",
+        productCode: null,
+        quantity: report.totals.quantity,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        totalValue: report.totals.totalValue,
+        invoiceCount: null,
+      },
+    },
+  ];
+}
+
+type PartyWisePurchaseExportRow = Record<string, string | number | null>;
+
+const PARTY_WISE_PURCHASE_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "supplierName", header: "Supplier", type: "string" },
+  { key: "invoiceCount", header: "Invoice Count", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+];
+
+/**
+ * Flattens buildPartyWisePurchaseReport's report into the single-sheet shape
+ * src/lib/excel-export.ts's shared contract understands. Row shape mirrors
+ * party-wise-purchase-table.tsx's own on-screen render exactly. Unlike the
+ * Item-wise export, `invoiceCount` IS summed in the totals footer here — it
+ * is copied straight from `report.totals.invoiceCount`, which
+ * buildPartyWisePurchaseReport itself sums (every POSTED invoice belongs to
+ * exactly one supplier).
+ */
+export function toPartyWisePurchaseExportTable(report: PartyWisePurchaseReport): ReportExportTable[] {
+  const rows: PartyWisePurchaseExportRow[] = report.rows.map((row) => ({
+    supplierName: row.supplierName,
+    invoiceCount: row.invoiceCount,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalTax,
+    grandTotal: row.grandTotal,
+  }));
+
+  return [
+    {
+      sheetName: "Party-wise Purchases",
+      columns: PARTY_WISE_PURCHASE_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        supplierName: "Period Total",
+        invoiceCount: report.totals.invoiceCount,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        grandTotal: report.totals.grandTotal,
+      },
+    },
+  ];
+}
+
+type PurchaseReturnSummaryExportRow = Record<string, string | number | Date | null>;
+
+const REFUND_MODE_EXPORT_LABELS: Record<RefundMode, string> = {
+  LEDGER_ADJUSTMENT: "Ledger Adjustment",
+  CASH_REFUND: "Cash Refund",
+};
+
+const PURCHASE_RETURN_SUMMARY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "returnNumber", header: "Return Number", type: "string" },
+  { key: "sourceInvoiceNumber", header: "Source Invoice", type: "string" },
+  { key: "returnDate", header: "Date", type: "date" },
+  { key: "supplierName", header: "Supplier", type: "string" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+  { key: "refundMode", header: "Refund Mode", type: "string" },
+  { key: "status", header: "Status", type: "string" },
+];
+
+/**
+ * Flattens buildPurchaseReturnSummary's report into the single-sheet shape
+ * src/lib/excel-export.ts's shared contract understands. Row shape mirrors
+ * purchase-return-summary-table.tsx's own on-screen render exactly: a null
+ * `returnNumber` (a DRAFT return not yet numbered) shows as "Draft", refund
+ * mode and status both render via their own display labels (never the raw
+ * enum). The totals footer's only real figure is `totalGrandTotal`, copied
+ * straight from `report.totalGrandTotal`, matching this report's own
+ * type — no per-column totals exist beyond it (PurchaseReturnSummaryReport
+ * has no `totals` object, only a single running total).
+ */
+export function toPurchaseReturnSummaryExportTable(report: PurchaseReturnSummaryReport): ReportExportTable[] {
+  const rows: PurchaseReturnSummaryExportRow[] = report.rows.map((row) => ({
+    returnNumber: row.returnNumber ?? "Draft",
+    sourceInvoiceNumber: row.purchaseInvoice.invoiceNumber,
+    returnDate: row.returnDate,
+    supplierName: row.purchaseInvoice.supplierName,
+    grandTotal: row.grandTotal,
+    refundMode: REFUND_MODE_EXPORT_LABELS[row.refundMode] ?? row.refundMode,
+    status: PURCHASE_RETURN_STATUS_LABELS[row.status],
+  }));
+
+  return [
+    {
+      sheetName: "Purchase Return Summary",
+      columns: PURCHASE_RETURN_SUMMARY_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        returnNumber: "Period Total",
+        sourceInvoiceNumber: null,
+        returnDate: null,
+        supplierName: null,
+        grandTotal: report.totalGrandTotal,
+        refundMode: null,
         status: null,
       },
     },

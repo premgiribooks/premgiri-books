@@ -192,3 +192,118 @@ export function toSupplierStatementExportTable(report: SupplierStatementReport):
     },
   ];
 }
+
+type SupplierOutstandingExportRow = Record<string, string | number | null>;
+
+const SUPPLIER_OUTSTANDING_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "supplierName", header: "Supplier", type: "string" },
+  { key: "outstandingBalance", header: "Outstanding Balance", type: "currency" },
+  { key: "creditDays", header: "Credit Days", type: "number" },
+];
+
+/**
+ * Flattens buildSupplierOutstandingReport's flat row list into the
+ * single-sheet shape src/lib/excel-export.ts's shared contract understands,
+ * mirroring the on-screen SupplierOutstandingTable's own column set exactly.
+ * No totals footer — that table renders no footer row for this report.
+ */
+export function toSupplierOutstandingExportTable(report: SupplierOutstandingReport): ReportExportTable[] {
+  const rows: SupplierOutstandingExportRow[] = report.rows.map((row) => ({
+    supplierName: row.supplierName,
+    outstandingBalance: row.outstandingBalance,
+    creditDays: row.creditDays,
+  }));
+
+  return [
+    {
+      sheetName: "Supplier Outstanding",
+      columns: SUPPLIER_OUTSTANDING_EXPORT_COLUMNS,
+      rows,
+    },
+  ];
+}
+
+type SupplierDirectoryExportRow = Record<string, string | number | null>;
+
+const SUPPLIER_DIRECTORY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "displayName", header: "Name", type: "string" },
+  { key: "mobileNumber", header: "Mobile", type: "string" },
+  { key: "gstin", header: "GSTIN", type: "string" },
+  { key: "creditDays", header: "Credit Days", type: "number" },
+  { key: "cityState", header: "City / State", type: "string" },
+  { key: "status", header: "Status", type: "string" },
+];
+
+/**
+ * Flattens buildSupplierDirectory's flat row list into the single-sheet
+ * shape src/lib/excel-export.ts's shared contract understands, mirroring the
+ * on-screen SupplierDirectoryTable's own column set exactly — including its
+ * combined "City / State" column and `isActive` -> Active/Inactive label
+ * (SupplierStatusBadge's own text). No totals footer — that table renders no
+ * footer row for this report.
+ */
+export function toSupplierDirectoryExportTable(report: SupplierDirectoryReport): ReportExportTable[] {
+  const rows: SupplierDirectoryExportRow[] = report.rows.map((row) => ({
+    displayName: row.displayName,
+    mobileNumber: row.mobileNumber ?? "",
+    gstin: row.gstin ?? "",
+    creditDays: row.creditDays,
+    cityState: [row.city, row.state].filter(Boolean).join(", "),
+    status: row.isActive ? "Active" : "Inactive",
+  }));
+
+  return [
+    {
+      sheetName: "Supplier Directory",
+      columns: SUPPLIER_DIRECTORY_EXPORT_COLUMNS,
+      rows,
+    },
+  ];
+}
+
+type SupplierPurchaseSummaryExportRow = Record<string, string | number | null>;
+
+const SUPPLIER_PURCHASE_SUMMARY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "supplierName", header: "Supplier", type: "string" },
+  { key: "invoiceCount", header: "Invoice Count", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+];
+
+/**
+ * Flattens buildSupplierPurchaseSummary's `PartyWisePurchaseReport` rows into
+ * the single-sheet shape src/lib/excel-export.ts's shared contract
+ * understands, mirroring the on-screen PartyWisePurchaseTable's own column
+ * set exactly. `totals` is copied straight from `report.totals`, never
+ * re-summed. Deliberately self-contained — does not import from
+ * purchase-reports.ts, matching this codebase's own established
+ * small-duplication convention (see signedOpening/humanizeVoucherType
+ * above): the Purchase module's own Party-wise Purchase Report screen gets
+ * its own, independently-added export function for this same
+ * PartyWisePurchaseReport type.
+ */
+export function toSupplierPurchaseSummaryExportTable(report: PartyWisePurchaseReport): ReportExportTable[] {
+  const rows: SupplierPurchaseSummaryExportRow[] = report.rows.map((row) => ({
+    supplierName: row.supplierName,
+    invoiceCount: row.invoiceCount,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalTax,
+    grandTotal: row.grandTotal,
+  }));
+
+  return [
+    {
+      sheetName: "Supplier Purchase Summary",
+      columns: SUPPLIER_PURCHASE_SUMMARY_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        supplierName: "Period Total",
+        invoiceCount: report.totals.invoiceCount,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        grandTotal: report.totals.grandTotal,
+      },
+    },
+  ];
+}

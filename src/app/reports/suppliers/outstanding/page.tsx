@@ -5,6 +5,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { SupplierOutstandingTable } from "@/modules/reports/suppliers/components/supplier-outstanding-table";
 import { SupplierReportFilterBar } from "@/modules/reports/suppliers/components/supplier-report-filter-bar";
 import { supplierReportService } from "@/modules/reports/suppliers/services/supplier-report-service";
@@ -73,12 +74,17 @@ export default async function SupplierOutstandingPage({ searchParams }: Supplier
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ financialYearId: selectedFinancialYear.id, asOfDate, status });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Supplier Outstanding</h1>
-          <p className="text-sm text-muted-foreground">Balance owed to each supplier as of the selected date.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Supplier Outstanding</h1>
+            <p className="text-sm text-muted-foreground">Balance owed to each supplier as of the selected date.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/suppliers/outstanding/export?${exportParams.toString()}`} />
         </div>
 
         <SupplierReportFilterBar

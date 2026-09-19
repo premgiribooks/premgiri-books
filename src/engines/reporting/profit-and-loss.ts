@@ -8,6 +8,7 @@ import type {
   ProfitAndLossRow,
   ProfitAndLossSection,
 } from "@/engines/reporting/types";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -160,4 +161,76 @@ export function buildProfitAndLossReport(periodRows: ProfitAndLossLedgerMovement
     grossProfit,
     netProfit,
   };
+}
+
+type ProfitAndLossExportRow = Record<string, string | number | null>;
+
+const PROFIT_AND_LOSS_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "particulars", header: "Particulars", type: "string" },
+  { key: "indentLevel", header: "Indent Level", type: "number" },
+  { key: "amount", header: "Amount", type: "currency" },
+];
+
+/** Mirrors balance-sheet.ts's flattenBalanceSheetSection, plus a `depthOffset`
+ * so a bucket's sections can be nested one level under their own "Direct
+ * Income"/"Indirect Expense" label row (profit-and-loss-statement.tsx's own
+ * ProfitAndLossSectionGroup heading). */
+function flattenProfitAndLossSection(section: ProfitAndLossSection, depthOffset: number, rows: ProfitAndLossExportRow[]): void {
+  rows.push({ particulars: section.groupName, indentLevel: section.depth + depthOffset, amount: section.subtotal });
+
+  for (const row of section.rows) {
+    rows.push({ particulars: row.ledgerName, indentLevel: section.depth + depthOffset + 1, amount: row.value });
+  }
+
+  for (const child of section.childSections) {
+    flattenProfitAndLossSection(child, depthOffset, rows);
+  }
+}
+
+function pushBucketRows(label: string, sections: ProfitAndLossSection[], rows: ProfitAndLossExportRow[]): void {
+  if (sections.length === 0) {
+    return;
+  }
+  rows.push({ particulars: label, indentLevel: 0, amount: null });
+  for (const section of sections) {
+    flattenProfitAndLossSection(section, 1, rows);
+  }
+}
+
+/**
+ * Flattens buildProfitAndLossReport's four section-tree buckets into the
+ * same two-statement layout profit-and-loss-statement.tsx renders on screen
+ * — a "Trading Account" sheet (Direct Income, Direct Expense, Gross Profit)
+ * and a "Profit & Loss Account" sheet (Gross Profit brought forward,
+ * Indirect Income, Indirect Expense, Net Profit/Loss) — rather than one
+ * sheet per bucket. Gross Profit and Net Profit are copied straight from
+ * `report.grossProfit`/`report.netProfit`, never re-derived.
+ */
+export function toProfitAndLossExportTable(report: ProfitAndLossReport): ReportExportTable[] {
+  const tradingAccountRows: ProfitAndLossExportRow[] = [];
+  pushBucketRows("Direct Income", report.directIncome, tradingAccountRows);
+  pushBucketRows("Direct Expense", report.directExpense, tradingAccountRows);
+
+  const profitAndLossAccountRows: ProfitAndLossExportRow[] = [
+    { particulars: "Gross Profit brought forward", indentLevel: 0, amount: report.grossProfit },
+  ];
+  pushBucketRows("Indirect Income", report.indirectIncome, profitAndLossAccountRows);
+  pushBucketRows("Indirect Expense", report.indirectExpense, profitAndLossAccountRows);
+
+  const isNetLoss = report.netProfit < 0;
+
+  return [
+    {
+      sheetName: "Trading Account",
+      columns: PROFIT_AND_LOSS_EXPORT_COLUMNS,
+      rows: tradingAccountRows,
+      totals: { particulars: "Gross Profit", indentLevel: null, amount: report.grossProfit },
+    },
+    {
+      sheetName: "Profit & Loss Account",
+      columns: PROFIT_AND_LOSS_EXPORT_COLUMNS,
+      rows: profitAndLossAccountRows,
+      totals: { particulars: isNetLoss ? "Net Loss" : "Net Profit", indentLevel: null, amount: report.netProfit },
+    },
+  ];
 }

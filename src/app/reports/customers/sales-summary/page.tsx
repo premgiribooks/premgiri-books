@@ -7,6 +7,7 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { CustomerReportFilterBar } from "@/modules/reports/customers/components/customer-report-filter-bar";
 import { customerReportService } from "@/modules/reports/customers/services/customer-report-service";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { PartyWiseSalesTable } from "@/modules/reports/sales/components/party-wise-sales-table";
 import { isValidCalendarDate, resolveDefaultAsOfDate, toCalendarDateString } from "@/modules/reports/validation/financial-report-filters-schema";
 import type { PartyWiseSalesReport } from "@/types/sales-report";
@@ -55,12 +56,17 @@ export default async function CustomerSalesSummaryPage({ searchParams }: Custome
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ dateFrom, dateTo });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Customer Sales Summary</h1>
-          <p className="text-sm text-muted-foreground">Sales value grouped by customer, for the selected period.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Customer Sales Summary</h1>
+            <p className="text-sm text-muted-foreground">Sales value grouped by customer, for the selected period.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/customers/sales-summary/export?${exportParams.toString()}`} />
         </div>
 
         <CustomerReportFilterBar showDateRange />

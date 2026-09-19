@@ -5,7 +5,10 @@ import {
   buildPartyWiseSalesReport,
   buildSalesRegister,
   buildSalesReturnSummary,
+  toItemWiseSalesExportTable,
+  toPartyWiseSalesExportTable,
   toSalesRegisterExportTable,
+  toSalesReturnSummaryExportTable,
 } from "@/engines/reporting/sales-reports";
 import type { ItemWiseSalesAggregateRow, PartyWiseSalesAggregateRow, SalesInvoiceListRow } from "@/types/sales-invoice";
 import type { SalesReturnListRow } from "@/types/sales-return";
@@ -66,7 +69,10 @@ function returnRow(overrides: Partial<SalesReturnListRow> = {}): SalesReturnList
   return {
     id: "ret-1",
     returnNumber: "SR-0001",
+    returnDate: new Date("2027-02-10"),
     grandTotal: 118,
+    refundMode: "LEDGER_ADJUSTMENT",
+    status: "POSTED",
     salesInvoice: { id: "inv-1", invoiceNumber: "INV-0001", invoiceDate: new Date(), customerMode: "PERMANENT", customerId: "cust-1", customerName: "Acme Co" },
     ...overrides,
   } as unknown as SalesReturnListRow;
@@ -240,6 +246,129 @@ describe("toSalesRegisterExportTable", () => {
       totalTax: 0,
       grandTotal: 0,
       amountPaid: 0,
+      status: "",
+    });
+  });
+});
+
+describe("toItemWiseSalesExportTable", () => {
+  it("maps each product row's fields, combining cgst+sgst+igst+cess into one Total Tax figure", () => {
+    const report = buildItemWiseSalesReport([itemWiseRow()]);
+
+    const tables = toItemWiseSalesExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Item-wise Sales");
+    expect(tables[0].rows).toEqual([
+      {
+        productName: "Widget",
+        productCode: "WID-1",
+        quantity: 10,
+        taxableAmount: 1000,
+        totalTax: 180,
+        totalValue: 1180,
+        invoiceCount: 2,
+      },
+    ]);
+  });
+
+  it("carries the totals footer straight from report.totals, leaving invoiceCount blank — never re-summed", () => {
+    const report = buildItemWiseSalesReport([itemWiseRow(), itemWiseRow({ productId: "prod-2", quantity: 5 })]);
+
+    const tables = toItemWiseSalesExportTable(report);
+
+    expect(tables[0].totals).toEqual({
+      productName: "Period Total",
+      productCode: "",
+      quantity: report.totals.quantity,
+      taxableAmount: report.totals.taxableAmount,
+      totalTax: report.totals.totalTax,
+      totalValue: report.totals.totalValue,
+      invoiceCount: null,
+    });
+  });
+
+  it("produces a valid, empty sheet with a zero-totals footer for no rows", () => {
+    const tables = toItemWiseSalesExportTable(buildItemWiseSalesReport([]));
+
+    expect(tables[0].rows).toEqual([]);
+    expect(tables[0].totals).toMatchObject({ quantity: 0, taxableAmount: 0, totalTax: 0, totalValue: 0 });
+  });
+});
+
+describe("toPartyWiseSalesExportTable", () => {
+  it("maps a real-Customer row's fields, and labels the synthetic Walk-in/Quick buckets via customerName", () => {
+    const report = buildPartyWiseSalesReport([
+      partyWiseRow(),
+      partyWiseRow({ customerId: null, customerMode: "WALK_IN", customerName: null, invoiceCount: 1, taxableAmount: 100, cgst: 9, sgst: 9, igst: 0, cess: 0, grandTotal: 118 }),
+    ]);
+
+    const tables = toPartyWiseSalesExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Party-wise Sales");
+    expect(tables[0].rows[0]).toEqual({ customerName: "Acme Co", invoiceCount: 2, taxableAmount: 1000, totalTax: 180, grandTotal: 1180 });
+    expect(tables[0].rows[1]).toMatchObject({ customerName: "Walk-in Sales" });
+  });
+
+  it("carries the totals footer straight from report.totals, including the summed invoiceCount — never re-summed", () => {
+    const report = buildPartyWiseSalesReport([partyWiseRow(), partyWiseRow({ customerId: "cust-2", customerName: "Other Co" })]);
+
+    const tables = toPartyWiseSalesExportTable(report);
+
+    expect(tables[0].totals).toEqual({
+      customerName: "Period Total",
+      invoiceCount: report.totals.invoiceCount,
+      taxableAmount: report.totals.taxableAmount,
+      totalTax: report.totals.totalTax,
+      grandTotal: report.totals.grandTotal,
+    });
+  });
+});
+
+describe("toSalesReturnSummaryExportTable", () => {
+  it("maps each return row's fields, labeling refund mode and status via their own display maps", () => {
+    const report = buildSalesReturnSummary([returnRow()]);
+
+    const tables = toSalesReturnSummaryExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Sales Return Summary");
+    expect(tables[0].rows).toEqual([
+      {
+        returnNumber: "SR-0001",
+        invoiceNumber: "INV-0001",
+        returnDate: new Date("2027-02-10"),
+        customerName: "Acme Co",
+        grandTotal: 118,
+        refundMode: "Ledger Adjustment",
+        status: "Posted",
+      },
+    ]);
+  });
+
+  it("falls back to 'Draft' for a null returnNumber and '—' for a missing customer name", () => {
+    const report = buildSalesReturnSummary([
+      returnRow({ returnNumber: null, salesInvoice: { id: "inv-1", invoiceNumber: "INV-0001", invoiceDate: new Date(), customerMode: "WALK_IN", customerId: null, customerName: null } as never }),
+    ]);
+
+    const tables = toSalesReturnSummaryExportTable(report);
+
+    expect(tables[0].rows[0]).toMatchObject({ returnNumber: "Draft", customerName: "—" });
+  });
+
+  it("carries the totals footer straight from report.totalGrandTotal — never re-summed", () => {
+    const report = buildSalesReturnSummary([returnRow(), returnRow({ id: "ret-2", grandTotal: 236 })]);
+
+    const tables = toSalesReturnSummaryExportTable(report);
+
+    expect(tables[0].totals).toEqual({
+      returnNumber: "Total",
+      invoiceNumber: "",
+      returnDate: null,
+      customerName: "",
+      grandTotal: report.totalGrandTotal,
+      refundMode: "",
       status: "",
     });
   });

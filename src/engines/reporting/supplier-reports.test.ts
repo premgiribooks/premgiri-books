@@ -5,11 +5,20 @@ import {
   buildSupplierOutstandingReport,
   buildSupplierPurchaseSummary,
   buildSupplierStatement,
+  toSupplierDirectoryExportTable,
+  toSupplierOutstandingExportTable,
+  toSupplierPurchaseSummaryExportTable,
   toSupplierStatementExportTable,
 } from "@/engines/reporting/supplier-reports";
 import type { LedgerStatementResult, TrialBalanceResult } from "@/engines/voucher/types";
 import type { PartyWisePurchaseAggregateRow } from "@/types/purchase-invoice";
-import type { SupplierReportRow, SupplierStatementReport } from "@/types/supplier-report";
+import type { PartyWisePurchaseReport } from "@/types/purchase-report";
+import type {
+  SupplierDirectoryReport,
+  SupplierOutstandingReport,
+  SupplierReportRow,
+  SupplierStatementReport,
+} from "@/types/supplier-report";
 
 function supplierRow(overrides: Partial<SupplierReportRow> = {}): SupplierReportRow {
   return {
@@ -296,5 +305,150 @@ describe("toSupplierStatementExportTable", () => {
 
     expect(tables[0].sheetName).toBe("Supplier Statement");
     expect(tables[0].title).toBe("Beta Traders");
+  });
+});
+
+describe("toSupplierOutstandingExportTable", () => {
+  function outstandingReport(overrides: Partial<SupplierOutstandingReport> = {}): SupplierOutstandingReport {
+    return {
+      rows: [
+        { supplierId: "supp-1", supplierName: "Acme Wholesale", outstandingBalance: -3000, creditDays: 30 },
+        { supplierId: "supp-2", supplierName: "Beta Traders", outstandingBalance: 500, creditDays: null },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("mirrors SupplierOutstandingTable's own column set exactly, with no totals footer", () => {
+    const tables = toSupplierOutstandingExportTable(outstandingReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Supplier Outstanding");
+    expect(tables[0].columns).toEqual([
+      { key: "supplierName", header: "Supplier", type: "string" },
+      { key: "outstandingBalance", header: "Outstanding Balance", type: "currency" },
+      { key: "creditDays", header: "Credit Days", type: "number" },
+    ]);
+    expect(tables[0].rows).toEqual([
+      { supplierName: "Acme Wholesale", outstandingBalance: -3000, creditDays: 30 },
+      { supplierName: "Beta Traders", outstandingBalance: 500, creditDays: null },
+    ]);
+    expect(tables[0].totals).toBeUndefined();
+  });
+
+  it("returns an empty rows array for an empty report", () => {
+    const tables = toSupplierOutstandingExportTable(outstandingReport({ rows: [] }));
+    expect(tables[0].rows).toEqual([]);
+  });
+});
+
+describe("toSupplierDirectoryExportTable", () => {
+  function directoryReport(overrides: Partial<SupplierDirectoryReport> = {}): SupplierDirectoryReport {
+    return {
+      rows: [
+        {
+          id: "supp-1",
+          displayName: "Acme Wholesale",
+          mobileNumber: "9876543210",
+          gstin: "27AAAAA0000A1Z5",
+          city: "Pune",
+          state: "Maharashtra",
+          creditDays: 30,
+          isActive: true,
+        },
+        {
+          id: "supp-2",
+          displayName: "Beta Traders",
+          mobileNumber: null,
+          gstin: null,
+          city: null,
+          state: null,
+          creditDays: null,
+          isActive: false,
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("mirrors SupplierDirectoryTable's own column set exactly, combining City/State and labeling status", () => {
+    const tables = toSupplierDirectoryExportTable(directoryReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Supplier Directory");
+    expect(tables[0].columns).toEqual([
+      { key: "displayName", header: "Name", type: "string" },
+      { key: "mobileNumber", header: "Mobile", type: "string" },
+      { key: "gstin", header: "GSTIN", type: "string" },
+      { key: "creditDays", header: "Credit Days", type: "number" },
+      { key: "cityState", header: "City / State", type: "string" },
+      { key: "status", header: "Status", type: "string" },
+    ]);
+    expect(tables[0].rows).toEqual([
+      {
+        displayName: "Acme Wholesale",
+        mobileNumber: "9876543210",
+        gstin: "27AAAAA0000A1Z5",
+        creditDays: 30,
+        cityState: "Pune, Maharashtra",
+        status: "Active",
+      },
+      {
+        displayName: "Beta Traders",
+        mobileNumber: "",
+        gstin: "",
+        creditDays: null,
+        cityState: "",
+        status: "Inactive",
+      },
+    ]);
+    expect(tables[0].totals).toBeUndefined();
+  });
+});
+
+describe("toSupplierPurchaseSummaryExportTable", () => {
+  function purchaseSummaryReport(overrides: Partial<PartyWisePurchaseReport> = {}): PartyWisePurchaseReport {
+    return {
+      rows: [
+        { supplierId: "supp-1", supplierName: "Acme Wholesale", invoiceCount: 2, taxableAmount: 1000, totalTax: 180, grandTotal: 1180 },
+        { supplierId: "supp-2", supplierName: "Beta Traders", invoiceCount: 1, taxableAmount: 500, totalTax: 90, grandTotal: 590 },
+      ],
+      totals: { invoiceCount: 3, taxableAmount: 1500, totalTax: 270, grandTotal: 1770 },
+      ...overrides,
+    };
+  }
+
+  it("mirrors PartyWisePurchaseTable's own column set exactly", () => {
+    const tables = toSupplierPurchaseSummaryExportTable(purchaseSummaryReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Supplier Purchase Summary");
+    expect(tables[0].columns).toEqual([
+      { key: "supplierName", header: "Supplier", type: "string" },
+      { key: "invoiceCount", header: "Invoice Count", type: "number" },
+      { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+      { key: "totalTax", header: "Total Tax", type: "currency" },
+      { key: "grandTotal", header: "Grand Total", type: "currency" },
+    ]);
+    expect(tables[0].rows).toEqual([
+      { supplierName: "Acme Wholesale", invoiceCount: 2, taxableAmount: 1000, totalTax: 180, grandTotal: 1180 },
+      { supplierName: "Beta Traders", invoiceCount: 1, taxableAmount: 500, totalTax: 90, grandTotal: 590 },
+    ]);
+  });
+
+  it("carries the totals footer straight from report.totals, never re-summed", () => {
+    // Deliberately mismatched with the rows' own sum, mirroring
+    // trial-balance.test.ts's own "never recomputes" precedent.
+    const tables = toSupplierPurchaseSummaryExportTable(
+      purchaseSummaryReport({ totals: { invoiceCount: 99, taxableAmount: 99, totalTax: 99, grandTotal: 99 } })
+    );
+
+    expect(tables[0].totals).toEqual({
+      supplierName: "Period Total",
+      invoiceCount: 99,
+      taxableAmount: 99,
+      totalTax: 99,
+      grandTotal: 99,
+    });
   });
 });

@@ -73,6 +73,8 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ financialYearId: selectedFinancialYear.id, from, to });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
@@ -84,7 +86,7 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
               activity.
             </p>
           </div>
-          <ReportExportButton />
+          <ReportExportButton downloadUrl={`/reports/cash-flow/export?${exportParams.toString()}`} />
         </div>
 
         <FinancialYearDateRangeFilterBar

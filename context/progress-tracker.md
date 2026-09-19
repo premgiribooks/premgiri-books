@@ -5273,3 +5273,26 @@ build` (all 5 new `.../export` routes present).
 **Next Up** (same user request, remaining scope): Excel Export for the other ~14 report
 screens, and Excel Import extended to the remaining masters (Categories, Brands, Units,
 Warehouses, HSN Codes, GST Rates, Margin Profiles, Price Lists, Employees).
+
+---
+
+**Excel Export extended to 13 more reports, implemented 2026-09-19** (still spec 77),
+continuing the same user request. Wired the established pattern onto Customer
+Outstanding/Directory/Sales-Summary, Supplier Outstanding/Directory/Purchase-Summary, Sales
+Item-wise/Party-wise/Returns, Purchase Item-wise/Party-wise/Returns, and Profit &
+Loss/Cash Flow. Built by 5 parallel agents (grouped by engine-file ownership) that all hit
+a mid-task rate limit and stopped early with substantial partial work already in place; the
+remaining gaps (3 missing test cases, 1 missing route test file, 9 page wirings) were
+completed directly. Full record, including code review's 1 MEDIUM (a totals-footer label
+inconsistency, fixed) and 1 LOW (missing filename sanitization on 2 of 13 routes, fixed)
+and security review's clean pass, is recorded in `context/Phases/phase-tracker.md`'s Phase
+12 section.
+
+Re-verified after both fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (185 files, 2439 tests — 143 new), `next
+build` (all 19 `.../export` routes present).
+
+**Next Up** (same user request, remaining scope): Excel Export for GST reports, Inventory
+reports, and Employee reports (the last ~9 report screens), then Excel Import extended to
+the remaining masters (Categories, Brands, Units, Warehouses, HSN Codes, GST Rates, Margin
+Profiles, Price Lists, Employees).

@@ -2,6 +2,7 @@ import type { LedgerGroup } from "@prisma/client";
 
 import { buildLedgerGroupIndex, getRootGroup } from "@/engines/reporting/ledger-classification";
 import type { CashFlowReport, CashLedgerMovement, CategorizableEntry } from "@/engines/reporting/types";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 // 67-cash-flow.md's Business Rules — categorization keys off the counter-
 // ledger's top-level (root) group name, reusing getRootGroup (64-trial-
@@ -72,4 +73,45 @@ export function buildCashFlowReport(
     netChangeInCash,
     reconciles: round2(operating + investing + financing) === netChangeInCash,
   };
+}
+
+type CashFlowExportRow = Record<string, string | number | null>;
+
+const CASH_FLOW_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "particulars", header: "Particulars", type: "string" },
+  { key: "amount", header: "Amount", type: "currency" },
+];
+
+/**
+ * Flattens buildCashFlowReport's already-computed figures into a single flat
+ * sheet — this report has no ledger-level rows to flatten (unlike Trial
+ * Balance/Balance Sheet/Profit & Loss), so this is a fixed list of the same
+ * four rows cash-flow-statement.tsx renders on screen (Operating/Investing/
+ * Financing plus a reconciliation note), with the headline
+ * netChangeInCash as the totals footer. No figure is re-summed.
+ */
+export function toCashFlowExportTable(report: CashFlowReport): ReportExportTable[] {
+  const isNetDecrease = report.netChangeInCash < 0;
+
+  const rows: CashFlowExportRow[] = [
+    { particulars: "Net Cash from Operating Activities", amount: report.operating },
+    { particulars: "Net Cash from Investing Activities", amount: report.investing },
+    { particulars: "Net Cash from Financing Activities", amount: report.financing },
+    {
+      particulars: report.reconciles ? "Reconciled" : "Not reconciled — data-integrity check failed",
+      amount: null,
+    },
+  ];
+
+  return [
+    {
+      sheetName: "Cash Flow",
+      columns: CASH_FLOW_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        particulars: isNetDecrease ? "Net Decrease in Cash" : "Net Increase in Cash",
+        amount: report.netChangeInCash,
+      },
+    },
+  ];
 }

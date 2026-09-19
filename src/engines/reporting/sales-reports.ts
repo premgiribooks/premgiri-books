@@ -1,5 +1,6 @@
 import { SALES_INVOICE_STATUS_LABELS } from "@/modules/sales-invoices/components/sales-invoice-status-badge";
 import { toPaise } from "@/modules/sales-invoices/utils/sales-invoice-calculations";
+import { SALES_RETURN_STATUS_LABELS } from "@/modules/sales-returns/components/sales-return-status-badge";
 import type {
   ItemWiseSalesAggregateRow,
   PartyWiseSalesAggregateRow,
@@ -237,6 +238,166 @@ export function toSalesRegisterExportTable(report: SalesRegisterReport): ReportE
         totalTax: report.totals.totalTax,
         grandTotal: report.totals.grandTotal,
         amountPaid: report.totals.amountPaid,
+        status: "",
+      },
+    },
+  ];
+}
+
+type ItemWiseSalesExportRow = Record<string, string | number | null>;
+
+const ITEM_WISE_SALES_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "productName", header: "Product Name", type: "string" },
+  { key: "productCode", header: "Product Code", type: "string" },
+  { key: "quantity", header: "Quantity Sold", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "totalValue", header: "Total Value", type: "currency" },
+  { key: "invoiceCount", header: "Invoice Count", type: "number" },
+];
+
+/**
+ * Flattens the Item-wise Sales Report into the flat rows-plus-totals-footer
+ * shape, mirroring item-wise-sales-table.tsx's exact column set —
+ * `productName`/`productCode` split into their own columns (a flat sheet has
+ * no room for the screen's stacked two-line product cell). `invoiceCount` is
+ * carried per-row exactly as shown on screen, but left blank in the totals
+ * footer (mirroring the on-screen footer's own empty `<TableCell />`),
+ * matching buildItemWiseSalesReport's own deliberate exclusion of a summed
+ * invoiceCount from `report.totals`.
+ */
+export function toItemWiseSalesExportTable(report: ItemWiseSalesReport): ReportExportTable[] {
+  const rows: ItemWiseSalesExportRow[] = report.rows.map((row) => ({
+    productName: row.productName,
+    productCode: row.productCode,
+    quantity: row.quantity,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalTax,
+    totalValue: row.totalValue,
+    invoiceCount: row.invoiceCount,
+  }));
+
+  return [
+    {
+      sheetName: "Item-wise Sales",
+      columns: ITEM_WISE_SALES_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        productName: "Period Total",
+        productCode: "",
+        quantity: report.totals.quantity,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        totalValue: report.totals.totalValue,
+        invoiceCount: null,
+      },
+    },
+  ];
+}
+
+type PartyWiseSalesExportRow = Record<string, string | number>;
+
+const PARTY_WISE_SALES_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "customerName", header: "Customer", type: "string" },
+  { key: "invoiceCount", header: "Invoice Count", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+];
+
+/**
+ * Flattens the Party-wise Sales Summary into the flat rows-plus-totals-footer
+ * shape, mirroring party-wise-sales-table.tsx's own column set. The screen's
+ * "Walk-in"/"Unconverted" `Badge` next to a synthetic bucket's name is
+ * dropped here — `row.customerName` already reads "Walk-in Sales"/"Quick
+ * Customer Sales (unconverted)" for those two buckets (toPartyWiseSalesRow's
+ * own labeling), so the badge would only repeat information the name column
+ * already carries, and a flat export sheet has no separate badge slot
+ * anyway. `invoiceCount` IS summed in the footer here, unlike Item-wise —
+ * matching buildPartyWiseSalesReport's own totals (every POSTED invoice
+ * belongs to exactly one group).
+ */
+export function toPartyWiseSalesExportTable(report: PartyWiseSalesReport): ReportExportTable[] {
+  const rows: PartyWiseSalesExportRow[] = report.rows.map((row) => ({
+    customerName: row.customerName,
+    invoiceCount: row.invoiceCount,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalTax,
+    grandTotal: row.grandTotal,
+  }));
+
+  return [
+    {
+      sheetName: "Party-wise Sales",
+      columns: PARTY_WISE_SALES_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        customerName: "Period Total",
+        invoiceCount: report.totals.invoiceCount,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        grandTotal: report.totals.grandTotal,
+      },
+    },
+  ];
+}
+
+type SalesReturnSummaryExportRow = Record<string, string | number | Date | null>;
+
+const SALES_RETURN_SUMMARY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "returnNumber", header: "Return Number", type: "string" },
+  { key: "invoiceNumber", header: "Source Invoice", type: "string" },
+  { key: "returnDate", header: "Date", type: "date" },
+  { key: "customerName", header: "Customer", type: "string" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+  { key: "refundMode", header: "Refund Mode", type: "string" },
+  { key: "status", header: "Status", type: "string" },
+];
+
+/** Mirrors sales-return-summary-table.tsx's own local `REFUND_MODE_LABEL` —
+ * duplicated here rather than imported, since that map is a private
+ * (non-exported) constant of the table component, the same posture this
+ * file's own `customerLabel` takes on sales-register-table.tsx's identical
+ * helper. */
+const REFUND_MODE_LABEL: Record<string, string> = {
+  LEDGER_ADJUSTMENT: "Ledger Adjustment",
+  CASH_REFUND: "Cash Refund",
+};
+
+/**
+ * Flattens the Sales Return Summary into the flat rows-plus-totals-footer
+ * shape, mirroring sales-return-summary-table.tsx's exact column set —
+ * including its `returnNumber ?? "Draft"` fallback, its refund-mode label
+ * map, and its `SalesReturnStatusBadge`'s own status text (imported from
+ * sales-return-status-badge.tsx, exported there unlike its sibling
+ * `REFUND_MODE_LABEL`). `returnDate` is passed as the raw `Date` (its
+ * "date" column type lets src/lib/excel-export.ts format it), not the
+ * screen's pre-formatted `formatSalesReturnDate` string. The totals footer
+ * is copied straight from `report.totalGrandTotal`, never re-summed.
+ */
+export function toSalesReturnSummaryExportTable(report: SalesReturnSummaryReport): ReportExportTable[] {
+  const rows: SalesReturnSummaryExportRow[] = report.rows.map((row) => ({
+    returnNumber: row.returnNumber ?? "Draft",
+    invoiceNumber: row.salesInvoice.invoiceNumber,
+    returnDate: row.returnDate,
+    customerName: row.salesInvoice.customerName ?? "—",
+    grandTotal: row.grandTotal,
+    refundMode: REFUND_MODE_LABEL[row.refundMode] ?? row.refundMode,
+    status: SALES_RETURN_STATUS_LABELS[row.status],
+  }));
+
+  return [
+    {
+      sheetName: "Sales Return Summary",
+      columns: SALES_RETURN_SUMMARY_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        returnNumber: "Total",
+        invoiceNumber: "",
+        returnDate: null,
+        customerName: "",
+        grandTotal: report.totalGrandTotal,
+        refundMode: "",
         status: "",
       },
     },

@@ -5,6 +5,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { ItemWiseSalesTable } from "@/modules/reports/sales/components/item-wise-sales-table";
 import { SalesReportFilterBar } from "@/modules/reports/sales/components/sales-report-filter-bar";
 import { salesReportService } from "@/modules/reports/sales/services/sales-report-service";
@@ -64,14 +65,22 @@ export default async function ItemWiseSalesPage({ searchParams }: ItemWiseSalesP
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ dateFrom, dateTo });
+  if (customerId) exportParams.set("customerId", customerId);
+  if (productId) exportParams.set("productId", productId);
+  if (warehouseId) exportParams.set("warehouseId", warehouseId);
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Item-wise Sales</h1>
-          <p className="text-sm text-muted-foreground">
-            Quantity and value sold, grouped by product, across every POSTED Sales Invoice in the selected range.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Item-wise Sales</h1>
+            <p className="text-sm text-muted-foreground">
+              Quantity and value sold, grouped by product, across every POSTED Sales Invoice in the selected range.
+            </p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/sales/item-wise/export?${exportParams.toString()}`} />
         </div>
 
         <SalesReportFilterBar

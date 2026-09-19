@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerGroup } from "@prisma/client";
 
-import { buildProfitAndLossReport, dayBefore } from "@/engines/reporting/profit-and-loss";
-import type { ProfitAndLossLedgerMovement } from "@/engines/reporting/types";
+import { buildProfitAndLossReport, dayBefore, toProfitAndLossExportTable } from "@/engines/reporting/profit-and-loss";
+import type { ProfitAndLossLedgerMovement, ProfitAndLossReport } from "@/engines/reporting/types";
 
 function group(overrides: Partial<LedgerGroup> & Pick<LedgerGroup, "id" | "name" | "natureType" | "affectsGrossProfit">): LedgerGroup {
   return {
@@ -143,5 +143,68 @@ describe("buildProfitAndLossReport", () => {
     expect(report.indirectExpense).toHaveLength(0);
     expect(report.grossProfit).toBe(0);
     expect(report.netProfit).toBe(0);
+  });
+});
+
+describe("toProfitAndLossExportTable", () => {
+  it("builds a Trading Account sheet and a Profit & Loss Account sheet, mirroring the on-screen statement's own layout", () => {
+    const salesAccounts = group({ id: "sales", name: "Sales Accounts", natureType: "INCOME", affectsGrossProfit: true });
+    const purchaseAccounts = group({ id: "purchase", name: "Purchase Accounts", natureType: "EXPENSE", affectsGrossProfit: true });
+    const indirectIncomes = group({ id: "ind-inc", name: "Indirect Incomes", natureType: "INCOME", affectsGrossProfit: false });
+    const indirectExpenses = group({ id: "ind-exp", name: "Indirect Expenses", natureType: "EXPENSE", affectsGrossProfit: false });
+
+    const rows: ProfitAndLossLedgerMovement[] = [
+      movement({ ledgerId: "l1", ledgerName: "Sales", ledgerGroupId: "sales", periodCredit: 10000 }),
+      movement({ ledgerId: "l2", ledgerName: "Purchases", ledgerGroupId: "purchase", periodDebit: 6000 }),
+      movement({ ledgerId: "l3", ledgerName: "Interest Received", ledgerGroupId: "ind-inc", periodCredit: 500 }),
+      movement({ ledgerId: "l4", ledgerName: "Rent", ledgerGroupId: "ind-exp", periodDebit: 1200 }),
+    ];
+
+    const report = buildProfitAndLossReport(rows, [salesAccounts, purchaseAccounts, indirectIncomes, indirectExpenses]);
+    const tables = toProfitAndLossExportTable(report);
+
+    expect(tables).toHaveLength(2);
+
+    const tradingAccount = tables[0];
+    expect(tradingAccount.sheetName).toBe("Trading Account");
+    expect(tradingAccount.rows).toEqual([
+      { particulars: "Direct Income", indentLevel: 0, amount: null },
+      { particulars: "Sales Accounts", indentLevel: 1, amount: 10000 },
+      { particulars: "Sales", indentLevel: 2, amount: 10000 },
+      { particulars: "Direct Expense", indentLevel: 0, amount: null },
+      { particulars: "Purchase Accounts", indentLevel: 1, amount: 6000 },
+      { particulars: "Purchases", indentLevel: 2, amount: 6000 },
+    ]);
+    expect(tradingAccount.totals).toEqual({ particulars: "Gross Profit", indentLevel: null, amount: 4000 });
+
+    const profitAndLossAccount = tables[1];
+    expect(profitAndLossAccount.sheetName).toBe("Profit & Loss Account");
+    expect(profitAndLossAccount.rows).toEqual([
+      { particulars: "Gross Profit brought forward", indentLevel: 0, amount: 4000 },
+      { particulars: "Indirect Income", indentLevel: 0, amount: null },
+      { particulars: "Indirect Incomes", indentLevel: 1, amount: 500 },
+      { particulars: "Interest Received", indentLevel: 2, amount: 500 },
+      { particulars: "Indirect Expense", indentLevel: 0, amount: null },
+      { particulars: "Indirect Expenses", indentLevel: 1, amount: 1200 },
+      { particulars: "Rent", indentLevel: 2, amount: 1200 },
+    ]);
+    expect(profitAndLossAccount.totals).toEqual({ particulars: "Net Profit", indentLevel: null, amount: 3300 });
+  });
+
+  it("labels the Profit & Loss Account footer 'Net Loss' when netProfit is negative, and omits empty buckets", () => {
+    const report: ProfitAndLossReport = {
+      directIncome: [],
+      directExpense: [],
+      indirectIncome: [],
+      indirectExpense: [],
+      grossProfit: 0,
+      netProfit: -500,
+    };
+
+    const tables = toProfitAndLossExportTable(report);
+
+    expect(tables[0].rows).toEqual([]);
+    expect(tables[1].rows).toEqual([{ particulars: "Gross Profit brought forward", indentLevel: 0, amount: 0 }]);
+    expect(tables[1].totals).toEqual({ particulars: "Net Loss", indentLevel: null, amount: -500 });
   });
 });

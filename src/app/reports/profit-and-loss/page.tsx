@@ -73,6 +73,8 @@ export default async function ProfitAndLossPage({ searchParams }: ProfitAndLossP
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ financialYearId: selectedFinancialYear.id, from, to });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
@@ -83,7 +85,7 @@ export default async function ProfitAndLossPage({ searchParams }: ProfitAndLossP
               Trading Account and Profit &amp; Loss Account for the selected period.
             </p>
           </div>
-          <ReportExportButton />
+          <ReportExportButton downloadUrl={`/reports/profit-and-loss/export?${exportParams.toString()}`} />
         </div>
 
         <FinancialYearDateRangeFilterBar
