@@ -79,16 +79,24 @@ jobs:
         # and pins the Termux host's real host key fetched directly via
         # `ssh-keyscan -p 8022 192.168.1.39` — avoids both an interactive
         # "unknown host key" prompt and blind trust-on-first-use.
+        #
+        # TERMUX_SSH_KEY holds the private key base64-encoded, not raw:
+        # writing the multi-line PEM text straight from an env var
+        # produced "Load key ... invalid format" on this runner (openssh
+        # rejected it), most likely from newline handling somewhere in
+        # how the runner marshals a multi-line secret into the Windows
+        # process environment block. Base64 travels as a single line, so
+        # there's nothing left for that to corrupt.
         run: |
           $keyPath = Join-Path $env:RUNNER_TEMP "termux_deploy_key"
-          Set-Content -Path $keyPath -Value $env:TERMUX_SSH_KEY -NoNewline
+          [IO.File]::WriteAllBytes($keyPath, [Convert]::FromBase64String($env:TERMUX_SSH_KEY_B64))
           icacls $keyPath /inheritance:r | Out-Null
           icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
 
           $knownHostsPath = Join-Path $env:RUNNER_TEMP "termux_known_hosts"
           Set-Content -Path $knownHostsPath -Value "[$($env:TERMUX_HOST)]:8022 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMEuHf6ttJM/HlHQmawcYdDG3Ho4y2clA3PyOShM1Nc4"
         env:
-          TERMUX_SSH_KEY: ${{ secrets.TERMUX_SSH_KEY }}
+          TERMUX_SSH_KEY_B64: ${{ secrets.TERMUX_SSH_KEY }}
           TERMUX_HOST: ${{ secrets.TERMUX_HOST }}
 
       - name: Ensure remote app directory exists
