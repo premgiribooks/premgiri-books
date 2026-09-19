@@ -3,6 +3,7 @@ import type { LedgerGroup } from "@prisma/client";
 import type { TrialBalanceResult, TrialBalanceRow } from "@/engines/voucher/types";
 import { buildLedgerGroupIndex } from "@/engines/reporting/ledger-classification";
 import type { LedgerGroupIndex, TrialBalanceReport, TrialBalanceSection } from "@/engines/reporting/types";
+import type { ReportExportTable } from "@/types/report-export";
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -88,4 +89,58 @@ export function buildTrialBalanceReport(result: TrialBalanceResult, groups: Ledg
     totalDebit: result.totalDebit,
     totalCredit: result.totalCredit,
   };
+}
+
+type TrialBalanceExportRow = Record<string, string | number | null>;
+
+function flattenSection(section: TrialBalanceSection, rows: TrialBalanceExportRow[]): void {
+  rows.push({
+    particulars: section.groupName,
+    indentLevel: section.depth,
+    debit: section.subtotalDebit,
+    credit: section.subtotalCredit,
+  });
+
+  for (const row of section.rows) {
+    rows.push({
+      particulars: row.ledgerName,
+      indentLevel: section.depth + 1,
+      debit: row.closingBalance >= 0 ? row.closingBalance : 0,
+      credit: row.closingBalance < 0 ? Math.abs(row.closingBalance) : 0,
+    });
+  }
+
+  for (const child of section.childSections) {
+    flattenSection(child, rows);
+  }
+}
+
+/**
+ * Flattens the group-hierarchy tree buildTrialBalanceReport produces into
+ * the flat rows-plus-totals-footer shape src/lib/excel-export.ts's shared
+ * contract understands (77-excel-export.md's Business Rules: flattening a
+ * presentation tree into export rows is the calling report's own shaping
+ * concern, never the shared utility's). Row order and figures mirror
+ * TrialBalanceGroupTree's own depth-first render exactly — a group's own
+ * subtotal row, then its own ledger rows, then child sections recursively.
+ */
+export function toTrialBalanceExportTable(report: TrialBalanceReport): ReportExportTable[] {
+  const rows: TrialBalanceExportRow[] = [];
+  for (const section of report.sections) {
+    flattenSection(section, rows);
+  }
+
+  return [
+    {
+      sheetName: "Trial Balance",
+      columns: [
+        { key: "particulars", header: "Particulars", type: "string" },
+        { key: "indentLevel", header: "Indent Level", type: "number" },
+        { key: "debit", header: "Debit", type: "currency" },
+        { key: "credit", header: "Credit", type: "currency" },
+      ],
+      rows,
+      totals: { particulars: "Grand Total", indentLevel: null, debit: report.totalDebit, credit: report.totalCredit },
+    },
+  ];
 }

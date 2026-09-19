@@ -80,7 +80,9 @@ export default async function TrialBalancePage({ searchParams }: TrialBalancePag
               Every ledger&apos;s closing balance as of the selected date, grouped under its Ledger Group hierarchy.
             </p>
           </div>
-          <ReportExportButton />
+          <ReportExportButton
+            downloadUrl={`/reports/trial-balance/export?financialYearId=${selectedFinancialYear.id}&asOfDate=${asOfDate}`}
+          />
         </div>
 
         <FinancialYearAsOfDateFilterBar

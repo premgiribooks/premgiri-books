@@ -5193,12 +5193,36 @@ change), `next build` (route table unchanged). Both review agents' remaining obs
 low-priority, not fixed this pass — left as known, named, non-blocking follow-ups rather
 than silently dropped.
 
-Git Workflow (branch/commit/PR/merge) not yet done — pending the user's decision on how
-they want this delivered.
+**Git Workflow: committed directly to `main` 2026-09-19** (commit `8048562`), per explicit
+user direction — no feature branch/PR for this one. The tracked `backups/` directory holds
+only `.gitkeep`; the local `.dump` file produced during testing was excluded from the
+commit per `.gitignore`'s new `/backups/*` rule.
 
 Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
-Rule. Next Up: get the user's decision on Git Workflow for this feature; after that, the
-next unimplemented item in `context/Phases/phase-tracker.md`'s own phase order (Excel
-Import #74, Excel Export #75, PDF Generation's remaining scope #76 — see its own recorded
-v3-gate hold, Barcode Billing
-#77, or Audit Logs #78, in whatever order the user prefers).
+Rule.
+
+---
+
+**#75 Excel Export implemented 2026-09-19** (spec 77,
+`context/feature-specs/77-excel-export.md`), per explicit user direction to pick this item
+next. Full implementation record — shared `src/lib/excel-export.ts` utility, its
+`src/types/report-export.ts` contract, `exceljs` as the sole new dependency, Trial
+Balance's `toTrialBalanceExportTable` mapping and reference Route Handler wiring, the
+`ReportExportButton` backward-compatible `downloadUrl` extension, and both review agents'
+findings (code review: 0 CRITICAL/HIGH/MEDIUM, 1 LOW deferred; security review: 1 MEDIUM
+CSV/Formula-Injection finding fixed by sanitizing every string cell value, 2 LOW accepted
+as-is) — is recorded in full in `context/Phases/phase-tracker.md`'s Phase 12 section, per
+the Tracker Update Rule's "detail lives in phase-tracker, this file cross-references it"
+convention.
+
+Re-verified after the security fix: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors,
+same 2 pre-existing unrelated warnings), `npx vitest run` (159 files, 2172 tests — 27 new),
+`next build` (`/reports/trial-balance/export` in the route table). Browser-verified live:
+Trial Balance's Export button downloads a real, valid `.xlsx` (parsed back and checked);
+`/reports/profit-and-loss`'s own Export button confirmed still disabled/unaffected. Git
+Workflow (branch/commit/PR/merge) not yet done — pending user decision.
+
+**Next Up**: PDF Generation's remaining scope (#76 — see its own recorded v3-gate hold),
+Excel Import (#74, now the earliest remaining item in `context/Phases/phase-tracker.md`'s
+own phase sequence), Barcode Billing (#77), or Audit Logs (#78) — in whatever order the
+user prefers.

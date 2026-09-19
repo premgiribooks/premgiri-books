@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerGroup } from "@prisma/client";
 
-import { buildTrialBalanceReport } from "@/engines/reporting/trial-balance";
+import { buildTrialBalanceReport, toTrialBalanceExportTable } from "@/engines/reporting/trial-balance";
 import type { TrialBalanceResult, TrialBalanceRow } from "@/engines/voucher/types";
 
 function group(overrides: Partial<LedgerGroup> & Pick<LedgerGroup, "id" | "name">): LedgerGroup {
@@ -116,5 +116,67 @@ describe("buildTrialBalanceReport", () => {
 
     expect(report.sections[0].subtotalDebit).toBe(40);
     expect(report.sections[0].subtotalCredit).toBe(30);
+  });
+});
+
+describe("toTrialBalanceExportTable", () => {
+  it("flattens a group's own subtotal row, then its ledger rows, then child sections, depth-first", () => {
+    const root = group({ id: "root", name: "Fixed Assets" });
+    const child = group({ id: "child", name: "Plant & Machinery", parentGroupId: "root" });
+    const rows: TrialBalanceRow[] = [
+      row({ ledgerId: "l1", ledgerName: "Land", ledgerGroupId: "root", closingBalance: 100 }),
+      row({ ledgerId: "l2", ledgerName: "Furniture", ledgerGroupId: "child", closingBalance: 50 }),
+    ];
+    const report = buildTrialBalanceReport({ rows, totalDebit: 150, totalCredit: 0 }, [root, child]);
+
+    const tables = toTrialBalanceExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Trial Balance");
+    expect(tables[0].rows).toEqual([
+      { particulars: "Fixed Assets", indentLevel: 0, debit: 150, credit: 0 },
+      { particulars: "Land", indentLevel: 1, debit: 100, credit: 0 },
+      { particulars: "Plant & Machinery", indentLevel: 1, debit: 50, credit: 0 },
+      { particulars: "Furniture", indentLevel: 2, debit: 50, credit: 0 },
+    ]);
+  });
+
+  it("carries the grand total in the totals footer, copied straight from the report — never re-summed", () => {
+    const root = group({ id: "root", name: "Loans" });
+    const rows: TrialBalanceRow[] = [
+      row({ ledgerId: "l1", ledgerName: "Receivable", ledgerGroupId: "root", closingBalance: 40 }),
+      row({ ledgerId: "l2", ledgerName: "Payable", ledgerGroupId: "root", closingBalance: -30 }),
+    ];
+    // Deliberately mismatched totals, mirroring buildTrialBalanceReport's own "never recomputes" test.
+    const report = buildTrialBalanceReport({ rows, totalDebit: 999, totalCredit: 111 }, [root]);
+
+    const tables = toTrialBalanceExportTable(report);
+
+    expect(tables[0].totals).toEqual({ particulars: "Grand Total", indentLevel: null, debit: 999, credit: 111 });
+  });
+
+  it("splits a ledger row's Debit/Credit by the debit-positive closingBalance sign, matching the on-screen tree", () => {
+    const root = group({ id: "root", name: "Loans" });
+    const rows: TrialBalanceRow[] = [
+      row({ ledgerId: "l1", ledgerName: "Receivable", ledgerGroupId: "root", closingBalance: 40 }),
+      row({ ledgerId: "l2", ledgerName: "Payable", ledgerGroupId: "root", closingBalance: -30 }),
+    ];
+    const report = buildTrialBalanceReport({ rows, totalDebit: 40, totalCredit: 30 }, [root]);
+
+    const tables = toTrialBalanceExportTable(report);
+
+    const receivable = tables[0].rows.find((r) => r.particulars === "Receivable");
+    const payable = tables[0].rows.find((r) => r.particulars === "Payable");
+    expect(receivable).toEqual({ particulars: "Receivable", indentLevel: 1, debit: 40, credit: 0 });
+    expect(payable).toEqual({ particulars: "Payable", indentLevel: 1, debit: 0, credit: 30 });
+  });
+
+  it("returns an empty rows array (no sections) when the trial balance has no ledgers", () => {
+    const report = buildTrialBalanceReport({ rows: [], totalDebit: 0, totalCredit: 0 }, []);
+
+    const tables = toTrialBalanceExportTable(report);
+
+    expect(tables[0].rows).toEqual([]);
+    expect(tables[0].totals).toEqual({ particulars: "Grand Total", indentLevel: null, debit: 0, credit: 0 });
   });
 });
