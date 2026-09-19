@@ -3,6 +3,7 @@ import type { LedgerGroup } from "@prisma/client";
 import type { TrialBalanceResult, TrialBalanceRow } from "@/engines/voucher/types";
 import { buildLedgerGroupIndex } from "@/engines/reporting/ledger-classification";
 import type { BalanceSheetReport, BalanceSheetSection, LedgerGroupIndex } from "@/engines/reporting/types";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 const PROFIT_AND_LOSS_PLUG_ID = "profit-and-loss-current-period";
 
@@ -139,4 +140,58 @@ export function buildBalanceSheetReport(result: TrialBalanceResult, netProfit: n
     netProfit: round2(netProfit),
     isBalanced: totalAssets === totalLiabilities,
   };
+}
+
+type BalanceSheetExportRow = Record<string, string | number | null>;
+
+const BALANCE_SHEET_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "particulars", header: "Particulars", type: "string" },
+  { key: "indentLevel", header: "Indent Level", type: "number" },
+  { key: "amount", header: "Amount", type: "currency" },
+];
+
+function flattenBalanceSheetSection(section: BalanceSheetSection, rows: BalanceSheetExportRow[]): void {
+  rows.push({ particulars: section.groupName, indentLevel: section.depth, amount: section.subtotal });
+
+  for (const row of section.rows) {
+    rows.push({ particulars: row.ledgerName, indentLevel: section.depth + 1, amount: row.value });
+  }
+
+  for (const child of section.childSections) {
+    flattenBalanceSheetSection(child, rows);
+  }
+}
+
+/**
+ * Flattens the Assets/Liabilities section trees buildBalanceSheetReport
+ * produces into two sheets matching src/lib/excel-export.ts's shared
+ * contract — one per side, mirroring trial-balance.ts's own
+ * toTrialBalanceExportTable flattening approach. Totals are copied straight
+ * from `report.totalAssets`/`totalLiabilities`, never re-summed.
+ */
+export function toBalanceSheetExportTable(report: BalanceSheetReport): ReportExportTable[] {
+  const assetRows: BalanceSheetExportRow[] = [];
+  for (const section of report.assets) {
+    flattenBalanceSheetSection(section, assetRows);
+  }
+
+  const liabilityRows: BalanceSheetExportRow[] = [];
+  for (const section of report.liabilities) {
+    flattenBalanceSheetSection(section, liabilityRows);
+  }
+
+  return [
+    {
+      sheetName: "Assets",
+      columns: BALANCE_SHEET_EXPORT_COLUMNS,
+      rows: assetRows,
+      totals: { particulars: "Total Assets", indentLevel: null, amount: report.totalAssets },
+    },
+    {
+      sheetName: "Liabilities",
+      columns: BALANCE_SHEET_EXPORT_COLUMNS,
+      rows: liabilityRows,
+      totals: { particulars: "Total Liabilities", indentLevel: null, amount: report.totalLiabilities },
+    },
+  ];
 }

@@ -5,10 +5,11 @@ import {
   buildSupplierOutstandingReport,
   buildSupplierPurchaseSummary,
   buildSupplierStatement,
+  toSupplierStatementExportTable,
 } from "@/engines/reporting/supplier-reports";
 import type { LedgerStatementResult, TrialBalanceResult } from "@/engines/voucher/types";
 import type { PartyWisePurchaseAggregateRow } from "@/types/purchase-invoice";
-import type { SupplierReportRow } from "@/types/supplier-report";
+import type { SupplierReportRow, SupplierStatementReport } from "@/types/supplier-report";
 
 function supplierRow(overrides: Partial<SupplierReportRow> = {}): SupplierReportRow {
   return {
@@ -197,5 +198,103 @@ describe("buildSupplierDirectory", () => {
         isActive: true,
       },
     ]);
+  });
+});
+
+describe("toSupplierStatementExportTable", () => {
+  function statementReport(overrides: Partial<SupplierStatementReport> = {}): SupplierStatementReport {
+    return {
+      supplierId: "supp-1",
+      supplierName: "Acme Wholesale",
+      openingBalance: 1000,
+      lines: [
+        {
+          voucherId: "v1",
+          voucherNumber: "PL-0001",
+          voucherType: "PURCHASE",
+          voucherTypeLabel: "Purchase Voucher",
+          voucherDate: new Date("2026-04-05T00:00:00.000Z"),
+          narration: "Invoice INV-0001",
+          debit: 0,
+          credit: 500,
+          runningBalance: 500,
+        },
+        {
+          voucherId: "v2",
+          voucherNumber: "PV-0001",
+          voucherType: "PAYMENT",
+          voucherTypeLabel: "Payment Voucher",
+          voucherDate: new Date("2026-04-10T00:00:00.000Z"),
+          narration: null,
+          debit: 300,
+          credit: 0,
+          runningBalance: 800,
+        },
+      ],
+      closingBalance: 800,
+      ...overrides,
+    };
+  }
+
+  it("prepends an Opening Balance row carrying the report's own openingBalance", () => {
+    const tables = toSupplierStatementExportTable(statementReport());
+
+    expect(tables[0].rows[0]).toEqual({
+      date: null,
+      voucherType: "",
+      voucherNumber: "",
+      narration: "Opening Balance",
+      debit: null,
+      credit: null,
+      runningBalance: 1000,
+    });
+  });
+
+  it("maps one row per statement line, with correct Debit/Credit/Running Balance values", () => {
+    const tables = toSupplierStatementExportTable(statementReport());
+
+    expect(tables[0].rows.slice(1)).toEqual([
+      {
+        date: new Date("2026-04-05T00:00:00.000Z"),
+        voucherType: "Purchase Voucher",
+        voucherNumber: "PL-0001",
+        narration: "Invoice INV-0001",
+        debit: 0,
+        credit: 500,
+        runningBalance: 500,
+      },
+      {
+        date: new Date("2026-04-10T00:00:00.000Z"),
+        voucherType: "Payment Voucher",
+        voucherNumber: "PV-0001",
+        narration: "",
+        debit: 300,
+        credit: 0,
+        runningBalance: 800,
+      },
+    ]);
+  });
+
+  it("carries the Closing Balance totals footer straight from the report, never re-summed", () => {
+    // Deliberately mismatched with the lines' own running balance, mirroring
+    // trial-balance.test.ts's own "never recomputes" precedent.
+    const tables = toSupplierStatementExportTable(statementReport({ closingBalance: 999 }));
+
+    expect(tables[0].totals).toEqual({
+      date: null,
+      voucherType: "",
+      voucherNumber: "",
+      narration: "Closing Balance",
+      debit: null,
+      credit: null,
+      runningBalance: 999,
+    });
+  });
+
+  it("sets the sheet's title to the supplier's own name", () => {
+    const tables = toSupplierStatementExportTable(statementReport({ supplierName: "Beta Traders" }));
+
+    expect(tables[0].sheetName).toBe("Supplier Statement");
+    expect(tables[0].title).toBe("Beta Traders");
   });
 });

@@ -5251,3 +5251,25 @@ same delivery preference set for Backup & Restore and Excel Export earlier this 
 
 **Next Up**: PDF Generation's remaining scope (#76 — see its own recorded v3-gate hold),
 Barcode Billing (#77), or Audit Logs (#78) — in whatever order the user prefers.
+
+---
+
+**Excel Export extended to 5 more reports, implemented 2026-09-19** (still spec 77), per
+explicit user direction to apply export to all reports, prioritizing Customer/Supplier
+Statement, Sales/Purchase Register, and Balance Sheet first. Wired the same
+`toXExportTable` → Route Handler → `ReportExportButton downloadUrl` pattern onto Balance
+Sheet, Customer Statement, Supplier Statement, Sales Register, and Purchase Register (4 of
+the 5 built by parallel agents from the same reference-pattern instructions, then verified
+together as one batch). Full implementation record, including both review agents' findings
+(code review: 0 CRITICAL/HIGH/MEDIUM, 1 LOW fixed for URL-building consistency; security
+review: 0 CRITICAL/HIGH/MEDIUM, the same LOW independently confirmed clean on permission
+re-checks, cross-company isolation, formula-injection sanitization reuse, and filename
+safety), is recorded in full in `context/Phases/phase-tracker.md`'s Phase 12 section.
+
+Re-verified after the fix: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (171 files, 2296 tests — 54 new), `next
+build` (all 5 new `.../export` routes present).
+
+**Next Up** (same user request, remaining scope): Excel Export for the other ~14 report
+screens, and Excel Import extended to the remaining masters (Categories, Brands, Units,
+Warehouses, HSN Codes, GST Rates, Margin Profiles, Price Lists, Employees).

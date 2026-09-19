@@ -5,10 +5,11 @@ import {
   buildCustomerOutstandingReport,
   buildCustomerSalesSummary,
   buildCustomerStatement,
+  toCustomerStatementExportTable,
 } from "@/engines/reporting/customer-reports";
 import type { LedgerStatementResult, TrialBalanceResult } from "@/engines/voucher/types";
 import type { PartyWiseSalesAggregateRow } from "@/types/sales-invoice";
-import type { CustomerReportRow } from "@/types/customer-report";
+import type { CustomerReportRow, CustomerStatementReport } from "@/types/customer-report";
 
 function customerRow(overrides: Partial<CustomerReportRow> = {}): CustomerReportRow {
   return {
@@ -164,6 +165,100 @@ describe("buildCustomerStatement", () => {
         runningBalance: 1200,
       },
     ]);
+  });
+});
+
+describe("toCustomerStatementExportTable", () => {
+  function statementReport(): CustomerStatementReport {
+    const statement: LedgerStatementResult = {
+      ledgerId: "ledger-1",
+      openingBalance: 1000,
+      lines: [
+        {
+          voucherId: "v1",
+          voucherNumber: "SL-0001",
+          voucherType: "SALES",
+          voucherDate: new Date("2026-04-05T00:00:00.000Z"),
+          narration: "Invoice INV-0001",
+          entryType: "DEBIT",
+          amount: 500,
+          runningBalance: 1500,
+        },
+        {
+          voucherId: "v2",
+          voucherNumber: "RV-0001",
+          voucherType: "RECEIPT",
+          voucherDate: new Date("2026-04-10T00:00:00.000Z"),
+          narration: null,
+          entryType: "CREDIT",
+          amount: 300,
+          runningBalance: 1200,
+        },
+      ],
+      closingBalance: 1200,
+    };
+
+    return buildCustomerStatement({ id: "cust-1", displayName: "Acme Retail" }, statement);
+  }
+
+  it("puts the Opening Balance as the first row, copied straight from report.openingBalance", () => {
+    const tables = toCustomerStatementExportTable(statementReport());
+
+    expect(tables[0].rows[0]).toEqual({
+      date: null,
+      voucherType: "",
+      voucherNumber: "",
+      narration: "Opening Balance",
+      debit: null,
+      credit: null,
+      runningBalance: 1000,
+    });
+  });
+
+  it("maps one row per statement line with the correct Debit/Credit/Running Balance figures", () => {
+    const tables = toCustomerStatementExportTable(statementReport());
+
+    expect(tables[0].rows.slice(1)).toEqual([
+      {
+        date: new Date("2026-04-05T00:00:00.000Z"),
+        voucherType: "Sales Voucher",
+        voucherNumber: "SL-0001",
+        narration: "Invoice INV-0001",
+        debit: 500,
+        credit: 0,
+        runningBalance: 1500,
+      },
+      {
+        date: new Date("2026-04-10T00:00:00.000Z"),
+        voucherType: "Receipt Voucher",
+        voucherNumber: "RV-0001",
+        narration: "",
+        debit: 0,
+        credit: 300,
+        runningBalance: 1200,
+      },
+    ]);
+  });
+
+  it("carries the Closing Balance totals footer straight from report.closingBalance — never re-summed", () => {
+    const tables = toCustomerStatementExportTable(statementReport());
+
+    expect(tables[0].totals).toEqual({
+      date: null,
+      voucherType: "",
+      voucherNumber: "",
+      narration: "Closing Balance",
+      debit: null,
+      credit: null,
+      runningBalance: 1200,
+    });
+  });
+
+  it("sets the sheet's title to the customer's name", () => {
+    const tables = toCustomerStatementExportTable(statementReport());
+
+    expect(tables[0].sheetName).toBe("Customer Statement");
+    expect(tables[0].title).toBe("Acme Retail");
   });
 });
 

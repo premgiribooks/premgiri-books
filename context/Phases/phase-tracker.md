@@ -2477,6 +2477,64 @@ as usual:
 > the same delivery preference set for Backup & Restore and Excel Export
 > earlier this session.
 
+> **Excel Export extended to 5 more reports, implemented 2026-09-19**
+> (still spec 77), per explicit user direction: "export should be applied
+> for all reports... most important I need is customer or supplier
+> statement and sale or purchase register and balance sheet." Wired the
+> same `toXExportTable` → Route Handler → `ReportExportButton downloadUrl`
+> pattern Trial Balance established onto **Balance Sheet** (two sheets,
+> Assets/Liabilities, each flattened depth-first with a synthetic
+> "Profit & Loss Account (Current Period)" row and a totals footer copied
+> straight from `report.totalAssets`/`totalLiabilities`), **Customer
+> Statement** and **Supplier Statement** (single sheet, `title` set to the
+> party's name, a synthetic Opening Balance first row and Closing Balance
+> totals row, both copied straight from the report — never re-derived from
+> the lines), and **Sales Register**/**Purchase Register** (single sheet
+> mirroring each on-screen table's own columns exactly, including the
+> human-readable status label via each module's own `*_STATUS_LABELS`
+> constant rather than the raw enum, and a totals footer copied straight
+> from `report.totals`). Balance Sheet was implemented directly; the other
+> four were built by four independent parallel agents working from the same
+> reference-pattern instructions, then verified together as one batch.
+>
+> Code review (batched across all 5): 0 CRITICAL/HIGH/MEDIUM, 1 LOW —
+> Balance Sheet/Customer Statement/Supplier Statement's page.tsx files built
+> their `downloadUrl` via raw template-string interpolation while Sales/
+> Purchase Register (independently) used `URLSearchParams`; not a real bug
+> (values are already-validated UUIDs/ISO dates, and the target route
+> re-validates everything via Zod regardless) but fixed anyway for
+> consistency, switching all three to `URLSearchParams`. Security review
+> (same batch): 0 CRITICAL/HIGH/MEDIUM, the identical LOW noted
+> independently by both agents. Both reviews confirmed, across all 5 routes:
+> `assertPermission(user, "reports", "export")` is re-checked independently
+> of the calling screen's button state; every report service still
+> re-checks `reports`/`view` and same-company ownership (a foreign
+> `customerId`/`supplierId`/`financialYearId` 400s, never leaks); no new
+> write path bypasses `excel-export.ts`'s existing formula-injection
+> sanitizer; error responses never leak stack traces/raw DB errors; and the
+> two Statement routes' `Content-Disposition` filenames (built from the
+> report's own resolved party name, not the raw query param) are safe
+> against header-injection/path-traversal via the same allow-list
+> sanitization regex the Trial Balance reference already established.
+>
+> Re-verified after the URLSearchParams fix: `npx tsc --noEmit` (0 errors),
+> `npx eslint src prisma` (0 errors, same 2 pre-existing unrelated
+> warnings), `npx vitest run` (171 files, **2296 tests** — 54 new across the
+> 5 engine test files + 5 route test files), `next build` (all 5 new
+> `.../export` routes present: `/reports/balance-sheet/export`,
+> `/reports/customers/statement/export`, `/reports/suppliers/statement/export`,
+> `/reports/sales/register/export`, `/reports/purchase/register/export`).
+> Not yet committed as of this entry — commit follows immediately after.
+>
+> **Next Up** (per the same user request): Excel Export for the remaining
+> ~14 report screens (Profit & Loss, Cash Flow, GST reports, Customer/
+> Supplier Outstanding/Directory/Sales-or-Purchase-Summary, Item-wise/
+> Party-wise Sales & Purchase, Sales/Purchase Returns, Inventory reports,
+> Employee reports), and Excel Import extended from Products/Customers/
+> Suppliers to the remaining masters (Categories, Brands, Units,
+> Warehouses, HSN Codes, GST Rates, Margin Profiles, Price Lists,
+> Employees).
+
 ---
 
 # Future Roadmap

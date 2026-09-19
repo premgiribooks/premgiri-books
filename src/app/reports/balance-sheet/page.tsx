@@ -70,6 +70,8 @@ export default async function BalanceSheetPage({ searchParams }: BalanceSheetPag
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ financialYearId: selectedFinancialYear.id, asOfDate });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
@@ -81,7 +83,7 @@ export default async function BalanceSheetPage({ searchParams }: BalanceSheetPag
               Loss plug.
             </p>
           </div>
-          <ReportExportButton />
+          <ReportExportButton downloadUrl={`/reports/balance-sheet/export?${exportParams.toString()}`} />
         </div>
 
         <FinancialYearAsOfDateFilterBar

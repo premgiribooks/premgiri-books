@@ -1,3 +1,4 @@
+import { PURCHASE_INVOICE_STATUS_LABELS } from "@/modules/purchase-invoices/components/purchase-invoice-status-badge";
 import { toPaise } from "@/modules/purchase-invoices/utils/purchase-invoice-calculations";
 import type {
   ItemWisePurchaseAggregateRow,
@@ -14,6 +15,7 @@ import type {
   PurchaseRegisterTotals,
   PurchaseReturnSummaryReport,
 } from "@/types/purchase-report";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 // 69-purchase-reports.md's Reporting Engine composition layer — pure
 // functions only, no Prisma import anywhere in this file. Mirrors
@@ -163,4 +165,60 @@ export function buildPurchaseReturnSummary(
   }
 
   return { rows: [...filtered], totalGrandTotal: totalGrandTotalPaise / 100 };
+}
+
+type PurchaseRegisterExportRow = Record<string, string | number | Date | null>;
+
+const PURCHASE_REGISTER_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "invoiceNumber", header: "Invoice Number", type: "string" },
+  { key: "supplierInvoiceNumber", header: "Supplier Invoice No.", type: "string" },
+  { key: "supplierName", header: "Supplier", type: "string" },
+  { key: "invoiceDate", header: "Date", type: "date" },
+  { key: "taxableAmount", header: "Taxable Amount", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+  { key: "amountPaid", header: "Amount Paid", type: "currency" },
+  { key: "status", header: "Status", type: "string" },
+];
+
+/**
+ * Flattens buildPurchaseRegister's report into the single-sheet shape
+ * src/lib/excel-export.ts's shared contract understands — mirrors
+ * trial-balance.ts's toTrialBalanceExportTable/balance-sheet.ts's
+ * toBalanceSheetExportTable. Row shape mirrors purchase-register-table.tsx's
+ * own on-screen render exactly: cgst+sgst+igst+cess combined into one Total
+ * Tax column, status shown via its display label (never the raw enum). The
+ * totals footer is copied straight from `report.totals`, never re-summed.
+ */
+export function toPurchaseRegisterExportTable(report: PurchaseRegisterReport): ReportExportTable[] {
+  const rows: PurchaseRegisterExportRow[] = report.rows.map((row) => ({
+    invoiceNumber: row.invoiceNumber ?? "—",
+    supplierInvoiceNumber: row.supplierInvoiceNumber,
+    supplierName: row.supplier.name,
+    invoiceDate: row.invoiceDate,
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalCgst + row.totalSgst + row.totalIgst + row.totalCess,
+    grandTotal: row.grandTotal,
+    amountPaid: row.amountPaid,
+    status: PURCHASE_INVOICE_STATUS_LABELS[row.status],
+  }));
+
+  return [
+    {
+      sheetName: "Purchase Register",
+      columns: PURCHASE_REGISTER_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        invoiceNumber: "Period Total",
+        supplierInvoiceNumber: null,
+        supplierName: null,
+        invoiceDate: null,
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        grandTotal: report.totals.grandTotal,
+        amountPaid: report.totals.amountPaid,
+        status: null,
+      },
+    },
+  ];
 }

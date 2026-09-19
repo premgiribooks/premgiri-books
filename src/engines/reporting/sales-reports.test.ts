@@ -5,12 +5,15 @@ import {
   buildPartyWiseSalesReport,
   buildSalesRegister,
   buildSalesReturnSummary,
+  toSalesRegisterExportTable,
 } from "@/engines/reporting/sales-reports";
 import type { ItemWiseSalesAggregateRow, PartyWiseSalesAggregateRow, SalesInvoiceListRow } from "@/types/sales-invoice";
 import type { SalesReturnListRow } from "@/types/sales-return";
 
 function invoiceRow(overrides: Partial<SalesInvoiceListRow> = {}): SalesInvoiceListRow {
   return {
+    invoiceNumber: "INV-0001",
+    invoiceDate: new Date("2027-01-15"),
     taxableAmount: 1000,
     totalCgst: 90,
     totalSgst: 90,
@@ -148,5 +151,96 @@ describe("buildSalesReturnSummary", () => {
     const report = buildSalesReturnSummary([returnRow()], "no-such-customer");
     expect(report.rows).toEqual([]);
     expect(report.totalGrandTotal).toBe(0);
+  });
+});
+
+describe("toSalesRegisterExportTable", () => {
+  it("maps a real-Customer row's fields, combining cgst+sgst+igst+cess into one Total Tax figure, and labels status the same way the on-screen badge does", () => {
+    const report = buildSalesRegister([
+      invoiceRow({
+        invoiceNumber: "INV-0001",
+        invoiceDate: new Date("2027-01-15"),
+        status: "POSTED",
+      }),
+    ]);
+
+    const tables = toSalesRegisterExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Sales Register");
+    expect(tables[0].rows).toEqual([
+      {
+        invoiceNumber: "INV-0001",
+        invoiceDate: new Date("2027-01-15"),
+        customerName: "Acme Co",
+        taxableAmount: 1000,
+        totalTax: 180,
+        grandTotal: 1180,
+        amountPaid: 1180,
+        status: "Posted",
+      },
+    ]);
+  });
+
+  it("falls back to the Walk-in/Quick Customer label for a null-customer row, mirroring sales-register-table.tsx's customerLabel exactly", () => {
+    const report = buildSalesRegister([
+      invoiceRow({
+        invoiceNumber: "INV-0002",
+        customer: null,
+        customerMode: "WALK_IN",
+        quickCustomerName: null,
+        status: "DRAFT",
+      }),
+      invoiceRow({
+        invoiceNumber: "INV-0003",
+        customer: null,
+        customerMode: "QUICK",
+        quickCustomerName: "Ramesh",
+        status: "CANCELLED",
+      }),
+    ]);
+
+    const tables = toSalesRegisterExportTable(report);
+
+    expect(tables[0].rows[0]).toMatchObject({ customerName: "Walk-in", status: "Draft" });
+    expect(tables[0].rows[1]).toMatchObject({ customerName: "Ramesh", status: "Cancelled" });
+  });
+
+  it("carries the totals footer straight from report.totals — never re-summed", () => {
+    const report = buildSalesRegister([
+      invoiceRow({ taxableAmount: 500, totalCgst: 0, totalSgst: 0, totalIgst: 90, totalCess: 5, grandTotal: 595, amountPaid: 0 }),
+    ]);
+
+    const tables = toSalesRegisterExportTable(report);
+
+    expect(tables[0].totals).toEqual({
+      invoiceNumber: "Total",
+      invoiceDate: null,
+      customerName: "",
+      taxableAmount: report.totals.taxableAmount,
+      totalTax: report.totals.totalTax,
+      grandTotal: report.totals.grandTotal,
+      amountPaid: report.totals.amountPaid,
+      status: "",
+    });
+  });
+
+  it("produces a valid, empty sheet with a zero-totals footer for an empty rows: [] report", () => {
+    const report = buildSalesRegister([]);
+
+    const tables = toSalesRegisterExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].rows).toEqual([]);
+    expect(tables[0].totals).toEqual({
+      invoiceNumber: "Total",
+      invoiceDate: null,
+      customerName: "",
+      taxableAmount: 0,
+      totalTax: 0,
+      grandTotal: 0,
+      amountPaid: 0,
+      status: "",
+    });
   });
 });

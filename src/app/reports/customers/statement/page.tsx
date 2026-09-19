@@ -5,6 +5,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { CustomerReportFilterBar } from "@/modules/reports/customers/components/customer-report-filter-bar";
 import { CustomerStatementTable } from "@/modules/reports/customers/components/customer-statement-table";
 import { customerReportService } from "@/modules/reports/customers/services/customer-report-service";
@@ -53,12 +54,19 @@ export default async function CustomerStatementPage({ searchParams }: CustomerSt
     }
   }
 
+  const exportParams = customerId ? new URLSearchParams({ customerId, dateFrom, dateTo }) : null;
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Customer Statement</h1>
-          <p className="text-sm text-muted-foreground">Dated ledger entries with running balance for one customer.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Customer Statement</h1>
+            <p className="text-sm text-muted-foreground">Dated ledger entries with running balance for one customer.</p>
+          </div>
+          <ReportExportButton
+            downloadUrl={exportParams ? `/reports/customers/statement/export?${exportParams.toString()}` : undefined}
+          />
         </div>
 
         <CustomerReportFilterBar customers={customers} showDateRange />

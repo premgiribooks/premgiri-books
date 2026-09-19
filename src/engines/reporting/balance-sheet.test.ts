@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerGroup } from "@prisma/client";
 
-import { buildBalanceSheetReport } from "@/engines/reporting/balance-sheet";
+import { buildBalanceSheetReport, toBalanceSheetExportTable } from "@/engines/reporting/balance-sheet";
 import type { TrialBalanceResult, TrialBalanceRow } from "@/engines/voucher/types";
 
 function group(overrides: Partial<LedgerGroup> & Pick<LedgerGroup, "id" | "name" | "natureType">): LedgerGroup {
@@ -156,5 +156,57 @@ describe("buildBalanceSheetReport", () => {
     // Only the synthetic Profit & Loss plug section remains on the Liabilities side.
     expect(report.liabilities).toHaveLength(1);
     expect(report.liabilities[0].groupName).toBe("Profit & Loss Account (Current Period)");
+  });
+});
+
+describe("toBalanceSheetExportTable", () => {
+  it("splits the report into an Assets sheet and a Liabilities sheet, each flattened depth-first", () => {
+    const cash = group({ id: "cash", name: "Cash-in-Hand", natureType: "ASSET" });
+    const capital = group({ id: "capital", name: "Capital Account", natureType: "LIABILITY" });
+    const rows: TrialBalanceRow[] = [
+      row({ ledgerId: "l1", ledgerName: "Cash", ledgerGroupId: "cash", closingBalance: 15000 }),
+      row({ ledgerId: "l2", ledgerName: "Owner's Capital", ledgerGroupId: "capital", closingBalance: -10000 }),
+    ];
+    const result: TrialBalanceResult = { rows, totalDebit: 15000, totalCredit: 10000 };
+    const report = buildBalanceSheetReport(result, 5000, [cash, capital]);
+
+    const tables = toBalanceSheetExportTable(report);
+
+    expect(tables).toHaveLength(2);
+    expect(tables[0].sheetName).toBe("Assets");
+    expect(tables[0].rows).toEqual([
+      { particulars: "Cash-in-Hand", indentLevel: 0, amount: 15000 },
+      { particulars: "Cash", indentLevel: 1, amount: 15000 },
+    ]);
+    expect(tables[1].sheetName).toBe("Liabilities");
+    expect(tables[1].rows).toEqual([
+      { particulars: "Capital Account", indentLevel: 0, amount: 10000 },
+      { particulars: "Owner's Capital", indentLevel: 1, amount: 10000 },
+      { particulars: "Profit & Loss Account (Current Period)", indentLevel: 0, amount: 5000 },
+      { particulars: "Profit & Loss Account (Current Period)", indentLevel: 1, amount: 5000 },
+    ]);
+  });
+
+  it("carries totalAssets/totalLiabilities in each sheet's totals footer, copied straight from the report", () => {
+    const cash = group({ id: "cash", name: "Cash-in-Hand", natureType: "ASSET" });
+    const rows: TrialBalanceRow[] = [row({ ledgerId: "l1", ledgerName: "Cash", ledgerGroupId: "cash", closingBalance: 1000 })];
+    const report = buildBalanceSheetReport({ rows, totalDebit: 1000, totalCredit: 0 }, 1000, [cash]);
+
+    const tables = toBalanceSheetExportTable(report);
+
+    expect(tables[0].totals).toEqual({ particulars: "Total Assets", indentLevel: null, amount: report.totalAssets });
+    expect(tables[1].totals).toEqual({ particulars: "Total Liabilities", indentLevel: null, amount: report.totalLiabilities });
+  });
+
+  it("returns an empty Assets sheet, and only the synthetic Profit & Loss plug on the Liabilities sheet, when no real ledger groups exist", () => {
+    const report = buildBalanceSheetReport({ rows: [], totalDebit: 0, totalCredit: 0 }, 0, []);
+
+    const tables = toBalanceSheetExportTable(report);
+
+    expect(tables[0].rows).toEqual([]);
+    expect(tables[1].rows).toEqual([
+      { particulars: "Profit & Loss Account (Current Period)", indentLevel: 0, amount: 0 },
+      { particulars: "Profit & Loss Account (Current Period)", indentLevel: 1, amount: 0 },
+    ]);
   });
 });

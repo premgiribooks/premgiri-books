@@ -1,3 +1,4 @@
+import { SALES_INVOICE_STATUS_LABELS } from "@/modules/sales-invoices/components/sales-invoice-status-badge";
 import { toPaise } from "@/modules/sales-invoices/utils/sales-invoice-calculations";
 import type {
   ItemWiseSalesAggregateRow,
@@ -14,6 +15,7 @@ import type {
   SalesRegisterTotals,
   SalesReturnSummaryReport,
 } from "@/types/sales-report";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 // 68-sales-reports.md's Reporting Engine composition layer — pure functions
 // only, no Prisma import anywhere in this file. Each function here shapes
@@ -170,4 +172,73 @@ export function buildSalesReturnSummary(rows: readonly SalesReturnListRow[], cus
   }
 
   return { rows: [...filtered], totalGrandTotal: totalGrandTotalPaise / 100 };
+}
+
+type SalesRegisterExportRow = Record<string, string | number | Date | null>;
+
+const SALES_REGISTER_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "invoiceNumber", header: "Invoice Number", type: "string" },
+  { key: "invoiceDate", header: "Date", type: "date" },
+  { key: "customerName", header: "Customer", type: "string" },
+  { key: "taxableAmount", header: "Taxable Amount", type: "currency" },
+  { key: "totalTax", header: "Total Tax", type: "currency" },
+  { key: "grandTotal", header: "Grand Total", type: "currency" },
+  { key: "amountPaid", header: "Amount Paid", type: "currency" },
+  { key: "status", header: "Status", type: "string" },
+];
+
+/** Resolved display name per Business Rules #1 — duplicated here rather than
+ * imported, mirroring sales-register-table.tsx's own `customerLabel`
+ * exactly (customer-reports.ts's signedOpening/humanizeVoucherType is this
+ * codebase's established precedent for duplicating small per-module
+ * helpers). */
+function customerLabel(invoice: SalesInvoiceListRow): string {
+  if (invoice.customer) {
+    return invoice.customer.name;
+  }
+  if (invoice.customerMode === "QUICK") {
+    return invoice.quickCustomerName ?? "Quick Customer";
+  }
+  return invoice.quickCustomerName ? `Walk-in — ${invoice.quickCustomerName}` : "Walk-in";
+}
+
+/**
+ * Flattens the Sales Register's invoice rows into the flat rows-plus-
+ * totals-footer shape src/lib/excel-export.ts's shared contract understands,
+ * mirroring trial-balance.ts/balance-sheet.ts's own toXExportTable
+ * flattening approach. Column set, the customer-label fallback, and the
+ * cgst+sgst+igst+cess -> single "Total Tax" combination all mirror
+ * sales-register-table.tsx's on-screen rendering exactly, so the export
+ * shows the same data as the screen. The totals footer is copied straight
+ * from `report.totals`, never re-summed.
+ */
+export function toSalesRegisterExportTable(report: SalesRegisterReport): ReportExportTable[] {
+  const rows: SalesRegisterExportRow[] = report.rows.map((row) => ({
+    invoiceNumber: row.invoiceNumber,
+    invoiceDate: row.invoiceDate,
+    customerName: customerLabel(row),
+    taxableAmount: row.taxableAmount,
+    totalTax: row.totalCgst + row.totalSgst + row.totalIgst + row.totalCess,
+    grandTotal: row.grandTotal,
+    amountPaid: row.amountPaid,
+    status: SALES_INVOICE_STATUS_LABELS[row.status],
+  }));
+
+  return [
+    {
+      sheetName: "Sales Register",
+      columns: SALES_REGISTER_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        invoiceNumber: "Total",
+        invoiceDate: null,
+        customerName: "",
+        taxableAmount: report.totals.taxableAmount,
+        totalTax: report.totals.totalTax,
+        grandTotal: report.totals.grandTotal,
+        amountPaid: report.totals.amountPaid,
+        status: "",
+      },
+    },
+  ];
 }

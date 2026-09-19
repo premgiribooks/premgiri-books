@@ -4,6 +4,7 @@ import { buildPartyWisePurchaseReport } from "@/engines/reporting/purchase-repor
 import type { LedgerStatementResult, TrialBalanceResult } from "@/engines/voucher/types";
 import type { PartyWisePurchaseAggregateRow } from "@/types/purchase-invoice";
 import type { PartyWisePurchaseReport } from "@/types/purchase-report";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 import type {
   SupplierDirectoryReport,
   SupplierOutstandingReport,
@@ -128,4 +129,66 @@ export function buildSupplierDirectory(suppliers: readonly SupplierReportRow[]):
   }));
 
   return { rows };
+}
+
+type SupplierStatementExportRow = Record<string, string | number | Date | null>;
+
+const SUPPLIER_STATEMENT_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "date", header: "Date", type: "date" },
+  { key: "voucherType", header: "Voucher Type", type: "string" },
+  { key: "voucherNumber", header: "Voucher Number", type: "string" },
+  { key: "narration", header: "Narration", type: "string" },
+  { key: "debit", header: "Debit", type: "currency" },
+  { key: "credit", header: "Credit", type: "currency" },
+  { key: "runningBalance", header: "Running Balance", type: "currency" },
+];
+
+/**
+ * Flattens `buildSupplierStatement`'s output into the single-sheet shape
+ * src/lib/excel-export.ts's shared contract understands, mirroring
+ * trial-balance.ts's own toTrialBalanceExportTable/balance-sheet.ts's
+ * toBalanceSheetExportTable pattern. An "Opening Balance" row is prepended
+ * (mirroring the Statement screen's own render) and a synthetic "Closing
+ * Balance" row is used as the sheet's totals footer — both figures copied
+ * straight from `report.openingBalance`/`report.closingBalance`, never
+ * re-derived from the lines below.
+ */
+export function toSupplierStatementExportTable(report: SupplierStatementReport): ReportExportTable[] {
+  const openingRow: SupplierStatementExportRow = {
+    date: null,
+    voucherType: "",
+    voucherNumber: "",
+    narration: "Opening Balance",
+    debit: null,
+    credit: null,
+    runningBalance: report.openingBalance,
+  };
+
+  const lineRows: SupplierStatementExportRow[] = report.lines.map((line) => ({
+    date: line.voucherDate,
+    voucherType: line.voucherTypeLabel,
+    voucherNumber: line.voucherNumber,
+    narration: line.narration ?? "",
+    debit: line.debit,
+    credit: line.credit,
+    runningBalance: line.runningBalance,
+  }));
+
+  return [
+    {
+      sheetName: "Supplier Statement",
+      title: report.supplierName,
+      columns: SUPPLIER_STATEMENT_EXPORT_COLUMNS,
+      rows: [openingRow, ...lineRows],
+      totals: {
+        date: null,
+        voucherType: "",
+        voucherNumber: "",
+        narration: "Closing Balance",
+        debit: null,
+        credit: null,
+        runningBalance: report.closingBalance,
+      },
+    },
+  ];
 }

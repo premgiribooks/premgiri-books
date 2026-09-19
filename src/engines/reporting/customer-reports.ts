@@ -10,6 +10,7 @@ import type {
   CustomerReportRow,
   CustomerStatementReport,
 } from "@/types/customer-report";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 // 71-customer-reports.md's Reporting Engine composition layer — pure
 // functions only, no Prisma import anywhere in this file. Every balance
@@ -112,6 +113,69 @@ export function buildCustomerStatement(
  */
 export function buildCustomerSalesSummary(rawRows: readonly PartyWiseSalesAggregateRow[]): PartyWiseSalesReport {
   return buildPartyWiseSalesReport(rawRows.filter((row) => row.customerId !== null));
+}
+
+type CustomerStatementExportRow = Record<string, string | number | Date | null>;
+
+const CUSTOMER_STATEMENT_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "date", header: "Date", type: "date" },
+  { key: "voucherType", header: "Voucher Type", type: "string" },
+  { key: "voucherNumber", header: "Voucher Number", type: "string" },
+  { key: "narration", header: "Narration", type: "string" },
+  { key: "debit", header: "Debit", type: "currency" },
+  { key: "credit", header: "Credit", type: "currency" },
+  { key: "runningBalance", header: "Running Balance", type: "currency" },
+];
+
+/**
+ * Flattens buildCustomerStatement's dated lines into the flat rows-plus-
+ * totals-footer shape src/lib/excel-export.ts's shared contract understands,
+ * mirroring trial-balance.ts/balance-sheet.ts's own toXExportTable
+ * flattening approach. The Opening Balance is prepended as a synthetic row
+ * (no voucher fields, just its own running-balance figure) and the Closing
+ * Balance is likewise a synthetic totals-footer row — both copied straight
+ * from `report.openingBalance`/`report.closingBalance`, never re-derived
+ * from `report.lines`.
+ */
+export function toCustomerStatementExportTable(report: CustomerStatementReport): ReportExportTable[] {
+  const rows: CustomerStatementExportRow[] = [
+    {
+      date: null,
+      voucherType: "",
+      voucherNumber: "",
+      narration: "Opening Balance",
+      debit: null,
+      credit: null,
+      runningBalance: report.openingBalance,
+    },
+    ...report.lines.map((line) => ({
+      date: line.voucherDate,
+      voucherType: line.voucherTypeLabel,
+      voucherNumber: line.voucherNumber,
+      narration: line.narration ?? "",
+      debit: line.debit,
+      credit: line.credit,
+      runningBalance: line.runningBalance,
+    })),
+  ];
+
+  return [
+    {
+      sheetName: "Customer Statement",
+      title: report.customerName,
+      columns: CUSTOMER_STATEMENT_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        date: null,
+        voucherType: "",
+        voucherNumber: "",
+        narration: "Closing Balance",
+        debit: null,
+        credit: null,
+        runningBalance: report.closingBalance,
+      },
+    },
+  ];
 }
 
 /** Business Rules #4 — a straightforward presentation of the Customer rows already fetched. */

@@ -5,6 +5,7 @@ import {
   buildPartyWisePurchaseReport,
   buildPurchaseRegister,
   buildPurchaseReturnSummary,
+  toPurchaseRegisterExportTable,
 } from "@/engines/reporting/purchase-reports";
 import type { ItemWisePurchaseAggregateRow, PartyWisePurchaseAggregateRow, PurchaseInvoiceListRow } from "@/types/purchase-invoice";
 import type { PurchaseReturnListRow } from "@/types/purchase-return";
@@ -136,5 +137,120 @@ describe("buildPurchaseReturnSummary", () => {
     const report = buildPurchaseReturnSummary([returnRow()], "no-such-supplier");
     expect(report.rows).toEqual([]);
     expect(report.totalGrandTotal).toBe(0);
+  });
+});
+
+describe("toPurchaseRegisterExportTable", () => {
+  it("maps each row to its export shape, combining tax fields and using the status display label", () => {
+    const rows = [
+      invoiceRow({
+        invoiceNumber: "PINV-0001",
+        supplierInvoiceNumber: "SUP-INV-1",
+        invoiceDate: new Date("2027-01-15T00:00:00.000Z"),
+        taxableAmount: 1000,
+        totalCgst: 90,
+        totalSgst: 90,
+        totalIgst: 0,
+        totalCess: 0,
+        grandTotal: 1180,
+        amountPaid: 1180,
+        status: "POSTED",
+        supplier: { id: "supp-1", name: "Acme Supplies", isActive: true, creditDays: 30, ledgerId: "ledger-1" },
+      }),
+      invoiceRow({
+        invoiceNumber: null,
+        supplierInvoiceNumber: "SUP-INV-2",
+        invoiceDate: new Date("2027-01-20T00:00:00.000Z"),
+        taxableAmount: 500,
+        totalCgst: 0,
+        totalSgst: 0,
+        totalIgst: 90,
+        totalCess: 5,
+        grandTotal: 595,
+        amountPaid: 0,
+        status: "DRAFT",
+        supplier: { id: "supp-2", name: "Beta Traders", isActive: true, creditDays: 15, ledgerId: "ledger-2" },
+      }),
+    ];
+    const report = buildPurchaseRegister(rows);
+
+    const tables = toPurchaseRegisterExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Purchase Register");
+    expect(tables[0].rows).toEqual([
+      {
+        invoiceNumber: "PINV-0001",
+        supplierInvoiceNumber: "SUP-INV-1",
+        supplierName: "Acme Supplies",
+        invoiceDate: new Date("2027-01-15T00:00:00.000Z"),
+        taxableAmount: 1000,
+        totalTax: 180,
+        grandTotal: 1180,
+        amountPaid: 1180,
+        status: "Posted",
+      },
+      {
+        invoiceNumber: "—",
+        supplierInvoiceNumber: "SUP-INV-2",
+        supplierName: "Beta Traders",
+        invoiceDate: new Date("2027-01-20T00:00:00.000Z"),
+        taxableAmount: 500,
+        totalTax: 95,
+        grandTotal: 595,
+        amountPaid: 0,
+        status: "Draft",
+      },
+    ]);
+  });
+
+  it("copies the totals footer straight from report.totals, never re-summing", () => {
+    const rows = [
+      invoiceRow(),
+      invoiceRow({
+        taxableAmount: 500,
+        totalCgst: 0,
+        totalSgst: 0,
+        totalIgst: 90,
+        totalCess: 5,
+        grandTotal: 595,
+        amountPaid: 0,
+      }),
+    ];
+    const report = buildPurchaseRegister(rows);
+
+    const tables = toPurchaseRegisterExportTable(report);
+
+    expect(tables[0].totals).toEqual({
+      invoiceNumber: "Period Total",
+      supplierInvoiceNumber: null,
+      supplierName: null,
+      invoiceDate: null,
+      taxableAmount: report.totals.taxableAmount,
+      totalTax: report.totals.totalTax,
+      grandTotal: report.totals.grandTotal,
+      amountPaid: report.totals.amountPaid,
+      status: null,
+    });
+  });
+
+  it("returns a valid, empty sheet with a zero-totals footer for an empty report", () => {
+    const report = buildPurchaseRegister([]);
+
+    const tables = toPurchaseRegisterExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].rows).toEqual([]);
+    expect(tables[0].totals).toEqual({
+      invoiceNumber: "Period Total",
+      supplierInvoiceNumber: null,
+      supplierName: null,
+      invoiceDate: null,
+      taxableAmount: 0,
+      totalTax: 0,
+      grandTotal: 0,
+      amountPaid: 0,
+      status: null,
+    });
   });
 });
