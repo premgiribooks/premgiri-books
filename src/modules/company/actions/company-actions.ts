@@ -8,6 +8,7 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { assertPermission } from "@/lib/permissions";
 import { setCurrentCompany } from "@/lib/current-company";
 import { clearCurrentBranch } from "@/lib/current-branch";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { companyService } from "@/modules/company/services/company-service";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
 import { saveCompanyLogo } from "@/modules/company/services/company-logo-service";
@@ -32,6 +33,7 @@ export async function updateCompanyProfileAction(
   input: CompanyProfileInput
 ): Promise<ActionResult<CompanyWithSettings>> {
   try {
+    assertNotRestoring();
     const company = await companyService.updateCompanyProfile(companyId, input);
     revalidatePath(`/company/${companyId}/edit`);
     return { success: true, data: company };
@@ -45,6 +47,7 @@ export async function updateCompanySettingsAction(
   input: CompanySettingsInput
 ): Promise<ActionResult<CompanySettings>> {
   try {
+    assertNotRestoring();
     const settings = await companySettingsService.updateSettings(companyId, input);
     revalidatePath("/profile");
     return { success: true, data: settings };
@@ -58,6 +61,7 @@ export async function updateSalesLedgerMappingAction(
   input: SalesLedgerMappingInput
 ): Promise<ActionResult<CompanySettings>> {
   try {
+    assertNotRestoring();
     const settings = await companySettingsService.updateSalesLedgerMapping(companyId, input);
     revalidatePath("/settings/sales-ledgers");
     return { success: true, data: settings };
@@ -71,6 +75,7 @@ export async function updateGstFilingFrequencyAction(
   input: GstFilingFrequencyInput
 ): Promise<ActionResult<CompanySettings>> {
   try {
+    assertNotRestoring();
     const settings = await companySettingsService.updateGstFilingFrequency(companyId, input);
     revalidatePath("/settings/sales-ledgers");
     return { success: true, data: settings };
@@ -84,6 +89,7 @@ export async function updatePayrollLedgerMappingAction(
   input: PayrollLedgerMappingInput
 ): Promise<ActionResult<CompanySettings>> {
   try {
+    assertNotRestoring();
     const settings = await companySettingsService.updatePayrollLedgerMapping(companyId, input);
     revalidatePath("/settings/sales-ledgers");
     return { success: true, data: settings };

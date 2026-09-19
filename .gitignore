@@ -55,6 +55,11 @@ next-env.d.ts
 /public/uploads/logos/*
 !/public/uploads/logos/.gitkeep
 
+# 81-backup-restore.md's default local backup directory (BACKUP_DIR
+# overrides it) — whole-database dump files, never committed.
+/backups/*
+!/backups/.gitkeep
+
 # playwright-cli browser-verification scratch (screenshots, snapshots, console logs)
 /.playwright-cli/
 

@@ -40,7 +40,7 @@ const ADMINISTRATION_MODULES = [
     href: "/administration/backup",
     icon: DatabaseBackup,
     title: "Backup",
-    description: "Coming soon.",
+    description: "Backup and restore the whole installation's database.",
   },
 ] as const;
 

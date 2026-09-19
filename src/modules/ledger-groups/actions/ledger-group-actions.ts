@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { ledgerGroupService } from "@/modules/ledger-groups/services/ledger-group-service";
 import type {
   CreateLedgerGroupInput,
@@ -15,6 +16,7 @@ export async function createLedgerGroupAction(
   input: CreateLedgerGroupInput
 ): Promise<ActionResult<LedgerGroup>> {
   try {
+    assertNotRestoring();
     const ledgerGroup = await ledgerGroupService.createLedgerGroup(input);
     revalidatePath("/accounting/ledger-groups");
     return { success: true, data: ledgerGroup };
@@ -28,6 +30,7 @@ export async function updateLedgerGroupAction(
   input: UpdateLedgerGroupInput
 ): Promise<ActionResult<LedgerGroup>> {
   try {
+    assertNotRestoring();
     const ledgerGroup = await ledgerGroupService.updateLedgerGroup(id, input);
     revalidatePath("/accounting/ledger-groups");
     revalidatePath(`/accounting/ledger-groups/${id}/edit`);
@@ -39,6 +42,7 @@ export async function updateLedgerGroupAction(
 
 export async function activateLedgerGroupAction(id: string): Promise<ActionResult<LedgerGroup>> {
   try {
+    assertNotRestoring();
     const ledgerGroup = await ledgerGroupService.activateLedgerGroup(id);
     revalidatePath("/accounting/ledger-groups");
     return { success: true, data: ledgerGroup };
@@ -49,6 +53,7 @@ export async function activateLedgerGroupAction(id: string): Promise<ActionResul
 
 export async function deactivateLedgerGroupAction(id: string): Promise<ActionResult<LedgerGroup>> {
   try {
+    assertNotRestoring();
     const ledgerGroup = await ledgerGroupService.deactivateLedgerGroup(id);
     revalidatePath("/accounting/ledger-groups");
     return { success: true, data: ledgerGroup };

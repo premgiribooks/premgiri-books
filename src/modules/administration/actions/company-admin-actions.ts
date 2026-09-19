@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { companyService } from "@/modules/company/services/company-service";
 import type { CreateCompanyInput } from "@/modules/administration/validation/create-company-schema";
 import type { CompanyInput } from "@/modules/company/validation/company-schema";
@@ -20,6 +21,7 @@ export async function createCompanyAction(
   input: CreateCompanyInput
 ): Promise<ActionResult<CompanyWithSettings>> {
   try {
+    assertNotRestoring();
     const company = await companyService.createCompany(input);
     revalidatePath("/administration/companies");
     return { success: true, data: company };
@@ -33,6 +35,7 @@ export async function updateCompanyAction(
   input: CompanyInput
 ): Promise<ActionResult<CompanyWithSettings>> {
   try {
+    assertNotRestoring();
     const company = await companyService.updateCompany(id, input);
     revalidatePath("/administration/companies");
     revalidatePath(`/administration/companies/${id}/edit`);
@@ -44,6 +47,7 @@ export async function updateCompanyAction(
 
 export async function activateCompanyAction(id: string): Promise<ActionResult<CompanyWithSettings>> {
   try {
+    assertNotRestoring();
     const company = await companyService.activateCompany(id);
     revalidatePath("/administration/companies");
     return { success: true, data: company };
@@ -56,6 +60,7 @@ export async function deactivateCompanyAction(
   id: string
 ): Promise<ActionResult<CompanyWithSettings>> {
   try {
+    assertNotRestoring();
     const company = await companyService.deactivateCompany(id);
     revalidatePath("/administration/companies");
     return { success: true, data: company };

@@ -4,6 +4,7 @@ import type { Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { roleService } from "@/modules/roles/services/role-service";
 import type { RoleFormInput } from "@/modules/roles/validation/role-schema";
 import type { ActionResult } from "@/types/api";
@@ -11,6 +12,7 @@ import type { ActionResult } from "@/types/api";
 export async function createRoleAction(input: RoleFormInput): Promise<ActionResult<Role>> {
   let role: Role;
   try {
+    assertNotRestoring();
     role = await roleService.createRole(input);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -26,6 +28,7 @@ export async function updateRoleAction(
 ): Promise<ActionResult<Role>> {
   let role: Role;
   try {
+    assertNotRestoring();
     role = await roleService.updateRole(id, input);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -39,6 +42,7 @@ export async function updateRoleAction(
 export async function activateRoleAction(id: string): Promise<ActionResult<Role>> {
   let role: Role;
   try {
+    assertNotRestoring();
     role = await roleService.activateRole(id);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -52,6 +56,7 @@ export async function activateRoleAction(id: string): Promise<ActionResult<Role>
 export async function deactivateRoleAction(id: string): Promise<ActionResult<Role>> {
   let role: Role;
   try {
+    assertNotRestoring();
     role = await roleService.deactivateRole(id);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };

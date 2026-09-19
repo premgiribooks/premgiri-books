@@ -10,6 +10,7 @@ import {
   getCurrentFinancialYearId,
   setCurrentFinancialYear,
 } from "@/lib/current-financial-year";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { financialYearService } from "@/modules/financial-year/services/financial-year-service";
 import type { FinancialYearInput } from "@/modules/financial-year/validation/financial-year-schema";
 import type { ActionResult } from "@/types/api";
@@ -19,6 +20,7 @@ export async function createFinancialYearAction(
   input: FinancialYearInput
 ): Promise<ActionResult<FinancialYear>> {
   try {
+    assertNotRestoring();
     const company = await getCurrentCompany();
     if (!company) {
       return { success: false, error: "Select a company before creating a financial year." };
@@ -37,6 +39,7 @@ export async function updateFinancialYearAction(
   input: FinancialYearInput
 ): Promise<ActionResult<FinancialYear>> {
   try {
+    assertNotRestoring();
     const financialYear = await financialYearService.updateFinancialYear(id, input);
     revalidatePath("/financial-year");
     revalidatePath(`/financial-year/${id}/edit`);
@@ -50,6 +53,7 @@ export async function setCurrentFinancialYearAction(
   id: string
 ): Promise<ActionResult<FinancialYear>> {
   try {
+    assertNotRestoring();
     const financialYear = await financialYearService.setCurrent(id);
     revalidatePath("/financial-year");
     return { success: true, data: financialYear };
@@ -60,6 +64,7 @@ export async function setCurrentFinancialYearAction(
 
 export async function closeFinancialYearAction(id: string): Promise<ActionResult<FinancialYear>> {
   try {
+    assertNotRestoring();
     const result = await financialYearService.closeFinancialYear(id);
 
     if (result.wasCurrent && (await getCurrentFinancialYearId()) === id) {

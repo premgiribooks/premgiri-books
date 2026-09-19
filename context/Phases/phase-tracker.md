@@ -2088,7 +2088,7 @@ as usual:
 | 76  | PDF Generation   | Reports    | 🟨     |
 | 77  | Barcode Billing  | Sales      | ⬜     |
 | 78  | Audit Logs       | Platform   | ⬜     |
-| 79  | Backup & Restore | Database   | ⬜     |
+| 79  | Backup & Restore | Database   | ✅     |
 
 > **#73 Global Search implemented 2026-09-17.** `src/modules/search/`
 > (`global-search-service.ts`, Zod validation, `src/app/api/search/route.ts`)
@@ -2165,6 +2165,104 @@ as usual:
 > already used for the identical reason). `tsc`/`eslint`/`vitest run` (152
 > files, 2075 tests) all still pass; see `progress-tracker.md`'s matching
 > dated entry for the full root-cause writeup.
+
+> **#79 Backup & Restore implemented 2026-09-18** (spec 81,
+> `context/feature-specs/81-backup-restore.md`). Replaces
+> `src/app/administration/backup/page.tsx`'s `ComingSoon` stub with a real
+> screen at the same route/gate. New `BackupJob` model (3 enums:
+> `BackupJobType`/`BackupJobStatus`/`BackupJobTrigger`) with a deliberately
+> nullable, always-null-in-v1 `companyId` column per the spec's own v4
+> Supersession Note — no relation declared, purely v4-readiness. New
+> `src/modules/backup/` (repository/service/scheduler/validation/actions/
+> components) shells out to `pg_dump -Fc`/`pg_restore --clean --if-exists`
+> via `child_process.execFile` (args array, never a shell string), connecting
+> via `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`/`PGSSLMODE`
+> environment variables parsed from `DATABASE_URL` (a code-review fix — see
+> below — rather than the original draft's plain argv element). Restore always runs a
+> mandatory `PRE_RESTORE_SAFETY` backup first and aborts before touching the
+> live database if that fails; the confirmation dialog requires typing a
+> fixed literal phrase (`RESTORE_CONFIRMATION_PHRASE`, Zod `z.literal`,
+> re-validated server-side) since this installation has no single
+> "installation name" concept the spec's own wording assumed.
+>
+> **Maintenance-mode mechanism deviates from a literal reading of the
+> spec, deliberately**: the "no concurrent business-data writes may reach
+> the database mid-restore" requirement is enforced by a new process-wide
+> in-memory flag (`src/lib/restore-lock.ts`) read inside `run-action.ts`,
+> the shared wrapper most Server Action mutations call — rather than in
+> `proxy.ts`. Next.js's own Proxy docs explicitly warn
+> against relying on shared modules/globals there (it can run in a
+> separate execution context even under the Node.js runtime); `run-
+> action.ts` has no such caveat. Also deliberately not backed by a
+> `BackupJob` row's own RUNNING status: `pg_restore --clean` drops and
+> recreates the whole schema, including the `BackupJob` table itself,
+> mid-operation, so a durability signal living inside the database being
+> wiped can't reliably answer "is a restore in progress" during the
+> window that matters. The daily scheduler (`ensureDailyBackup`) runs from
+> a new `src/instrumentation.ts` (`register()`, non-blocking) — the
+> launch-time catch-up check the spec's own Scheduling Mechanism section
+> decided on, not an in-process timer or the host OS scheduler.
+>
+> **Security finding, self-caught and fixed before review**: a live
+> `next dev` smoke test surfaced that `pg_dump`'s spawn-failure `Error`
+> carries the full command line (`.cmd`/`.spawnargs`), including
+> `DATABASE_URL`'s embedded password as a CLI argument — logging the raw
+> error via `logger.error({ err: error }, ...)` leaked the DB password
+> into the log stream via Pino's default error serializer. Fixed:
+> `getErrorMessage()` now redacts any `postgres(ql)://` substring, and
+> every `logger.error` call in `backup-service.ts` passes only that
+> sanitized string, never the raw `Error` object; a regression test
+> (`backup-service.test.ts`) asserts neither the recorded
+> `BackupJob.errorMessage` nor the logged payload ever contains
+> `DATABASE_URL`. The credential was exposed only within this local dev
+> session's own log output, never externally — flagged to the user for
+> their own judgment on rotation.
+>
+> **Code review + security review (parallel subagents), findings fixed
+> same session**: both independently found the same CRITICAL bug — the
+> restore lock was engaged only *after* the pre-restore safety backup
+> completed, leaving that entire (multi-second-to-minute) window open to
+> a second concurrent restore attempt; fixed by engaging the lock before
+> the safety backup starts, plus an explicit re-entrancy check at the top
+> of `runRestore`. The security review additionally found that the "one
+> chokepoint" claim above was false: 34 mutating Server Action functions
+> across 10 legacy files (predating `runAction`'s promotion) never called
+> it at all; fixed with a new `assertNotRestoring()` guard called
+> directly inside each of those 34 functions. Both agents also independently
+> flagged that `src/instrumentation.ts`'s own startup catch still logged
+> the raw error object — fixed by extracting the redaction logic into a
+> shared `src/lib/redact-error.ts` both files now import. The code review
+> additionally flagged `DATABASE_URL` appearing as a plain `pg_dump`/
+> `pg_restore` argv element (visible via the OS process list) — fixed via
+> the `PG*` env-var approach noted above. Full detail in
+> `progress-tracker.md`'s matching dated entry.
+>
+> Also discovered, not fixed (unrelated, pre-existing): migration
+> `20260918043848_payment_mode_integration_sales`'s backfill `INSERT`
+> is missing the `::"PaymentModeLedgerClass"` cast its sibling
+> `20260918155521_payment_mode_integration_purchase` has, which makes
+> `prisma migrate dev`'s shadow-database replay fail on a fresh history
+> (`column "ledgerClass" is of type ... but expression is of type text`).
+> Worked around for this feature (hand-wrote `backup_restore`'s migration
+> SQL, applied via `prisma db execute`, recorded via `prisma migrate
+> resolve --applied`) rather than editing an already-applied migration's
+> checksummed file. **Follow-up needed**: the next fresh `migrate reset`/
+> CI-from-scratch run will still hit this pre-existing bug.
+>
+> Verified (after the review fixes): `npx tsc --noEmit`, `npx eslint src
+> prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx vitest
+> run` (157 files, **2145 tests** — 21 new), `next build` (`/administration/backup` in the route
+> table, no longer a stub). Live-verified via a real `next dev` run:
+> unauthenticated `/administration/backup` redirects to `/login`; the
+> daily-backup scheduler fires on startup and correctly records a
+> `FAILED` `BackupJob` (pg_dump/pg_restore are not installed on this dev
+> machine — `ENOENT`), never a silent no-op or a crash. Full authenticated
+> browser click-through (Backup Now button, history table, Restore
+> dialog) was **not** performed — no Chromium/Playwright tooling was
+> available in this session's shell; recommend the user click through
+> `/administration/backup` themselves before merging. Git Workflow
+> (branch/commit/PR/merge) not yet done — pending user decision, see
+> `progress-tracker.md`'s matching dated entry.
 
 ---
 

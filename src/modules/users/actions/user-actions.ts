@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { userService } from "@/modules/users/services/user-service";
 import type { UserFormInput } from "@/modules/users/validation/user-schema";
 import type { ActionResult } from "@/types/api";
@@ -13,6 +14,7 @@ export async function createUserAction(
 ): Promise<ActionResult<UserWithRole>> {
   let user: UserWithRole;
   try {
+    assertNotRestoring();
     user = await userService.createUser(input);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -28,6 +30,7 @@ export async function updateUserAction(
 ): Promise<ActionResult<UserWithRole>> {
   let user: UserWithRole;
   try {
+    assertNotRestoring();
     user = await userService.updateUser(id, input);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -41,6 +44,7 @@ export async function updateUserAction(
 export async function activateUserAction(id: string): Promise<ActionResult<UserWithRole>> {
   let user: UserWithRole;
   try {
+    assertNotRestoring();
     user = await userService.activateUser(id);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -53,6 +57,7 @@ export async function activateUserAction(id: string): Promise<ActionResult<UserW
 export async function deactivateUserAction(id: string): Promise<ActionResult<UserWithRole>> {
   let user: UserWithRole;
   try {
+    assertNotRestoring();
     user = await userService.deactivateUser(id);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };

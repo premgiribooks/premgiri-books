@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { bankAccountService } from "@/modules/bank-accounts/services/bank-account-service";
 import type {
   CreateBankAccountInput,
@@ -23,6 +24,7 @@ export async function createBankAccountAction(
   input: CreateBankAccountInput
 ): Promise<ActionResult<BankAccountWithLedger>> {
   try {
+    assertNotRestoring();
     const bankAccount = await bankAccountService.createBankAccount(input);
     revalidateBankAccountPaths();
     return { success: true, data: bankAccount };
@@ -36,6 +38,7 @@ export async function updateBankAccountAction(
   input: UpdateBankAccountInput
 ): Promise<ActionResult<BankAccountWithLedger>> {
   try {
+    assertNotRestoring();
     const bankAccount = await bankAccountService.updateBankAccount(id, input);
     revalidateBankAccountPaths(id);
     return { success: true, data: bankAccount };
@@ -48,6 +51,7 @@ export async function activateBankAccountAction(
   id: string
 ): Promise<ActionResult<BankAccountWithLedger>> {
   try {
+    assertNotRestoring();
     const bankAccount = await bankAccountService.activateBankAccount(id);
     revalidateBankAccountPaths();
     return { success: true, data: bankAccount };
@@ -60,6 +64,7 @@ export async function deactivateBankAccountAction(
   id: string
 ): Promise<ActionResult<BankAccountWithLedger>> {
   try {
+    assertNotRestoring();
     const bankAccount = await bankAccountService.deactivateBankAccount(id);
     revalidateBankAccountPaths();
     return { success: true, data: bankAccount };

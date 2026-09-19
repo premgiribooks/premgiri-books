@@ -10,6 +10,7 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from "@/constants/password-policy";
+import { assertNotRestoring } from "@/lib/restore-lock";
 import { platformUserService } from "@/modules/administration/services/platform-user-service";
 import type { SaveCompanyAdminInput } from "@/modules/administration/validation/create-company-schema";
 import type { ActionResult } from "@/types/api";
@@ -25,6 +26,7 @@ export async function resetCompanyAdminPasswordAction(
   newPassword: string
 ): Promise<ActionResult<undefined>> {
   try {
+    assertNotRestoring();
     const parsed = resetPasswordSchema.parse(newPassword);
     await platformUserService.resetCompanyAdminPassword(userId, parsed);
   } catch (error) {
@@ -39,6 +41,7 @@ export async function saveCompanyAdminAction(
   input: SaveCompanyAdminInput
 ): Promise<ActionResult<undefined>> {
   try {
+    assertNotRestoring();
     await platformUserService.saveCompanyAdmin(userId, input);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };
@@ -53,6 +56,7 @@ export async function setCompanyAdminActiveAction(
   isActive: boolean
 ): Promise<ActionResult<undefined>> {
   try {
+    assertNotRestoring();
     await platformUserService.setCompanyAdminActive(userId, isActive);
   } catch (error) {
     return { success: false, error: toActionErrorMessage(error) };

@@ -301,6 +301,7 @@ model User {
   physicalVerifications        PhysicalVerification[]
   gstFilingRecords             GstFilingRecord[]
   payrollRuns                  PayrollRun[]
+  backupJobs                   BackupJob[]
   // Nullable, unique — see Employee.userId's own comment (61-employee-master.md)
   // for why User and Employee are kept as two separate, optionally-linked
   // entities rather than merged.
@@ -2810,4 +2811,60 @@ model GstFilingRecord {
 
   @@unique([companyId, returnType, periodStart, periodEnd])
   @@index([companyId, returnType])
+}
+
+// 81-backup-restore.md — whole-installation PostgreSQL backup/restore
+// history. One model with a jobType discriminator rather than two
+// near-identical tables (coding-style.md's DRY principle).
+enum BackupJobType {
+  BACKUP
+  RESTORE
+}
+
+enum BackupJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum BackupJobTrigger {
+  MANUAL
+  SCHEDULED
+  PRE_RESTORE_SAFETY
+}
+
+// Deliberately NO companyId-scoped Tenant Isolation — this application runs
+// one shared PostgreSQL database for every Company on the installation, and
+// pg_dump/pg_restore operate on the whole database, not a per-company slice
+// (see the spec's Company-vs-Platform Disambiguation section). `companyId`
+// below is the one exception: kept nullable and always null in this v1 —
+// a deliberate v4-readiness column (v4 moves to one database per company,
+// per the spec's own v4 Supersession Note), not a live tenant scope. Every
+// query in this module filters by nothing but jobType/status/startedAt.
+model BackupJob {
+  id                String           @id @default(uuid())
+  jobType           BackupJobType
+  status            BackupJobStatus  @default(PENDING)
+  trigger           BackupJobTrigger
+  // v4-readiness only — see the model comment above. Always null in v1/v3;
+  // no relation to Company is declared since nothing here ever reads or
+  // writes a non-null value yet.
+  companyId         String?
+  filePath          String?
+  fileSizeBytes     BigInt?
+  startedAt         DateTime         @default(now())
+  completedAt       DateTime?
+  errorMessage      String?
+  triggeredByUserId String?
+  triggeredBy       User?            @relation(fields: [triggeredByUserId], references: [id])
+  // Links a RESTORE-type job back to the BACKUP-type job whose file it
+  // restored, so the history screen can show "Restored from: <backup,
+  // timestamp>" instead of only a bare file path.
+  restoredFromJobId String?
+  restoredFromJob   BackupJob?       @relation("RestoreSource", fields: [restoredFromJobId], references: [id])
+  restoreAttempts   BackupJob[]      @relation("RestoreSource")
+
+  @@index([jobType, status])
+  @@index([startedAt])
 }

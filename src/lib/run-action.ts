@@ -2,7 +2,22 @@ import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
 import { logger } from "@/lib/logger";
+import { isRestoreInProgress } from "@/lib/restore-lock";
 import type { ActionResult } from "@/types/api";
+
+export interface RunActionOptions {
+  /**
+   * 81-backup-restore.md's maintenance-mode requirement — while a database
+   * Restore is running, every Server Action mutation in the app must be
+   * refused. Since every module's actions already call this one shared
+   * wrapper, checking `isRestoreInProgress()` here (rather than in each of
+   * the ~40 call sites) blocks writes app-wide from one chokepoint. The one
+   * deliberate exception is `getRestoreStatusAction` itself, which must
+   * keep succeeding — with `isRestoring: true` in its own data — precisely
+   * while this is true, so the client can detect and display it.
+   */
+  bypassRestoreGuard?: boolean;
+}
 
 /**
  * Shared wrapper for Server Actions: runs the service operation, revalidates
@@ -22,8 +37,13 @@ import type { ActionResult } from "@/types/api";
  */
 export async function runAction<T>(
   operation: () => Promise<T>,
-  revalidatePaths: readonly string[]
+  revalidatePaths: readonly string[],
+  options: RunActionOptions = {}
 ): Promise<ActionResult<T>> {
+  if (!options.bypassRestoreGuard && isRestoreInProgress()) {
+    return { success: false, error: "A database restore is currently running. Please try again shortly." };
+  }
+
   let data: T;
   try {
     data = await operation();

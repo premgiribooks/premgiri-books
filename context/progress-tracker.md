@@ -95,7 +95,7 @@ Mapping so far:
 | 78           | PDF Generation (`78-pdf-generation.md`)                                        | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#76) — **spec drafted 2026-09-11, not implemented**; a shared Puppeteer-based `renderHtmlToPdf` core serving both document printing and spec 77's report-export contract |
 | 79           | Barcode Billing (`79-barcode-billing.md`)                                      | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#77) — **spec drafted 2026-09-11, not implemented**; UI-only over the existing `Product.barcode` field, added as a toggle-able entry mode in place on the existing Sales Invoice line-entry screen |
 | 80           | Audit Logs (`80-audit-logs.md`)                                                | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#78) — **spec drafted 2026-09-11, not implemented**; retrofits the existing generic `AuditLog` model to financial-transaction events only, under a new `audit` permission module at a new `/settings/audit-logs` route, explicitly distinct from the existing Super-Admin `/administration/audit` stub |
-| 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#79) — **spec drafted 2026-09-11, not implemented**; last item in Phase 12, closing the drafting of Phases 8–10/12 in full; introduces a new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one |
+| 81           | Backup & Restore (`81-backup-restore.md`)                                      | `context/Phases/phase-tracker.md` Phase 12 — Productivity Features (#79) — **implemented 2026-09-18**; new `BackupJob` model and a `pg_dump`/`pg_restore` mechanism, reusing the existing Super-Admin `/administration/backup` route rather than adding a company-level one — see this file's matching dated entry and `phase-tracker.md`'s own note for the full detail |
 | 82           | GSTR-2 (`82-gstr-2.md`)                                                        | `context/Phases/phase-tracker.md` Phase 8 — GST (#80) — **spec drafted 2026-09-11, not implemented**; added to Phase 8 after its original batch (specs 57–60) was already implemented/drafted, per explicit user request — read-only inward-supply reporting view in the original (suspended) GSTR-2 form's shape, no `GstFilingRecord`/filing workflow, no new schema |
 | 83           | ITC Register (`83-itc-register.md`)                                           | `context/Phases/phase-tracker.md` Phase 8 — GST (#81) — **spec drafted 2026-09-11, not implemented**; second item added to Phase 8 alongside spec 82 — rate/party/HSN breakdown of GSTR-3B's (#57/spec 59) Table 4(A)(5) lump ITC figure, report-only, explicitly not a full Electronic Credit Ledger, no new schema |
 | 84           | Navigation & Information Architecture Overhaul (`84-navigation-ia-overhaul.md`) | Not a `phase-tracker.md` item (cross-cutting, touches every module's navigation rather than one business feature) — **retrospective spec, implemented 2026-09-12/13** on branch `feature/navigation-ia-overhaul`; hierarchical permission-aware Sidebar, Ctrl+K Command Palette, favorites/recents, mobile drawer, third-level Reports sub-menus, scrollable/scrollbar-less rail, unified collapsed-icon tooltips; substantially (not formally) implements spec 75's PAGES+3-entity-DATA scope |
@@ -4987,10 +4987,12 @@ migrate status` (schema already up to date), `npx tsc --noEmit`, `npx eslint src
 (0 errors, same 2 pre-existing warnings), `npx vitest run` (153 files, 2124 tests), `next
 build` — all pass. Pushed `main` to `origin` (`ca936bc..dbb7ef5`).
 
+**User confirmed live browser testing passed** (Payment/Receipt/Contra Voucher forms,
+Payment Mode picker/auto-select, and detail views) after this merge — the last open item
+from this feature's own checklist.
+
 **Not yet done**: the cross-cutting TOCTOU follow-up noted above (separate task, spans
-#84/#85/#86's own create paths, not blocking); live browser click-through — this session
-ran the automated check suite only, consistent with this codebase's own convention of
-deferring interactive UI verification to the user's own session for most features.
+#84/#85/#86's own create paths, not blocking).
 
 Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
 Rule. **This was the last item in the Payment Mode Integration sequence (#84/#85/#86,
@@ -4998,3 +5000,205 @@ specs 91/92/93)** — once merged, every payment/receipt event in the system car
 structured Payment Mode end-to-end. Next Up: the next unimplemented item in
 `context/Phases/phase-tracker.md`'s own phase order (to be determined at that time — no
 further Payment Mode Integration work remains scheduled).
+
+## 2026-09-18 — Backup & Restore (#79, spec 81): implemented
+
+`81-backup-restore.md` (Phase 12 — Productivity Features, item #79, `Depends On:
+Database`) replaces `src/app/administration/backup/page.tsx`'s `ComingSoon` stub with a
+real whole-installation PostgreSQL Backup & Restore screen, at the same route
+(`/administration/backup`) and the same `requireSuperAdmin()` gate — no new route, no new
+permission module, matching the spec's own Company-vs-Platform Disambiguation (a shared
+single database means a restore is inherently installation-wide, never per-company).
+
+**Data Model**: one new Prisma model, `BackupJob` (enums `BackupJobType`
+BACKUP/RESTORE, `BackupJobStatus` PENDING/RUNNING/SUCCEEDED/FAILED, `BackupJobTrigger`
+MANUAL/SCHEDULED/PRE_RESTORE_SAFETY), plus a self-relation (`restoredFromJobId`) linking a
+RESTORE row back to the BACKUP row it restored. Per the spec's own v4 Supersession Note,
+the model carries a nullable `companyId` column — always `null` in v1/v3, no relation
+declared — purely so a future v4 per-tenant-database migration needs only new values, not
+a schema change. Migration hand-written and applied via `prisma db execute` +
+`prisma migrate resolve --applied` rather than `prisma migrate dev`, because that command's
+shadow-database replay hit an unrelated, pre-existing bug: migration
+`20260918043848_payment_mode_integration_sales`'s backfill `INSERT` is missing the
+`::"PaymentModeLedgerClass"` cast its sibling `20260918155521_payment_mode_integration_
+purchase` migration already has, so replaying the full migration history from scratch
+fails with `column "ledgerClass" is of type ... but expression is of type text`. Not fixed
+(editing an already-applied, checksummed migration file risks a drift error on this
+project's own shared dev database) — **flagged as a real, separate follow-up**: the next
+`prisma migrate reset` or from-scratch CI run will hit this.
+
+**Mechanism**: `src/modules/backup/services/backup-service.ts` shells out to `pg_dump -Fc`
+(backup) and `pg_restore --clean --if-exists` (restore) via `child_process.execFile` (args
+array, never a shell string — no injection surface), passing the app's own `DATABASE_URL`
+directly as `pg_dump`/`pg_restore`'s own connection-string argument rather than parsing
+host/user/password out of it separately. `BACKUP_DIR`/`PG_DUMP_PATH`/`PG_RESTORE_PATH` are
+environment-level overrides (defaulting to `<cwd>/backups` — mirroring
+`company-logo-service.ts`'s own `process.cwd()`-relative convention, since this codebase
+has no per-OS app-data-directory helper yet — and to relying on `PATH`, respectively), never
+a `CompanySettings` field. Every `runBackup` attempt is recorded as its own `BackupJob` row
+through PENDING → RUNNING → SUCCEEDED/FAILED, including failures (a missing/unwritable
+directory, or `pg_dump` exiting non-zero) — never a silent no-op.
+
+**Restore** (`backupService.runRestore`) always runs a mandatory `PRE_RESTORE_SAFETY`
+backup first (via the same `runBackup`) and aborts — throwing before `pg_restore` is ever
+spawned — if that safety backup itself fails. The confirmation dialog
+(`restore-confirmation-dialog.tsx`) requires typing a fixed phrase
+(`RESTORE_CONFIRMATION_PHRASE = "RESTORE DATABASE"`, `backup-schema.ts`) rather than "the
+installation's own name" the spec's prose suggested — this app has no single
+"installation name" concept (one installation's shared database can hold several
+`Company` rows), so a fixed, unambiguous, server-re-validated literal (Zod `z.literal`) is
+the equivalent alternative the spec's own wording allows for.
+
+**Maintenance-mode mechanism — a deliberate, reasoned deviation from a literal reading of
+the spec's own suggested implementation**: the requirement ("no concurrent business-data
+writes may reach the database mid-restore") is enforced by a new process-wide in-memory
+flag, `src/lib/restore-lock.ts` (`isRestoreInProgress`/`setRestoreInProgress`), read inside
+`src/lib/run-action.ts` — the one shared wrapper every Server Action mutation in this
+entire codebase already calls (verified: the only Route Handler in the app,
+`src/app/api/search/route.ts`, is GET-only) — via a new `bypassRestoreGuard` option used
+only by the read-only status-poll action. **Deliberately not placed in `proxy.ts`**:
+Next.js's own Proxy documentation explicitly warns "you should not attempt relying on
+shared modules or globals" there, since Proxy can execute in a separate context from the
+main render/action runtime even under the Node.js runtime — an earlier draft of this
+feature put the guard there and had to be reverted once this was found in Next's own docs.
+**Also deliberately not backed by the `BackupJob` row's own RUNNING status**: `pg_restore
+--clean` drops and recreates every object in the shared database, including the
+`BackupJob` table itself, mid-operation — a durability signal living inside the very
+database being wiped cannot reliably answer "is a restore in progress" during the window
+that matters most, so the in-memory flag (reset on a process crash, which leaves the
+`BackupJob` row visibly stuck at RUNNING as its own signal something needs attention) is
+the correct mechanism here, not a compromise. The Restoring maintenance UI itself
+(`restoring-guard.tsx`) polls a `getRestoreStatusAction` every 3s so a second, already-open
+browser tab also shows the blocking overlay and reloads once the restore finishes; the
+initiating tab shows its own overlay for the duration of its single, synchronous, awaited
+Server Action call.
+
+**Scheduling**: `src/instrumentation.ts` (new — this codebase's first use of Next.js's
+`register()` hook) calls `backup-scheduler.ts`'s `ensureDailyBackup()` once per server
+start, non-blocking (a full `pg_dump` must not delay every request on the one day it
+actually runs) — the spec's own decided "launch-time catch-up check" mechanism, explicitly
+chosen over an in-process timer (assumes the app is always open, false for a desktop ERP)
+or the host OS's own scheduler (per-OS setup outside the installer). Queries for the latest
+`SUCCEEDED` `BACKUP` job since local start-of-day; triggers one (`trigger: SCHEDULED`) only
+if none exists yet today.
+
+**Security finding, self-caught before either review agent ran**: a live `next dev` smoke
+test (this session deliberately started the real dev server against the actual dev
+database to verify the failure path, since `pg_dump`/`pg_restore` are not installed on this
+machine) surfaced that `child_process`'s spawn-failure `Error` object carries the full
+command line as `.cmd`/`.spawnargs` properties — including `DATABASE_URL`'s embedded
+password, passed as a CLI argument to `pg_dump`. The original `logger.error({ err: error },
+...)` calls handed Pino the raw `Error` object, and Pino's default error serializer
+included those extra properties verbatim, printing the live database password into the log
+stream in plain text. **Fixed immediately**: `getErrorMessage()` now runs every extracted
+message through a `postgres(ql)://` redaction regex, and all three `logger.error` call
+sites in `backup-service.ts` were changed to log only that already-redacted string, never
+`err: error`. A regression test was added asserting a spawn error whose `.cmd`/
+`.spawnargs` carry the real `DATABASE_URL` never leaks it into either the recorded
+`BackupJob.errorMessage` or the logged payload. The credential was exposed only within this
+local session's own terminal output/log file (never externally, no network call, no
+committed file) — the leaked log output and a temp file that captured it were deleted;
+**flagged to the user to decide whether to rotate the Aiven Postgres password** as a
+precaution, since only they can weigh that for their own database.
+
+**UI**: `/administration/backup` shows the (read-only, environment-configured) backup
+directory path, a "Backup Now" button, and a history table (Type/Trigger/Status/Started/
+Completed/Size/Triggered By/Restored From) with a per-row "Restore" action on any
+`SUCCEEDED` BACKUP-type row. No new breadcrumb key (the existing `backup: "Backup"` entry
+already covers it); the Administration hub card's description text updated from "Coming
+soon."
+
+**Testing**: 17 new tests across `backup-service.test.ts` (job status transitions,
+`pg_dump`/`pg_restore` argument construction via a mocked `child_process.execFile`,
+directory-missing/unwritable rejection, the pre-restore-safety-first ordering and
+abort-on-failure, and the credential-redaction regression above),
+`backup-scheduler.test.ts` (triggers exactly once per day), `backup-schema.test.ts`
+(confirmation-phrase mismatch rejected), and `backup-actions.test.ts` (the Super-Admin gate
+and the restore-guard's bypass for the status-poll action).
+
+**Verified**: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, the same 2
+pre-existing unrelated warnings), `npx vitest run` (157 files, 2140 tests — up from 153/
+2124), `next build` (`/administration/backup` in the route table, no longer a stub). Live
+`next dev` verification: unauthenticated `/administration/backup` correctly redirects to
+`/login`; the daily-backup scheduler fires on startup and records a clean `FAILED`
+`BackupJob` (pg_dump/pg_restore genuinely absent from this dev machine's `PATH` — `spawn
+pg_dump ENOENT`), confirming the "never a silent no-op" requirement end-to-end rather than
+only in a mock. **Not done**: an authenticated browser click-through (Backup Now, the
+history table, the Restore confirmation dialog) — no Chromium/Playwright tooling was
+available in this session's shell to drive one; the user should click through
+`/administration/backup` themselves before merging.
+
+## 2026-09-18 — Backup & Restore: code review + security review (parallel subagents), findings fixed
+
+Both agents independently converged on the same CRITICAL/HIGH pair, plus the security
+review found a broader gap the code review's narrower diff scope didn't surface. All fixed
+same session, before any commit.
+
+**[CRITICAL, both agents] Two concurrent Restore requests could both pass the maintenance-
+mode guard and run `pg_restore --clean` against the live database at the same time.**
+`setRestoreInProgress(true)` was only set *after* the mandatory pre-restore safety backup
+(a full `pg_dump`, seconds-to-minutes) completed — during that entire window,
+`isRestoreInProgress()` still read `false`, so a second `runRestoreAction` call (two tabs,
+two admins, a double-submit) sailed past `runAction`'s guard, ran its own safety backup,
+and could reach `pg_restore --clean` concurrently with the first. **Fixed**: the lock is
+now engaged in `backupService.runRestore` immediately after validating the target backup
+row, *before* the safety backup starts, wrapped in try/finally around the whole remaining
+body (including the abort-on-safety-failure throw); a re-entrancy check
+(`isRestoreInProgress()`) at the top of `runRestore` itself now rejects a second concurrent
+call outright, before even looking up the backup row. Regression tests added: the lock's
+engagement is asserted to happen before the safety backup's own `pg_dump` call fires, and a
+second concurrent `runRestore` call is asserted to short-circuit with zero side effects.
+
+**[HIGH, security review] The restore guard doesn't actually cover the whole app — ~10
+legacy Server Action files never call `runAction` at all.** My own claim in `run-action.ts`
+("every module's actions already call this one shared wrapper") was false: 34 mutating
+Server Action functions across `company-admin-actions.ts`, `platform-user-actions.ts`,
+`bank-account-actions.ts`, `company-actions.ts`, `financial-year-actions.ts`,
+`ledger-group-actions.ts`, `profile-actions.ts`, `permission-actions.ts`, `role-actions.ts`,
+and `user-actions.ts` predate `runAction`'s promotion and each implement their own inline
+try/catch, never touching `isRestoreInProgress()`. **Fixed**: added a new
+`assertNotRestoring()` export to `src/lib/restore-lock.ts`, called as the first line inside
+each of those 34 functions' own try blocks — a one-line, behavior-neutral addition when no
+restore is running, which is always. Deliberately left unguarded: read-only actions, and
+the handful of cookie-only/filesystem-only actions in those same files
+(`selectCompanyAction`, `selectFinancialYearAction`, `uploadCompanyLogoAction`) that never
+touch the database being restored.
+
+**[HIGH, both agents] `src/instrumentation.ts`'s startup catch logged the raw `Error`
+object**, reintroducing the exact anti-pattern just fixed inside `backup-service.ts` (a
+Prisma connection-validation error can itself echo a raw connection string in `.message`).
+**Fixed**: extracted `getErrorMessage`'s redaction logic out of `backup-service.ts` into a
+new shared `src/lib/redact-error.ts` (`getSafeErrorMessage`/`redactConnectionStrings`), so
+`instrumentation.ts` can reuse the same sanitization without an inverted dependency on the
+backup module; `backup-service.ts` now imports from there too.
+
+**[MEDIUM, code review] `DATABASE_URL` (with its embedded password) was passed as a plain
+`pg_dump`/`pg_restore` argv element**, visible for the spawned process's lifetime via the
+OS process list. **Fixed**: `backup-service.ts` now connects via `PGHOST`/`PGPORT`/
+`PGUSER`/`PGPASSWORD`/`PGDATABASE`/`PGSSLMODE` environment variables (`buildPgEnv`,
+parsed from `DATABASE_URL` via `node:url`'s `URL`), passed only to the spawned child's own
+`env`, never as an argument; `pg_restore`'s required `-d` flag now takes just the bare
+database name (no credentials).
+
+**[LOW, code review] Stale JSDoc** on `runBackup` claiming a Super-Admin re-throw that
+doesn't exist there — corrected to describe the method's actual "no permission check,
+every caller gates its own access" posture.
+
+**Verified after fixes**: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors,
+same 2 pre-existing unrelated warnings), `npx vitest run` (157 files, **2145 tests** — up
+from 2140, +5 new regression tests for the concurrency fix and the env-based connection
+change), `next build` (route table unchanged). Both review agents' remaining observations
+(a filename-collision edge case on same-second backups, one missing negative test for
+`getRestoreStatusAction`'s own Super-Admin gate) were reviewed and judged genuinely
+low-priority, not fixed this pass — left as known, named, non-blocking follow-ups rather
+than silently dropped.
+
+Git Workflow (branch/commit/PR/merge) not yet done — pending the user's decision on how
+they want this delivered.
+
+Both `context/Phases/phase-tracker.md` and this tracker updated per the Tracker Update
+Rule. Next Up: get the user's decision on Git Workflow for this feature; after that, the
+next unimplemented item in `context/Phases/phase-tracker.md`'s own phase order (Excel
+Import #74, Excel Export #75, PDF Generation's remaining scope #76 — see its own recorded
+v3-gate hold, Barcode Billing
+#77, or Audit Logs #78, in whatever order the user prefers).
