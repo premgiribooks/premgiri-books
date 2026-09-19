@@ -5219,8 +5219,9 @@ Re-verified after the security fix: `npx tsc --noEmit`, `npx eslint src prisma` 
 same 2 pre-existing unrelated warnings), `npx vitest run` (159 files, 2172 tests — 27 new),
 `next build` (`/reports/trial-balance/export` in the route table). Browser-verified live:
 Trial Balance's Export button downloads a real, valid `.xlsx` (parsed back and checked);
-`/reports/profit-and-loss`'s own Export button confirmed still disabled/unaffected. Git
-Workflow (branch/commit/PR/merge) not yet done — pending user decision.
+`/reports/profit-and-loss`'s own Export button confirmed still disabled/unaffected.
+**Git Workflow: committed directly to `main` 2026-09-19** (commit `9238433`), matching the
+same delivery preference set for Backup & Restore earlier this session.
 
 **Next Up**: PDF Generation's remaining scope (#76 — see its own recorded v3-gate hold),
 Excel Import (#74, now the earliest remaining item in `context/Phases/phase-tracker.md`'s

@@ -2351,8 +2351,9 @@ as usual:
 > flattened group/ledger rows, Grand Total footer) with zero console errors;
 > separately confirmed `/reports/profit-and-loss`'s own Export button is
 > still the disabled stub, unaffected by the `ReportExportButton` change.
-> Git Workflow (branch/commit/PR/merge) not yet done — pending user
-> decision, see `progress-tracker.md`'s matching dated entry.
+> **Committed directly to `main` 2026-09-19** (commit `9238433`), matching
+> the same delivery preference set for Backup & Restore earlier this
+> session.
 
 ---
 
