@@ -18,13 +18,15 @@ jobs:
     # this to a custom label instead if a second self-hosted runner is ever
     # registered for this repo.
     runs-on: [self-hosted, Windows]
-    # Existing steps below are written as POSIX shell (cp -r, heredocs).
-    # CHE-RL-LTP14 has Git Bash/MSYS2 on PATH (confirmed: `uname -a` reports
-    # MINGW64), so run everything through bash instead of the Windows
-    # default of PowerShell.
-    defaults:
-      run:
-        shell: bash
+    # `run:` steps use pwsh (the default on a Windows runner). Forcing
+    # `shell: bash` here previously broke the job: this runner's service
+    # process resolves `bash` on PATH to the WSL launcher stub at
+    # C:\Windows\System32\bash.exe rather than Git Bash, and that stub
+    # can't execute the runner's generated temp script
+    # ("No such type or file or directory"). The scp/ssh steps below are
+    # unaffected either way — appleboy's actions run their `script:` on
+    # the remote Termux host over SSH (Termux's own bash), not on this
+    # runner.
 
     steps:
       - name: Checkout
@@ -66,8 +68,8 @@ jobs:
 
       - name: Prepare deployment folder
         run: |
-          mkdir deploy
-          cp -r .next/standalone/. deploy/
+          New-Item -ItemType Directory -Force -Path deploy | Out-Null
+          Copy-Item -Path ".next\standalone\*" -Destination "deploy" -Recurse -Force
 
       - name: Ensure remote app directory exists
         # scp itself won't create a missing target directory, and this
