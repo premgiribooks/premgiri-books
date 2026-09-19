@@ -5574,3 +5574,35 @@ same 2 pre-existing unrelated warnings), `npx vitest run` (217 files, **2863 tes
 `next build` (clean).
 
 **This closes out both follow-up requests in full.**
+
+---
+
+## 2026-09-19 — Sales Invoice Print button now prints the same PDF as Download
+
+Resolves the "open follow-up" recorded in the redesign entry above (`SalesInvoicePrintView`
+and the downloaded PDF had diverged and would need reconciling if the user wanted them visually
+identical again). Rather than updating the separate on-screen print stylesheet to match the new
+full GST tax-invoice layout — a second template that could drift out of sync again — per
+explicit user request, the Print button now fetches the exact same `[id]/pdf` Route Handler
+output the Download button downloads and opens the browser's native print dialog on it.
+
+- **`SalesInvoicePrintButton`** rewritten as a client component taking `salesInvoiceId`: fetches
+  `/sales/invoices/[id]/pdf`, builds an object URL from the response blob, loads it into a
+  hidden `<iframe>`, and calls `iframe.contentWindow.print()` once it loads. The object URL and
+  iframe are cleaned up on the next window `focus` event (fires when the browser's print
+  dialog/preview closes). A fetch failure surfaces via `sonner`'s `toast.error`, matching this
+  codebase's existing client-action error pattern (`BackupNowButton` etc.), rather than failing
+  silently.
+- **`SalesInvoicePrintView`** (the old on-screen, browser-`window.print()`-only preview) deleted
+  along with its `print:hidden` wrapper on the detail page — it was the sole reason for that
+  divergence and has no remaining caller. `effectiveLineTax` in `sales-invoice-display.ts` was
+  also removed (with its tests) since `SalesInvoicePrintView` was its only production caller;
+  `customerDisplayName` stays, now used only by `buildSalesInvoiceHtml`.
+
+No business logic moved — the Route Handler already re-checks its own `sales`/`view` permission
+and DRAFT-status gate on every request, so this button change doesn't introduce or bypass any
+authorization path.
+
+Re-verified: `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing
+unrelated warnings), `npx vitest run` (217 files, 2864 tests, all passing — includes the removal
+of the 2 `effectiveLineTax` cases).

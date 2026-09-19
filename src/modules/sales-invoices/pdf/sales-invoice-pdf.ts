@@ -6,7 +6,10 @@ import { formatSalesInvoiceDate } from "@/modules/sales-invoices/utils/format-sa
 import { customerDisplayName } from "@/modules/sales-invoices/utils/sales-invoice-display";
 import type { BankAccountWithLedger } from "@/types/bank-account";
 import type { CompanyWithSettings } from "@/types/company";
-import type { SalesInvoiceDetail, SalesInvoiceItemDetail } from "@/types/sales-invoice";
+import type {
+  SalesInvoiceDetail,
+  SalesInvoiceItemDetail,
+} from "@/types/sales-invoice";
 
 /**
  * Everything `buildSalesInvoiceHtml` needs beyond the invoice itself — all
@@ -217,8 +220,12 @@ function formatAddressLines(parts: {
   if (parts.addressLine2) {
     lines.push(parts.addressLine2);
   }
-  const cityState = [parts.city, parts.state].filter((value): value is string => Boolean(value)).join(", ");
-  const cityStateLine = parts.pinCode ? [cityState, parts.pinCode].filter(Boolean).join(" - ") : cityState;
+  const cityState = [parts.city, parts.state]
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
+  const cityStateLine = parts.pinCode
+    ? [cityState, parts.pinCode].filter(Boolean).join(" - ")
+    : cityState;
   if (cityStateLine) {
     lines.push(cityStateLine);
   }
@@ -226,7 +233,9 @@ function formatAddressLines(parts: {
 }
 
 function addressLinesHtml(lines: string[]): string {
-  return lines.map((line) => `<p class="party-line">${escapeHtml(line)}</p>`).join("");
+  return lines
+    .map((line) => `<p class="party-line">${escapeHtml(line)}</p>`)
+    .join("");
 }
 
 /** Resolves a GST state code (e.g. "29") to its statutory name (e.g.
@@ -235,7 +244,9 @@ function addressLinesHtml(lines: string[]): string {
  * on a posted invoice was validated against this same list at creation
  * time). */
 function placeOfSupplyDisplay(stateCode: string): string {
-  return GST_STATE_CODES.find((entry) => entry.code === stateCode)?.name ?? stateCode;
+  return (
+    GST_STATE_CODES.find((entry) => entry.code === stateCode)?.name ?? stateCode
+  );
 }
 
 function itemRow(item: SalesInvoiceItemDetail, srNo: number): string {
@@ -275,12 +286,11 @@ function totalsRow(label: string, amount: number, extraClass = ""): string {
  * aggregation here is a plain sum of already-computed line quantities for
  * the "Total Qty" row, not a tax/pricing calculation.
  *
- * Deliberately diverges from `SalesInvoicePrintView`'s simpler on-screen
- * layout as of this redesign (previously the two were kept visually
- * identical, sharing only the print stylesheet) — the on-screen Print
- * Preview was intentionally left untouched; only the downloaded PDF gained
- * the seller/bank/logo/amount-in-words sections a full standard invoice
- * needs. See progress-tracker.md's dated entry for the full rationale.
+ * This is now also the on-screen "Print" button's output: rather than
+ * maintaining a second, simpler print stylesheet that could drift out of
+ * sync with this template (as `SalesInvoicePrintView` once did — removed;
+ * see progress-tracker.md's dated entry for the full rationale), Print
+ * fetches this same PDF and opens the browser's native print dialog on it.
  *
  * Also deliberately DROPS the prior template's "Paid" totals row and its
  * "Payments" section (ledger/mode/reference/amount per payment) — a legal
@@ -292,17 +302,29 @@ function totalsRow(label: string, amount: number, extraClass = ""): string {
  * company-wide setting (Company creation/edit) — rather than the invoice's
  * own `narration` field. `narration` is intentionally never read here.
  */
-export function buildSalesInvoiceHtml({ salesInvoice, company, bankAccount, logoDataUri }: SalesInvoicePdfData): string {
+export function buildSalesInvoiceHtml({
+  salesInvoice,
+  company,
+  bankAccount,
+  logoDataUri,
+}: SalesInvoicePdfData): string {
   const partyName = escapeHtml(customerDisplayName(salesInvoice));
-  const totalQty = salesInvoice.items.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQty = salesInvoice.items.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
 
   const buyerLines = salesInvoice.customer
     ? formatAddressLines(salesInvoice.customer)
     : salesInvoice.quickCustomerAddress
       ? [salesInvoice.quickCustomerAddress]
       : [];
-  const buyerGstin = salesInvoice.customer ? salesInvoice.customer.gstin : salesInvoice.quickCustomerGstin;
-  const buyerMobile = salesInvoice.customer ? null : salesInvoice.quickCustomerMobile;
+  const buyerGstin = salesInvoice.customer
+    ? salesInvoice.customer.gstin
+    : salesInvoice.quickCustomerGstin;
+  const buyerMobile = salesInvoice.customer
+    ? null
+    : salesInvoice.quickCustomerMobile;
 
   const companyLines = company
     ? formatAddressLines({
