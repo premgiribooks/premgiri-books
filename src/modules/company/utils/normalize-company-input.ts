@@ -19,6 +19,7 @@ const NULLABLE_FIELDS = [
   "district",
   "pinCode",
   "logo",
+  "termsAndConditions",
 ] as const;
 
 type NullableField = (typeof NULLABLE_FIELDS)[number];

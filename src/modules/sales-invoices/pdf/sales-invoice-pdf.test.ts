@@ -132,6 +132,7 @@ function buildCompanyFixture(overrides: Partial<CompanyWithSettings> = {}): Comp
     currencySymbol: "₹",
     decimalPlaces: 2,
     logo: null,
+    termsAndConditions: null,
     timeZone: "Asia/Kolkata",
     isActive: true,
     bootstrapVersion: 1,
@@ -264,17 +265,35 @@ describe("buildSalesInvoiceHtml", () => {
     expect(() => buildSalesInvoiceHtml(buildFixture({ company: null }))).not.toThrow();
   });
 
-  it("renders the narration as a Remarks line only when present", () => {
-    const withNarration = buildSalesInvoiceHtml(buildFixture({ salesInvoice: { narration: "Handle with care" } }));
-    expect(withNarration).toContain("Remarks");
-    expect(withNarration).toContain("Handle with care");
+  it("renders the company's own Terms & Conditions only when set, and never reads the invoice's own narration", () => {
+    const withTerms = buildSalesInvoiceHtml(
+      buildFixture({ company: { termsAndConditions: "Goods once sold will not be taken back." } })
+    );
+    expect(withTerms).toContain("Terms &amp; Conditions");
+    expect(withTerms).toContain("Goods once sold will not be taken back.");
 
-    const withoutNarration = buildSalesInvoiceHtml(buildFixture({ salesInvoice: { narration: null } }));
-    expect(withoutNarration).not.toContain("Remarks");
+    const withoutTerms = buildSalesInvoiceHtml(buildFixture({ company: { termsAndConditions: null } }));
+    expect(withoutTerms).not.toContain("Terms &amp; Conditions");
+
+    // Setting narration but leaving termsAndConditions unset must render
+    // nothing — narration is intentionally never read by this template.
+    const narrationOnly = buildSalesInvoiceHtml(
+      buildFixture({ salesInvoice: { narration: "Handle with care" }, company: { termsAndConditions: null } })
+    );
+    expect(narrationOnly).not.toContain("Handle with care");
+  });
+
+  it("sticks the totals-onward footer to the bottom of the page via a flex wrapper, and keeps the computer-generated-invoice footer note", () => {
+    const html = buildSalesInvoiceHtml(buildFixture());
+
+    expect(html).toContain('<div class="invoice-footer">');
+    expect(html).toContain("This is a computer generated invoice.");
   });
 
   it("escapes user-entered text before embedding it in the HTML", () => {
-    const html = buildSalesInvoiceHtml(buildFixture({ salesInvoice: { narration: "<script>alert('x')</script>" } }));
+    const html = buildSalesInvoiceHtml(
+      buildFixture({ company: { termsAndConditions: "<script>alert('x')</script>" } })
+    );
 
     expect(html).not.toContain("<script>alert('x')</script>");
     expect(html).toContain("&lt;script&gt;");

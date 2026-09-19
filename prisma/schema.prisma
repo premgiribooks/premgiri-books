@@ -31,23 +31,23 @@ datasource db {
 // -----------------------------------------------------------------------------
 
 model Company {
-  id               String   @id @default(uuid())
-  companyName      String
-  legalName        String
-  displayName      String?
-  businessType     String?
-  gstin            String?  @unique
-  pan              String?
-  tan              String?
-  cin              String?
-  mobileNumber     String?
-  alternateMobile  String?
-  email            String?
-  website          String?
-  addressLine1     String?
-  addressLine2     String?
-  city             String?
-  state            String?
+  id                 String   @id @default(uuid())
+  companyName        String
+  legalName          String
+  displayName        String?
+  businessType       String?
+  gstin              String?  @unique
+  pan                String?
+  tan                String?
+  cin                String?
+  mobileNumber       String?
+  alternateMobile    String?
+  email              String?
+  website            String?
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  state              String?
   // The company's own GST state code (01-38, GST_STATE_CODES) — needed by
   // the GST Engine's determineSupplyType() to decide intra- vs inter-state
   // tax on every GST-taxed document (first consumer: Quotation, feature-spec
@@ -57,24 +57,31 @@ model Company {
   // stateCode is null until a Company Admin sets it via Company Profile; the
   // first document-creating call blocks with a friendly error until it is
   // set, never guesses.
-  stateCode        String?
-  district         String?
-  country          String   @default("India")
-  pinCode          String?
-  currency         String   @default("INR")
-  currencySymbol   String   @default("₹")
-  decimalPlaces    Int      @default(2)
-  logo             String?
-  timeZone         String   @default("Asia/Kolkata")
-  isActive         Boolean  @default(true)
+  stateCode          String?
+  district           String?
+  country            String   @default("India")
+  pinCode            String?
+  currency           String   @default("INR")
+  currencySymbol     String   @default("₹")
+  decimalPlaces      Int      @default(2)
+  logo               String?
+  // Free-text, optional — printed as the Sales Invoice PDF's "Terms &
+  // Conditions" section (replacing that document's own per-invoice
+  // narration/remark), a company-wide setting rather than something typed
+  // per invoice. Editable from Company creation and both edit surfaces
+  // (Super-Admin's /administration/companies/[id]/edit and the Company
+  // Admin's own /company/[id]/edit profile form).
+  termsAndConditions String?
+  timeZone           String   @default("Asia/Kolkata")
+  isActive           Boolean  @default(true)
   // Lets a future ERP upgrade detect a company seeded by an older
   // TenantBootstrapService version (missing a newer default role/permission/
   // master) without a manual migration. Only the column exists today — no
   // detect-and-backfill logic reads it yet; see
   // architecture-Migration-Super-Admin-Administration-Implementation-Plan.md.
-  bootstrapVersion Int      @default(1)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  bootstrapVersion   Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   settings              CompanySettings?
   financialYears        FinancialYear[]

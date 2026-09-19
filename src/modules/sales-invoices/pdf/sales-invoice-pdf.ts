@@ -48,6 +48,22 @@ export interface SalesInvoicePdfData {
 const INVOICE_STYLES = `
   .invoice {
     max-width: 100%;
+    /* A4 is 297mm tall; renderHtmlToPdf's DEFAULT_MARGIN reserves 10mm top +
+       10mm bottom (see pdf-generation.ts), leaving 277mm of page content
+       height; PRINT_STYLESHEET's own body { padding: 16px } consumes a
+       further 32px (top+bottom) inside that. Giving .invoice a flex column
+       layout at least that tall lets .invoice-footer's margin-top: auto push
+       the totals-onward block to the bottom of a short invoice's single
+       page. On a genuinely multi-page invoice (enough items to already
+       exceed this height) the auto margin simply collapses to 0 — the
+       footer falls back to following the content immediately, exactly as
+       before this rule existed, never forcing an unnatural page break. */
+    min-height: calc(277mm - 32px);
+    display: flex;
+    flex-direction: column;
+  }
+  .invoice-footer {
+    margin-top: auto;
   }
   .invoice-header {
     display: flex;
@@ -171,6 +187,11 @@ const INVOICE_STYLES = `
     margin-top: 34px;
     text-align: right;
   }
+  .terms-text {
+    /* Preserves the line breaks the company entered in its own Terms &
+       Conditions textarea — plain HTML would otherwise collapse them. */
+    white-space: pre-line;
+  }
   .signature-line {
     display: inline-block;
     width: 160px;
@@ -262,6 +283,10 @@ function totalsRow(label: string, amount: number, extraClass = ""): string {
  * Tax Invoice is not a payment receipt; Indian GST invoices conventionally
  * carry no payment-collection detail (that belongs on a receipt/statement).
  * `salesInvoice.payments`/`amountPaid` are intentionally never read here.
+ *
+ * The "Terms & Conditions" section renders `company.termsAndConditions` — a
+ * company-wide setting (Company creation/edit) — rather than the invoice's
+ * own `narration` field. `narration` is intentionally never read here.
  */
 export function buildSalesInvoiceHtml({ salesInvoice, company, bankAccount, logoDataUri }: SalesInvoicePdfData): string {
   const partyName = escapeHtml(customerDisplayName(salesInvoice));
@@ -347,50 +372,52 @@ export function buildSalesInvoiceHtml({ salesInvoice, company, bankAccount, logo
         </tbody>
       </table>
 
-      <div class="totals">
-        <div class="totals-box">
-          ${totalsRow("Subtotal", salesInvoice.subtotal, "always")}
-          ${totalsRow("Discount", salesInvoice.totalDiscount, "always")}
-          ${totalsRow("Taxable Amount", salesInvoice.taxableAmount, "always")}
-          ${totalsRow("CGST", salesInvoice.totalCgst)}
-          ${totalsRow("SGST", salesInvoice.totalSgst)}
-          ${totalsRow("IGST", salesInvoice.totalIgst)}
-          ${totalsRow("Cess", salesInvoice.totalCess)}
-          ${totalsRow("Round Off", salesInvoice.roundOff, "always")}
-          ${totalsRow("Grand Total", salesInvoice.grandTotal, "grand-total")}
+      <div class="invoice-footer">
+        <div class="totals">
+          <div class="totals-box">
+            ${totalsRow("Subtotal", salesInvoice.subtotal, "always")}
+            ${totalsRow("Discount", salesInvoice.totalDiscount, "always")}
+            ${totalsRow("Taxable Amount", salesInvoice.taxableAmount, "always")}
+            ${totalsRow("CGST", salesInvoice.totalCgst)}
+            ${totalsRow("SGST", salesInvoice.totalSgst)}
+            ${totalsRow("IGST", salesInvoice.totalIgst)}
+            ${totalsRow("Cess", salesInvoice.totalCess)}
+            ${totalsRow("Round Off", salesInvoice.roundOff, "always")}
+            ${totalsRow("Grand Total", salesInvoice.grandTotal, "grand-total")}
+          </div>
         </div>
-      </div>
 
-      <div class="amount-words">
-        <div class="label">Amount in Words</div>
-        <div class="value">${escapeHtml(amountToWords(salesInvoice.grandTotal))}</div>
-      </div>
-
-      <div class="footer-grid">
-        <div class="footer-block">
-          ${
-            bankAccount
-              ? `<div class="footer-heading">Bank Details</div>
-          <p class="party-line">Bank Name: ${escapeHtml(bankAccount.bankName)}</p>
-          <p class="party-line">A/C No.: ${escapeHtml(bankAccount.accountNumber)}</p>
-          <p class="party-line">IFSC: ${escapeHtml(bankAccount.ifscCode)}</p>
-          <p class="party-line">Branch: ${escapeHtml(bankAccount.branchName)}</p>`
-              : ""
-          }
-          ${
-            salesInvoice.narration
-              ? `<div class="footer-heading" style="margin-top: 10px;">Remarks</div>
-          <p class="party-line">${escapeHtml(salesInvoice.narration)}</p>`
-              : ""
-          }
+        <div class="amount-words">
+          <div class="label">Amount in Words</div>
+          <div class="value">${escapeHtml(amountToWords(salesInvoice.grandTotal))}</div>
         </div>
-        <div class="footer-block signature-area">
-          ${company ? `<div>for ${escapeHtml(company.companyName)}</div>` : ""}
-          <div class="signature-line">Authorised Signatory</div>
-        </div>
-      </div>
 
-      <div class="footer-note">This is a computer generated invoice.</div>
+        <div class="footer-grid">
+          <div class="footer-block">
+            ${
+              bankAccount
+                ? `<div class="footer-heading">Bank Details</div>
+            <p class="party-line">Bank Name: ${escapeHtml(bankAccount.bankName)}</p>
+            <p class="party-line">A/C No.: ${escapeHtml(bankAccount.accountNumber)}</p>
+            <p class="party-line">IFSC: ${escapeHtml(bankAccount.ifscCode)}</p>
+            <p class="party-line">Branch: ${escapeHtml(bankAccount.branchName)}</p>`
+                : ""
+            }
+            ${
+              company?.termsAndConditions
+                ? `<div class="footer-heading" style="margin-top: 10px;">Terms &amp; Conditions</div>
+            <p class="party-line terms-text">${escapeHtml(company.termsAndConditions)}</p>`
+                : ""
+            }
+          </div>
+          <div class="footer-block signature-area">
+            ${company ? `<div>for ${escapeHtml(company.companyName)}</div>` : ""}
+            <div class="signature-line">Authorised Signatory</div>
+          </div>
+        </div>
+
+        <div class="footer-note">This is a computer generated invoice.</div>
+      </div>
     </div>
   </body>
 </html>`;

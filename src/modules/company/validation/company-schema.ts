@@ -61,6 +61,19 @@ export const companySchema = z.object({
   currencySymbol: z.string().trim().min(1, "Currency symbol is required"),
   decimalPlaces: z.number().int().min(0).max(4),
   logo: optionalText(),
+  // Printed as the Sales Invoice PDF's "Terms & Conditions" section — a
+  // company-wide setting, not typed per invoice. Capped generously (a real
+  // multi-clause terms block, unlike a one-line narration) rather than left
+  // unbounded — renderHtmlToPdf's shared/reused Puppeteer instance
+  // (pdf-generation.ts) serves every tenant from one process, so an
+  // unbounded free-text field here would let one company's oversized
+  // submission degrade PDF-render latency for every other tenant sharing
+  // that instance, not just their own (security-review finding).
+  termsAndConditions: z
+    .string()
+    .trim()
+    .max(2000, "Terms & Conditions must be at most 2000 characters")
+    .optional(),
 });
 
 export type CompanyInput = z.infer<typeof companySchema>;

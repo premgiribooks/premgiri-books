@@ -27,5 +27,6 @@ export function toCompanyFormValues(company: Company): Partial<CompanyInput> {
     currencySymbol: company.currencySymbol,
     decimalPlaces: company.decimalPlaces,
     logo: company.logo ?? undefined,
+    termsAndConditions: company.termsAndConditions ?? undefined,
   };
 }

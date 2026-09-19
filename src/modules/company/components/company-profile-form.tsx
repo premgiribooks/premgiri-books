@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Form,
   FormControl,
@@ -358,6 +359,26 @@ export function CompanyProfileForm({ companyId, defaultValues }: CompanyProfileF
                     {...field}
                     onChange={(event) => field.onChange(event.target.valueAsNumber)}
                   />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </FormSection>
+
+        <FormSection
+          title="Invoicing"
+          description="Printed on every downloaded Sales Invoice PDF."
+          columns={1}
+        >
+          <FormField
+            control={form.control}
+            name="termsAndConditions"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Terms & Conditions</FormLabel>
+                <FormControl>
+                  <Textarea {...field} value={field.value ?? ""} rows={4} maxLength={2000} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

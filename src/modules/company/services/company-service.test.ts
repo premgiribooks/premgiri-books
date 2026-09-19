@@ -83,6 +83,7 @@ const EXISTING_COMPANY = {
   currencySymbol: "₹",
   decimalPlaces: 2,
   logo: null,
+  termsAndConditions: "Goods once sold will not be taken back.",
   timeZone: "Asia/Kolkata",
   isActive: true,
   bootstrapVersion: 1,
@@ -122,6 +123,7 @@ function profileInput(overrides: Record<string, unknown> = {}) {
     currencySymbol: "₹",
     decimalPlaces: 2,
     logo: undefined,
+    termsAndConditions: "Payment due within 30 days.",
     ...overrides,
   };
 }
@@ -169,6 +171,14 @@ describe("updateCompanyProfile", () => {
     expect(persistData.tan).toBe(EXISTING_COMPANY.tan);
     expect(persistData.cin).toBe(EXISTING_COMPANY.cin);
     expect(persistData.currency).toBe(EXISTING_COMPANY.currency);
+  });
+
+  it("persists the submitted Terms & Conditions text, and stores a blank value as null (not empty string)", async () => {
+    await companyService.updateCompanyProfile(COMPANY_ID, profileInput({ termsAndConditions: "New terms." }));
+    expect((updateMock.mock.calls[0][1] as Record<string, unknown>).termsAndConditions).toBe("New terms.");
+
+    await companyService.updateCompanyProfile(COMPANY_ID, profileInput({ termsAndConditions: "" }));
+    expect((updateMock.mock.calls[1][1] as Record<string, unknown>).termsAndConditions).toBeNull();
   });
 
   it("rejects when the acting user does not belong to the target company", async () => {

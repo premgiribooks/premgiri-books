@@ -5504,3 +5504,73 @@ deliberately NOT added — every other financial document/report in this app alr
 `.toFixed(2)` with no thousand separators, and introducing one new formatting convention for
 this single document alone was judged a bigger inconsistency than the gap it would close;
 worth a deliberate, app-wide decision if the user wants it.
+
+---
+
+## 2026-09-19 — Sales Invoice PDF: footer sticks to page bottom + company-wide Terms & Conditions
+
+Two follow-up requests against the just-shipped redesign above. Before implementing, asked
+the user to resolve two real ambiguities rather than guessing: (1) should the new Terms &
+Conditions replace the invoice's own narration-based "Remarks" section or show alongside it —
+**user chose replace**; (2) should the new field apply to all 10 document PDFs or just Sales
+Invoice — **user chose Sales Invoice only** (the field itself lives on `Company`, so extending
+it to other documents later is a small follow-up, not a redo).
+
+**Footer-sticks-to-bottom**: wrapped everything from the totals box onward (totals,
+amount-in-words, bank details, terms & conditions, signature area, footer note) in one new
+`.invoice-footer` div, and gave `.invoice` `min-height: calc(277mm - 32px); display: flex;
+flex-direction: column;` (A4's 297mm, minus `renderHtmlToPdf`'s 10mm+10mm page margins, minus
+`PRINT_STYLESHEET`'s `body { padding: 16px }` top+bottom) with `.invoice-footer { margin-top:
+auto; }`. On a short invoice this pushes the footer to the bottom of the single page; on a
+genuinely multi-page invoice the auto margin collapses to 0 once content already exceeds the
+`min-height` floor, so the footer just follows content as before. **Verified both cases with
+real rendered output**, not just reasoned about: a short invoice (Puppeteer PNG screenshot)
+and a 45-line-item invoice that spans two pages (rendered via Chromium's own PDF viewer,
+screenshotted) — the table breaks at a clean row boundary (item 40/41), the `<thead>` repeats
+on page 2 automatically, and the footer correctly follows the remaining items on page 2 rather
+than being stranded with an awkward gap. All preview scripts/outputs were throwaway (run from
+`scripts/`, deleted after), nothing committed.
+
+**Company-wide Terms & Conditions**: new `Company.termsAndConditions String?` column
+(migration `20260919190000_add_company_terms_and_conditions` — applied via the established
+`prisma db execute` + `prisma migrate resolve --applied` workaround, since `prisma migrate
+dev`'s shadow-database creation fails against this environment's restricted DB user; see spec
+28/29/30's identical precedent earlier in this file), capped at 2000 characters, editable from
+all three company-editing surfaces (Super-Admin's create + edit via `company-form.tsx`, and
+the Company Admin's own self-service `company-profile-form.tsx`) as an optional textarea under
+a new "Invoicing" section. The Sales Invoice PDF's "Remarks" section now renders this field
+(escaped, `white-space: pre-line` to preserve the textarea's own line breaks) instead of the
+invoice's own `narration` — `narration` is intentionally never read by `sales-invoice-pdf.ts`
+anymore.
+
+**Code review: 1 CRITICAL found and fixed, 1 MEDIUM verified resolved.** The CRITICAL:
+`src/modules/company/utils/company-form-values.ts`'s `toCompanyFormValues` — the sole source
+of both edit forms' `defaultValues` — was never updated to map the new column, so it silently
+rendered blank on every edit-page load regardless of what was actually stored; the next save
+of *any* unrelated field would then submit an empty Textarea value, `blankToNull` it to `null`,
+and silently erase a previously-saved Terms & Conditions with no error, no warning, nothing —
+a real, easily-reproduced data-loss bug, not hypothetical. Fixed by adding the missing
+`termsAndConditions: company.termsAndConditions ?? undefined` line; this function had **zero**
+prior test coverage (exactly how the bug slipped through undetected), so a new
+`company-form-values.test.ts` was added asserting every mapped field, not just the new one, to
+close that gap for good. The MEDIUM (an unverified claim that the footer-stick-to-bottom CSS
+degrades gracefully on a multi-page invoice) is the "verified both cases with real rendered
+output" work described above — confirmed clean, not just asserted in a comment.
+**Security review: 0 CRITICAL/HIGH** — confirmed the escaping order is correct
+(`escapeHtml` wraps the raw value before the `pre-line`-styled tag receives it), confirmed
+`company`/`edit`'s existing permission gate is a consistent, non-widening fit for this field
+(the same gate already fully controls address/logo/display name, all equally customer-facing),
+and confirmed no new raw-SQL write path was introduced. One LOW flagged and fixed: the security
+review caught that this file's own first-draft comment claiming "no length cap, matching
+narration's precedent" was factually wrong — `narration` actually caps at 500 characters — so
+an uncapped free-text field feeding into a **shared, cross-tenant Puppeteer instance**
+(`renderHtmlToPdf` reuses one browser process for every company) was a real, if minor,
+multi-tenant blast-radius concern; fixed with a 2000-character cap (generous enough for a real
+multi-clause terms block, unlike narration's one-line spirit) plus a matching `maxLength` on
+both Textareas for UX, and the inaccurate comment was corrected.
+
+Re-verified after all fixes: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors,
+same 2 pre-existing unrelated warnings), `npx vitest run` (217 files, **2863 tests** — 21 new),
+`next build` (clean).
+
+**This closes out both follow-up requests in full.**

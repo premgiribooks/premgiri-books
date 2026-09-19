@@ -222,6 +222,7 @@ export const companyService = {
       district: blankToNull(data.district),
       pinCode: blankToNull(data.pinCode),
       logo: blankToNull(data.logo),
+      termsAndConditions: blankToNull(data.termsAndConditions),
     };
 
     const company = await companyRepository.update(id, merged);
