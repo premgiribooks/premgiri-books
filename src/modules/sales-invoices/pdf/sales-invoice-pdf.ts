@@ -1,3 +1,4 @@
+import { GST_STATE_CODES } from "@/engines/gst/state-codes";
 import { escapeHtml } from "@/lib/html-escape";
 import { amountToWords } from "@/lib/number-to-words";
 import { PRINT_STYLESHEET } from "@/lib/pdf-templates/print-stylesheet";
@@ -200,12 +201,6 @@ const INVOICE_STYLES = `
     border-top: 1px solid #999999;
     color: #555555;
   }
-  .footer-note {
-    margin-top: 20px;
-    text-align: center;
-    color: #888888;
-    font-size: 9px;
-  }
 `;
 
 function formatAddressLines(parts: {
@@ -232,6 +227,15 @@ function formatAddressLines(parts: {
 
 function addressLinesHtml(lines: string[]): string {
   return lines.map((line) => `<p class="party-line">${escapeHtml(line)}</p>`).join("");
+}
+
+/** Resolves a GST state code (e.g. "29") to its statutory name (e.g.
+ * "Karnataka") for display — falls back to the raw code itself if it isn't
+ * one of the statutory GST_STATE_CODES (defensive only; every value stored
+ * on a posted invoice was validated against this same list at creation
+ * time). */
+function placeOfSupplyDisplay(stateCode: string): string {
+  return GST_STATE_CODES.find((entry) => entry.code === stateCode)?.name ?? stateCode;
 }
 
 function itemRow(item: SalesInvoiceItemDetail, srNo: number): string {
@@ -334,7 +338,7 @@ export function buildSalesInvoiceHtml({ salesInvoice, company, bankAccount, logo
           <div class="invoice-meta">
             <div><span class="label">Invoice No.</span>${escapeHtml(salesInvoice.invoiceNumber)}</div>
             <div><span class="label">Date</span>${formatSalesInvoiceDate(salesInvoice.invoiceDate)}</div>
-            <div><span class="label">Place of Supply</span>${escapeHtml(salesInvoice.placeOfSupplyStateCode)}</div>
+            <div><span class="label">Place of Supply</span>${escapeHtml(placeOfSupplyDisplay(salesInvoice.placeOfSupplyStateCode))}</div>
           </div>
         </div>
       </div>
@@ -415,8 +419,6 @@ export function buildSalesInvoiceHtml({ salesInvoice, company, bankAccount, logo
             <div class="signature-line">Authorised Signatory</div>
           </div>
         </div>
-
-        <div class="footer-note">This is a computer generated invoice.</div>
       </div>
     </div>
   </body>

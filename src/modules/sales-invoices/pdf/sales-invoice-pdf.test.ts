@@ -283,11 +283,30 @@ describe("buildSalesInvoiceHtml", () => {
     expect(narrationOnly).not.toContain("Handle with care");
   });
 
-  it("sticks the totals-onward footer to the bottom of the page via a flex wrapper, and keeps the computer-generated-invoice footer note", () => {
+  it("sticks the totals-onward footer to the bottom of the page via a flex wrapper", () => {
     const html = buildSalesInvoiceHtml(buildFixture());
 
     expect(html).toContain('<div class="invoice-footer">');
-    expect(html).toContain("This is a computer generated invoice.");
+  });
+
+  it("no longer renders the 'computer generated invoice' footer note — removed per explicit request", () => {
+    const html = buildSalesInvoiceHtml(buildFixture());
+
+    expect(html).not.toContain("This is a computer generated invoice.");
+    expect(html).not.toContain("footer-note");
+  });
+
+  it("renders Place of Supply as the state's own name, not its raw GST code", () => {
+    const html = buildSalesInvoiceHtml(buildFixture({ salesInvoice: { placeOfSupplyStateCode: "27" } }));
+
+    expect(html).toContain("Maharashtra");
+    expect(html).not.toMatch(/Place of Supply<\/span>27</);
+  });
+
+  it("falls back to the raw code if it isn't a recognized GST state code (defensive, shouldn't happen for a posted invoice)", () => {
+    const html = buildSalesInvoiceHtml(buildFixture({ salesInvoice: { placeOfSupplyStateCode: "99" } }));
+
+    expect(html).toContain("Place of Supply</span>99");
   });
 
   it("escapes user-entered text before embedding it in the HTML", () => {
