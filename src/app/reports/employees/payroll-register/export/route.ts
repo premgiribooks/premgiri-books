@@ -5,18 +5,36 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError, getCurrentCompanyUser } from "@/lib/current-user";
 import { exportToExcelBuffer } from "@/lib/excel-export";
 import { logger } from "@/lib/logger";
+import { renderHtmlToPdf } from "@/lib/pdf-generation";
+import { buildReportHtml } from "@/lib/pdf-templates/report-pdf-template";
 import { assertPermission } from "@/lib/permissions";
 import { toPayrollRegisterExportTable } from "@/engines/reporting/employee-reports";
 import { employeeReportService } from "@/modules/reports/employees/services/employee-report-service";
 import { payrollRegisterFiltersSchema } from "@/modules/reports/employees/validation/employee-report-schema";
 
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const DOWNLOAD_FILENAME = "Payroll-Register.xlsx";
+const PDF_CONTENT_TYPE = "application/pdf";
+
+type ExportFormat = "xlsx" | "pdf";
 
 /**
- * Delivers the Payroll Register report as a downloadable `.xlsx`, following
- * customers/directory/export/route.ts's own reference wiring for an
- * all-optional-filter report exactly. Re-checks its own `reports`/`export`
+ * Anything other than the literal string `"pdf"` is treated as `"xlsx"` —
+ * this codebase's fail-safe-default convention (78-pdf-generation.md's
+ * Business Rules), so an unrecognized `?format=` value never 500s, it just
+ * falls back to the original behavior.
+ */
+function resolveFormat(value: string | null): ExportFormat {
+  return value === "pdf" ? "pdf" : "xlsx";
+}
+
+function downloadFilename(format: ExportFormat): string {
+  return `Payroll-Register.${format}`;
+}
+
+/**
+ * Delivers the Payroll Register report as a downloadable `.xlsx` or `.pdf`,
+ * following customers/directory/export/route.ts's own reference wiring for
+ * an all-optional-filter report exactly. Re-checks its own `reports`/`export`
  * permission independently of the calling screen's Export button —
  * `employeeReportService.getPayrollRegister` re-checks `reports`/`view` on
  * its own, the same module every other Employee Reports view is gated on.
@@ -24,10 +42,11 @@ const DOWNLOAD_FILENAME = "Payroll-Register.xlsx";
  * gates payroll-run mutations elsewhere (payroll-run-service.ts), but this
  * report-read path deliberately uses the coarser `reports` module instead —
  * a known, tracked design tradeoff (see progress-tracker.md), not an
- * oversight; `financialYearId`/`dateFrom`/`dateTo`/
- * `status` are all optional (status defaults to "POSTED" via the schema
- * itself, mirroring the on-screen filter bar's own default), so the
- * filename carries no filter-derived suffix.
+ * oversight; this applies equally to both export formats. `financialYearId`/
+ * `dateFrom`/`dateTo`/`status` are all optional (status defaults to "POSTED"
+ * via the schema itself, mirroring the on-screen filter bar's own default),
+ * so the filename carries no filter-derived suffix. Both export formats
+ * reuse the exact same `toPayrollRegisterExportTable(report)` shaping.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -43,17 +62,32 @@ export async function GET(request: Request): Promise<NextResponse> {
       ...(dateTo ? { dateTo } : {}),
       ...(status ? { status } : {}),
     });
+    const format = resolveFormat(url.searchParams.get("format"));
 
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "reports", "export");
 
     const report = await employeeReportService.getPayrollRegister(filters);
-    const buffer = await exportToExcelBuffer(toPayrollRegisterExportTable(report));
+    const tables = toPayrollRegisterExportTable(report);
+
+    if (format === "pdf") {
+      const html = buildReportHtml(tables);
+      const pdf = await renderHtmlToPdf(html, { format: "A4", orientation: "portrait" });
+
+      return new NextResponse(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": PDF_CONTENT_TYPE,
+          "Content-Disposition": `attachment; filename="${downloadFilename("pdf")}"`,
+        },
+      });
+    }
+
+    const buffer = await exportToExcelBuffer(tables);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": XLSX_CONTENT_TYPE,
-        "Content-Disposition": `attachment; filename="${DOWNLOAD_FILENAME}"`,
+        "Content-Disposition": `attachment; filename="${downloadFilename("xlsx")}"`,
       },
     });
   } catch (error) {

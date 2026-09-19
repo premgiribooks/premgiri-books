@@ -66,6 +66,9 @@ export default async function CustomerStatementPage({ searchParams }: CustomerSt
           </div>
           <ReportExportButton
             downloadUrl={exportParams ? `/reports/customers/statement/export?${exportParams.toString()}` : undefined}
+            pdfDownloadUrl={
+              exportParams ? `/reports/customers/statement/export?${exportParams.toString()}&format=pdf` : undefined
+            }
           />
         </div>
 

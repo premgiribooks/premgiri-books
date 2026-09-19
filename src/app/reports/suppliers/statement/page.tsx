@@ -66,6 +66,9 @@ export default async function SupplierStatementPage({ searchParams }: SupplierSt
           </div>
           <ReportExportButton
             downloadUrl={exportParams ? `/reports/suppliers/statement/export?${exportParams.toString()}` : undefined}
+            pdfDownloadUrl={
+              exportParams ? `/reports/suppliers/statement/export?${exportParams.toString()}&format=pdf` : undefined
+            }
           />
         </div>
 

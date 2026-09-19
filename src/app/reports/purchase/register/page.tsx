@@ -86,7 +86,10 @@ export default async function PurchaseRegisterPage({ searchParams }: PurchaseReg
             <h1 className="text-xl font-semibold text-foreground">Purchase Register</h1>
             <p className="text-sm text-muted-foreground">Every Purchase Invoice within the selected date range, POSTED by default.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/purchase/register/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/purchase/register/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/purchase/register/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <PurchaseReportFilterBar suppliers={suppliers} statusOptions={PURCHASE_INVOICE_STATUS_VALUES} />

@@ -86,7 +86,10 @@ export default async function CashFlowPage({ searchParams }: CashFlowPageProps) 
               activity.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/cash-flow/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/cash-flow/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/cash-flow/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <FinancialYearDateRangeFilterBar

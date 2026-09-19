@@ -5,23 +5,43 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError, getCurrentCompanyUser } from "@/lib/current-user";
 import { exportToExcelBuffer } from "@/lib/excel-export";
 import { logger } from "@/lib/logger";
+import { renderHtmlToPdf } from "@/lib/pdf-generation";
+import { buildReportHtml } from "@/lib/pdf-templates/report-pdf-template";
 import { assertPermission } from "@/lib/permissions";
 import { toEmployeeDirectoryExportTable } from "@/engines/reporting/employee-reports";
 import { employeeReportService } from "@/modules/reports/employees/services/employee-report-service";
 import { employeeDirectoryFiltersSchema } from "@/modules/reports/employees/validation/employee-report-schema";
 
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const DOWNLOAD_FILENAME = "Employee-Directory.xlsx";
+const PDF_CONTENT_TYPE = "application/pdf";
+
+type ExportFormat = "xlsx" | "pdf";
 
 /**
- * Delivers the Employee Directory report as a downloadable `.xlsx`,
- * following customers/directory/export/route.ts's own reference wiring for
- * an all-optional-filter directory report exactly. Re-checks its own
- * `reports`/`export` permission independently of the calling screen's
+ * Anything other than the literal string `"pdf"` is treated as `"xlsx"` —
+ * this codebase's fail-safe-default convention (78-pdf-generation.md's
+ * Business Rules), so an unrecognized `?format=` value never 500s, it just
+ * falls back to the original behavior.
+ */
+function resolveFormat(value: string | null): ExportFormat {
+  return value === "pdf" ? "pdf" : "xlsx";
+}
+
+function downloadFilename(format: ExportFormat): string {
+  return `Employee-Directory.${format}`;
+}
+
+/**
+ * Delivers the Employee Directory report as a downloadable `.xlsx` or
+ * `.pdf`, following customers/directory/export/route.ts's own reference
+ * wiring for an all-optional-filter directory report exactly. Re-checks its
+ * own `reports`/`export` permission independently of the calling screen's
  * Export button — `employeeReportService.getEmployeeDirectory` re-checks
  * `reports`/`view` on its own, the same module every other Employee
  * Reports view is gated on. Every filter (department/designation/branchId/
  * status) is optional, so the filename carries no filter-derived suffix.
+ * Both export formats reuse the exact same
+ * `toEmployeeDirectoryExportTable(report)` shaping.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -37,17 +57,32 @@ export async function GET(request: Request): Promise<NextResponse> {
       ...(branchId ? { branchId } : {}),
       ...(status ? { status } : {}),
     });
+    const format = resolveFormat(url.searchParams.get("format"));
 
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "reports", "export");
 
     const report = await employeeReportService.getEmployeeDirectory(filters);
-    const buffer = await exportToExcelBuffer(toEmployeeDirectoryExportTable(report));
+    const tables = toEmployeeDirectoryExportTable(report);
+
+    if (format === "pdf") {
+      const html = buildReportHtml(tables);
+      const pdf = await renderHtmlToPdf(html, { format: "A4", orientation: "portrait" });
+
+      return new NextResponse(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": PDF_CONTENT_TYPE,
+          "Content-Disposition": `attachment; filename="${downloadFilename("pdf")}"`,
+        },
+      });
+    }
+
+    const buffer = await exportToExcelBuffer(tables);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": XLSX_CONTENT_TYPE,
-        "Content-Disposition": `attachment; filename="${DOWNLOAD_FILENAME}"`,
+        "Content-Disposition": `attachment; filename="${downloadFilename("xlsx")}"`,
       },
     });
   } catch (error) {

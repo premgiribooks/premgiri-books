@@ -66,7 +66,10 @@ export default async function SupplierPurchaseSummaryPage({ searchParams }: Supp
             <h1 className="text-xl font-semibold text-foreground">Supplier Purchase Summary</h1>
             <p className="text-sm text-muted-foreground">Purchase value grouped by supplier, for the selected period.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/suppliers/purchase-summary/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/suppliers/purchase-summary/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/suppliers/purchase-summary/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SupplierReportFilterBar showDateRange />

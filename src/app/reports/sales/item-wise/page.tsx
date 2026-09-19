@@ -80,7 +80,10 @@ export default async function ItemWiseSalesPage({ searchParams }: ItemWiseSalesP
               Quantity and value sold, grouped by product, across every POSTED Sales Invoice in the selected range.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/sales/item-wise/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/sales/item-wise/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/sales/item-wise/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SalesReportFilterBar

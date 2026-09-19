@@ -5375,3 +5375,35 @@ build` (all 9 new `.../pdf` routes present, Purchase Invoice has none).
 `main` 2026-09-19** (commit `42444d4`), per explicit user direction — matching the same
 delivery preference set for Backup & Restore, Excel Export, and Excel Import earlier this
 session.
+
+---
+
+## 2026-09-19 — PDF export extended to all 28 remaining report screens (spec 78)
+
+Per explicit user request to implement the open follow-up from the entry above. Built by 7
+parallel agents grouped by report module (Customers, Suppliers, Sales transactional, Purchase
+transactional, Financial Statements + GST dashboard, Inventory, Employees), all mirroring
+Trial Balance's committed reference wiring exactly — same `resolveFormat` fail-safe helper,
+same "shape once into `tables`, branch on format" structure, same permission/filter-validation
+ordering ahead of the format branch. Full implementation record, including the preserved
+Employee payroll/salary permission tradeoff and GST dashboard's dual-permission boundary, and
+both review agents' findings (code review: 0 CRITICAL/HIGH/MEDIUM; security review: 0
+CRITICAL/HIGH/MEDIUM), is recorded in full in `context/Phases/phase-tracker.md`'s Phase 12
+section, per the Tracker Update Rule.
+
+**Caught during code review**: an unrelated, unexplained, untested one-line change had
+appeared in the working tree on the already-committed `src/app/sales/invoices/[id]/pdf/
+route.ts` (`format: "A5"` silently changed to `"A4"`) — outside any of the 7 agents' assigned
+scope (all were explicitly told not to touch Sales Invoice files) and unclaimed by any of
+them. Since it contradicted the already-shipped, spec'd A5 convention with no rationale or
+test update, reverted it back to `"A5"` via `git checkout` before staging anything, rather
+than let an unexplained behavior change ride along with this batch.
+
+Re-verified after the revert: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (214 files, 2831 tests — 196 new), `next
+build` (all existing `.../export` routes unchanged in the table — PDF rides the same route via
+`?format=pdf`, not a new route).
+
+**This closes out feature-spec 78 (PDF Generation) in full, with no remaining open scope**:
+all 29 report screens now offer both Excel and PDF export, all 10 in-scope documents have
+working PDF downloads, and Purchase Invoice remains permanently excluded.

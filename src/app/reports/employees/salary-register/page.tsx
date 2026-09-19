@@ -49,6 +49,7 @@ export default async function SalaryRegisterReportPage({ searchParams }: SalaryR
   }
 
   let downloadUrl: string | undefined;
+  let pdfDownloadUrl: string | undefined;
   if (employeeId) {
     const exportParams = new URLSearchParams({ employeeId });
     if (financialYearId) {
@@ -61,6 +62,7 @@ export default async function SalaryRegisterReportPage({ searchParams }: SalaryR
       exportParams.set("dateTo", dateTo);
     }
     downloadUrl = `/reports/employees/salary-register/export?${exportParams.toString()}`;
+    pdfDownloadUrl = `/reports/employees/salary-register/export?${exportParams.toString()}&format=pdf`;
   }
 
   return (
@@ -71,7 +73,7 @@ export default async function SalaryRegisterReportPage({ searchParams }: SalaryR
             <h1 className="text-xl font-semibold text-foreground">Salary Register</h1>
             <p className="text-sm text-muted-foreground">One employee&apos;s posted salary history across payroll runs.</p>
           </div>
-          <ReportExportButton downloadUrl={downloadUrl} />
+          <ReportExportButton downloadUrl={downloadUrl} pdfDownloadUrl={pdfDownloadUrl} />
         </div>
 
         <EmployeeReportFilterBar employees={employees} employeeRequired showDateRange financialYears={financialYears} />

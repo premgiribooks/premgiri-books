@@ -12,6 +12,8 @@ const {
   getPartyWisePurchaseReportMock,
   exportToExcelBufferMock,
   toPartyWisePurchaseExportTableMock,
+  renderHtmlToPdfMock,
+  buildReportHtmlMock,
   errorMock,
 } = vi.hoisted(() => ({
   getCurrentCompanyUserMock: vi.fn(),
@@ -19,6 +21,8 @@ const {
   getPartyWisePurchaseReportMock: vi.fn(),
   exportToExcelBufferMock: vi.fn(),
   toPartyWisePurchaseExportTableMock: vi.fn(),
+  renderHtmlToPdfMock: vi.fn(),
+  buildReportHtmlMock: vi.fn(),
   errorMock: vi.fn(),
 }));
 
@@ -38,6 +42,12 @@ vi.mock("@/lib/excel-export", () => ({
 }));
 vi.mock("@/engines/reporting/purchase-reports", () => ({
   toPartyWisePurchaseExportTable: toPartyWisePurchaseExportTableMock,
+}));
+vi.mock("@/lib/pdf-generation", () => ({
+  renderHtmlToPdf: renderHtmlToPdfMock,
+}));
+vi.mock("@/lib/pdf-templates/report-pdf-template", () => ({
+  buildReportHtml: buildReportHtmlMock,
 }));
 vi.mock("@/lib/logger", () => ({
   logger: { error: errorMock },
@@ -60,6 +70,8 @@ describe("GET /reports/purchase/party-wise/export", () => {
     } as PartyWisePurchaseReport);
     toPartyWisePurchaseExportTableMock.mockReturnValue([{ sheetName: "Party-wise Purchases", columns: [], rows: [] }]);
     exportToExcelBufferMock.mockResolvedValue(Buffer.from("fake-xlsx"));
+    buildReportHtmlMock.mockReturnValue("<html></html>");
+    renderHtmlToPdfMock.mockResolvedValue(Buffer.from("%PDF-fake"));
   });
 
   it("returns 400 for a missing/invalid dateFrom or dateTo — never reaching the service", async () => {
@@ -126,6 +138,71 @@ describe("GET /reports/purchase/party-wise/export", () => {
     expect(getPartyWisePurchaseReportMock).toHaveBeenCalledWith({
       dateFrom: "2027-01-01",
       dateTo: "2027-03-31",
+    });
+  });
+
+  describe("format=pdf", () => {
+    it("returns a %PDF--prefixed buffer with the correct headers on success", async () => {
+      const response = await GET(request(`${VALID_QUERY}&format=pdf`));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe("application/pdf");
+      expect(response.headers.get("Content-Disposition")).toBe(
+        'attachment; filename="Party-wise-Purchases-2027-01-01_to_2027-03-31.pdf"'
+      );
+      const buffer = Buffer.from(await response.arrayBuffer());
+      expect(buffer.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    });
+
+    it("reuses the exact same toPartyWisePurchaseExportTable shaping as the xlsx path — one shaping function, two rendering targets", async () => {
+      const sharedTables = [{ sheetName: "Party-wise Purchases", columns: [], rows: [] }];
+      toPartyWisePurchaseExportTableMock.mockReturnValue(sharedTables);
+
+      await GET(request(`${VALID_QUERY}&format=pdf`));
+
+      expect(buildReportHtmlMock).toHaveBeenCalledWith(sharedTables);
+      expect(exportToExcelBufferMock).not.toHaveBeenCalled();
+    });
+
+    it("renders A4 portrait per the reports paper-size convention", async () => {
+      await GET(request(`${VALID_QUERY}&format=pdf`));
+
+      expect(renderHtmlToPdfMock).toHaveBeenCalledWith(expect.any(String), { format: "A4", orientation: "portrait" });
+    });
+
+    it("applies the same reports:export permission gate as the xlsx path", async () => {
+      assertPermissionMock.mockRejectedValue(new AuthorizationError("You do not have permission to export reports."));
+
+      const response = await GET(request(`${VALID_QUERY}&format=pdf`));
+
+      expect(response.status).toBe(403);
+      expect(getPartyWisePurchaseReportMock).not.toHaveBeenCalled();
+      expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
+    });
+
+    it("applies the same filter validation as the xlsx path", async () => {
+      const response = await GET(request("?dateFrom=not-a-date&dateTo=2027-03-31&format=pdf"));
+
+      expect(response.status).toBe(400);
+      expect(getCurrentCompanyUserMock).not.toHaveBeenCalled();
+    });
+
+    it("returns a generic 500 and logs an unexpected render failure", async () => {
+      renderHtmlToPdfMock.mockRejectedValue(new Error("Chromium launch failed"));
+
+      const response = await GET(request(`${VALID_QUERY}&format=pdf`));
+
+      expect(response.status).toBe(500);
+      expect(errorMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to xlsx for an unrecognized format value instead of erroring", async () => {
+      const response = await GET(request(`${VALID_QUERY}&format=something-unknown`));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
     });
   });
 });

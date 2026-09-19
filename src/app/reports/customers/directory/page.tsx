@@ -59,7 +59,10 @@ export default async function CustomerDirectoryPage({ searchParams }: CustomerDi
             <h1 className="text-xl font-semibold text-foreground">Customer Directory</h1>
             <p className="text-sm text-muted-foreground">Every customer&apos;s contact and GST details.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/customers/directory/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/customers/directory/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/customers/directory/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <CustomerReportFilterBar showCustomerType showStatus />

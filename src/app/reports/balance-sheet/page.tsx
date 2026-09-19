@@ -83,7 +83,10 @@ export default async function BalanceSheetPage({ searchParams }: BalanceSheetPag
               Loss plug.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/balance-sheet/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/balance-sheet/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/balance-sheet/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <FinancialYearAsOfDateFilterBar

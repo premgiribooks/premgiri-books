@@ -85,7 +85,10 @@ export default async function ProfitAndLossPage({ searchParams }: ProfitAndLossP
               Trading Account and Profit &amp; Loss Account for the selected period.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/profit-and-loss/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/profit-and-loss/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/profit-and-loss/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <FinancialYearDateRangeFilterBar

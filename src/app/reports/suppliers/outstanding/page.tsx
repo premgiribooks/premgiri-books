@@ -84,7 +84,10 @@ export default async function SupplierOutstandingPage({ searchParams }: Supplier
             <h1 className="text-xl font-semibold text-foreground">Supplier Outstanding</h1>
             <p className="text-sm text-muted-foreground">Balance owed to each supplier as of the selected date.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/suppliers/outstanding/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/suppliers/outstanding/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/suppliers/outstanding/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SupplierReportFilterBar

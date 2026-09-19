@@ -68,7 +68,10 @@ export default async function PartyWiseSalesPage({ searchParams }: PartyWiseSale
               Sales value grouped by customer, with Walk-in and unconverted Quick Customer sales as their own labeled rows.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/sales/party-wise/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/sales/party-wise/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/sales/party-wise/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SalesReportFilterBar />

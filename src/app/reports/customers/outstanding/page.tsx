@@ -87,7 +87,10 @@ export default async function CustomerOutstandingPage({ searchParams }: Customer
             <h1 className="text-xl font-semibold text-foreground">Customer Outstanding</h1>
             <p className="text-sm text-muted-foreground">Balance owed by each customer as of the selected date, compared against their credit limit.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/customers/outstanding/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/customers/outstanding/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/customers/outstanding/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <CustomerReportFilterBar

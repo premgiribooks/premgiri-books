@@ -66,7 +66,10 @@ export default async function CustomerSalesSummaryPage({ searchParams }: Custome
             <h1 className="text-xl font-semibold text-foreground">Customer Sales Summary</h1>
             <p className="text-sm text-muted-foreground">Sales value grouped by customer, for the selected period.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/customers/sales-summary/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/customers/sales-summary/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/customers/sales-summary/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <CustomerReportFilterBar showDateRange />

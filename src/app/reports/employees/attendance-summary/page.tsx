@@ -78,7 +78,10 @@ export default async function AttendanceSummaryReportPage({ searchParams }: Atte
               Per-employee present/half-day/absent/on-leave counts for the selected period.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/employees/attendance-summary/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/employees/attendance-summary/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/employees/attendance-summary/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <EmployeeReportFilterBar showPeriod employees={employees} branches={branches} />

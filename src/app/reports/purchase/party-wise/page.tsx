@@ -66,7 +66,10 @@ export default async function PartyWisePurchasePage({ searchParams }: PartyWiseP
             <h1 className="text-xl font-semibold text-foreground">Party-wise Purchase Summary</h1>
             <p className="text-sm text-muted-foreground">Purchase value grouped by supplier.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/purchase/party-wise/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/purchase/party-wise/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/purchase/party-wise/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <PurchaseReportFilterBar />

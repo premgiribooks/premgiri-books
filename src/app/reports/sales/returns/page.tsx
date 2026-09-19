@@ -82,7 +82,10 @@ export default async function SalesReturnSummaryPage({ searchParams }: SalesRetu
             <h1 className="text-xl font-semibold text-foreground">Sales Return Summary</h1>
             <p className="text-sm text-muted-foreground">Every Sales Return within the selected date range, POSTED by default.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/sales/returns/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/sales/returns/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/sales/returns/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SalesReportFilterBar customers={customers} statusOptions={SALES_RETURN_STATUS_VALUES} />

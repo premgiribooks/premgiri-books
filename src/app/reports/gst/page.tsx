@@ -78,7 +78,10 @@ export default async function GstReportsPage({ searchParams }: GstReportsPagePro
               .
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/gst/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/gst/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/gst/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <GstDashboardFilterBar from={from} to={to} />

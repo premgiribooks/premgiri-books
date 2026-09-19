@@ -5,22 +5,41 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError, getCurrentCompanyUser } from "@/lib/current-user";
 import { exportToExcelBuffer } from "@/lib/excel-export";
 import { logger } from "@/lib/logger";
+import { renderHtmlToPdf } from "@/lib/pdf-generation";
+import { buildReportHtml } from "@/lib/pdf-templates/report-pdf-template";
 import { assertPermission } from "@/lib/permissions";
 import { toLowStockExportTable } from "@/engines/reporting/inventory-reports";
 import { inventoryReportService } from "@/modules/reports/inventory/services/inventory-report-service";
 import { lowStockFiltersSchema } from "@/modules/reports/inventory/validation/inventory-report-schema";
 
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const DOWNLOAD_FILENAME = "Low-Stock.xlsx";
+const PDF_CONTENT_TYPE = "application/pdf";
+
+type ExportFormat = "xlsx" | "pdf";
 
 /**
- * Delivers the Low Stock / Reorder report as a downloadable `.xlsx`,
- * following trial-balance/export/route.ts's own reference wiring exactly.
- * Re-checks its own `reports`/`export` permission independently of the
- * calling screen's Export button; `inventoryReportService.getLowStockReport`
+ * Anything other than the literal string `"pdf"` is treated as `"xlsx"` —
+ * this codebase's fail-safe-default convention (78-pdf-generation.md's
+ * Business Rules), so an unrecognized `?format=` value never 500s, it just
+ * falls back to the original behavior.
+ */
+function resolveFormat(value: string | null): ExportFormat {
+  return value === "pdf" ? "pdf" : "xlsx";
+}
+
+function downloadFilename(format: ExportFormat): string {
+  return `Low-Stock.${format}`;
+}
+
+/**
+ * Delivers the Low Stock / Reorder report as a downloadable `.xlsx` or
+ * `.pdf`, following trial-balance/export/route.ts's own reference wiring
+ * exactly. Re-checks its own `reports`/`export` permission independently of
+ * the calling screen's Export button; `inventoryReportService.getLowStockReport`
  * re-checks `reports`/`view` on its own. Its only filter (`warehouseId`) is
  * optional, mirroring customer-directory/export/route.ts's own precedent, so
- * the filename carries no filter-derived suffix.
+ * the filename carries no filter-derived suffix. Reuses the exact same
+ * `toLowStockExportTable(report)` shaping for both rendering targets.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -29,17 +48,32 @@ export async function GET(request: Request): Promise<NextResponse> {
     const filters = lowStockFiltersSchema.parse({
       ...(warehouseIdParam ? { warehouseId: warehouseIdParam } : {}),
     });
+    const format = resolveFormat(url.searchParams.get("format"));
 
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "reports", "export");
 
     const report = await inventoryReportService.getLowStockReport(filters);
-    const buffer = await exportToExcelBuffer(toLowStockExportTable(report));
+    const tables = toLowStockExportTable(report);
+
+    if (format === "pdf") {
+      const html = buildReportHtml(tables);
+      const pdf = await renderHtmlToPdf(html, { format: "A4", orientation: "portrait" });
+
+      return new NextResponse(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": PDF_CONTENT_TYPE,
+          "Content-Disposition": `attachment; filename="${downloadFilename("pdf")}"`,
+        },
+      });
+    }
+
+    const buffer = await exportToExcelBuffer(tables);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": XLSX_CONTENT_TYPE,
-        "Content-Disposition": `attachment; filename="${DOWNLOAD_FILENAME}"`,
+        "Content-Disposition": `attachment; filename="${downloadFilename("xlsx")}"`,
       },
     });
   } catch (error) {

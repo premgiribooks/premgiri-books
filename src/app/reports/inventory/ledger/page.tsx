@@ -92,7 +92,10 @@ export default async function StockLedgerPage({ searchParams }: StockLedgerPageP
           {errorMessage ? (
             <ReportExportButton />
           ) : (
-            <ReportExportButton downloadUrl={`/reports/inventory/ledger/export?${exportParams.toString()}`} />
+            <ReportExportButton
+              downloadUrl={`/reports/inventory/ledger/export?${exportParams.toString()}`}
+              pdfDownloadUrl={`/reports/inventory/ledger/export?${exportParams.toString()}&format=pdf`}
+            />
           )}
         </div>
 

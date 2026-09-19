@@ -49,7 +49,10 @@ export default async function StockValuationPage({ searchParams }: StockValuatio
             <h1 className="text-xl font-semibold text-foreground">Stock Valuation</h1>
             <p className="text-sm text-muted-foreground">Stock valued at Latest Purchase Cost. Products with no cost set are flagged.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/inventory/valuation/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/inventory/valuation/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/inventory/valuation/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <InventoryReportFilterBar warehouses={warehouses} />

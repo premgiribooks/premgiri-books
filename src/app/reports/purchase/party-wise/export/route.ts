@@ -5,27 +5,44 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError, getCurrentCompanyUser } from "@/lib/current-user";
 import { exportToExcelBuffer } from "@/lib/excel-export";
 import { logger } from "@/lib/logger";
+import { renderHtmlToPdf } from "@/lib/pdf-generation";
+import { buildReportHtml } from "@/lib/pdf-templates/report-pdf-template";
 import { assertPermission } from "@/lib/permissions";
 import { toPartyWisePurchaseExportTable } from "@/engines/reporting/purchase-reports";
 import { purchaseReportService } from "@/modules/reports/purchase/services/purchase-report-service";
 import { partyWisePurchaseFiltersSchema } from "@/modules/reports/purchase/validation/purchase-report-schema";
 
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PDF_CONTENT_TYPE = "application/pdf";
 
-function downloadFilename(dateFrom: string, dateTo: string): string {
+type ExportFormat = "xlsx" | "pdf";
+
+/**
+ * Anything other than the literal string `"pdf"` is treated as `"xlsx"` —
+ * this codebase's fail-safe-default convention (78-pdf-generation.md's
+ * Business Rules), so an unrecognized `?format=` value never 500s, it just
+ * falls back to the original behavior.
+ */
+function resolveFormat(value: string | null): ExportFormat {
+  return value === "pdf" ? "pdf" : "xlsx";
+}
+
+function downloadFilename(dateFrom: string, dateTo: string, format: ExportFormat): string {
   const safeDateFrom = dateFrom.replace(/[^a-zA-Z0-9._-]/g, "_");
   const safeDateTo = dateTo.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `Party-wise-Purchases-${safeDateFrom}_to_${safeDateTo}.xlsx`;
+  return `Party-wise-Purchases-${safeDateFrom}_to_${safeDateTo}.${format}`;
 }
 
 /**
- * Delivers the Party-wise Purchase Report as a downloadable `.xlsx`,
- * following purchase/register/export/route.ts's own reference wiring
+ * Delivers the Party-wise Purchase Report as a downloadable `.xlsx` or
+ * `.pdf`, following trial-balance/export/route.ts's own reference wiring
  * exactly. Re-checks its own `reports`/`export` permission independently of
- * the calling screen's Export button; `purchaseReportService.
- * getPartyWisePurchaseReport` re-checks `reports`/`view` on its own. No
- * optional query params — `partyWisePurchaseFiltersSchema` only has
- * `dateFrom`/`dateTo`.
+ * the calling screen's Export button — both formats are equally gated;
+ * `purchaseReportService.getPartyWisePurchaseReport` re-checks `reports`/
+ * `view` on its own. No optional query params — `partyWisePurchaseFiltersSchema`
+ * only has `dateFrom`/`dateTo`. Both rendering targets reuse the exact same
+ * `toPartyWisePurchaseExportTable(report)` shaping — one shaping function,
+ * two rendering targets.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -34,17 +51,32 @@ export async function GET(request: Request): Promise<NextResponse> {
     const dateTo = url.searchParams.get("dateTo") ?? "";
 
     const filters = partyWisePurchaseFiltersSchema.parse({ dateFrom, dateTo });
+    const format = resolveFormat(url.searchParams.get("format"));
 
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "reports", "export");
 
     const report = await purchaseReportService.getPartyWisePurchaseReport(filters);
-    const buffer = await exportToExcelBuffer(toPartyWisePurchaseExportTable(report));
+    const tables = toPartyWisePurchaseExportTable(report);
+
+    if (format === "pdf") {
+      const html = buildReportHtml(tables);
+      const pdf = await renderHtmlToPdf(html, { format: "A4", orientation: "portrait" });
+
+      return new NextResponse(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": PDF_CONTENT_TYPE,
+          "Content-Disposition": `attachment; filename="${downloadFilename(filters.dateFrom, filters.dateTo, "pdf")}"`,
+        },
+      });
+    }
+
+    const buffer = await exportToExcelBuffer(tables);
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": XLSX_CONTENT_TYPE,
-        "Content-Disposition": `attachment; filename="${downloadFilename(filters.dateFrom, filters.dateTo)}"`,
+        "Content-Disposition": `attachment; filename="${downloadFilename(filters.dateFrom, filters.dateTo, "xlsx")}"`,
       },
     });
   } catch (error) {

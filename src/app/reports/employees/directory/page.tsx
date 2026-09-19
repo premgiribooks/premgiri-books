@@ -62,7 +62,10 @@ export default async function EmployeeDirectoryReportPage({ searchParams }: Empl
             <h1 className="text-xl font-semibold text-foreground">Employee Directory</h1>
             <p className="text-sm text-muted-foreground">Every employee&apos;s code, designation, department, branch, and status.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/employees/directory/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/employees/directory/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/employees/directory/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <EmployeeReportFilterBar branches={branches} showDepartmentDesignation showEmployeeStatus />

@@ -57,7 +57,10 @@ export default async function CurrentStockPage({ searchParams }: CurrentStockPag
             <h1 className="text-xl font-semibold text-foreground">Current Stock</h1>
             <p className="text-sm text-muted-foreground">Stock on hand (Σ IN − Σ OUT), by product and warehouse.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/inventory/current-stock/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/inventory/current-stock/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/inventory/current-stock/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <InventoryReportFilterBar

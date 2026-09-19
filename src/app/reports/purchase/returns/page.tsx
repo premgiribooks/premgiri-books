@@ -82,7 +82,10 @@ export default async function PurchaseReturnSummaryPage({ searchParams }: Purcha
             <h1 className="text-xl font-semibold text-foreground">Purchase Return Summary</h1>
             <p className="text-sm text-muted-foreground">Every Purchase Return within the selected date range, POSTED by default.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/purchase/returns/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/purchase/returns/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/purchase/returns/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <PurchaseReportFilterBar suppliers={suppliers} statusOptions={PURCHASE_RETURN_STATUS_VALUES} />

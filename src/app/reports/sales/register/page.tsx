@@ -86,7 +86,10 @@ export default async function SalesRegisterPage({ searchParams }: SalesRegisterP
             <h1 className="text-xl font-semibold text-foreground">Sales Register</h1>
             <p className="text-sm text-muted-foreground">Every Sales Invoice within the selected date range, POSTED by default.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/sales/register/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/sales/register/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/sales/register/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SalesReportFilterBar customers={customers} statusOptions={SALES_INVOICE_STATUS_VALUES} />

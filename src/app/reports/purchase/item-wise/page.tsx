@@ -80,7 +80,10 @@ export default async function ItemWisePurchasePage({ searchParams }: ItemWisePur
               Quantity and value purchased, grouped by product, across every POSTED Purchase Invoice in the selected range.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/purchase/item-wise/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/purchase/item-wise/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/purchase/item-wise/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <PurchaseReportFilterBar

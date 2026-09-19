@@ -70,7 +70,10 @@ export default async function PayrollRegisterReportPage({ searchParams }: Payrol
             <h1 className="text-xl font-semibold text-foreground">Payroll Register</h1>
             <p className="text-sm text-muted-foreground">Every payroll run&apos;s number, period, total net salary, and status.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/employees/payroll-register/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/employees/payroll-register/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/employees/payroll-register/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <EmployeeReportFilterBar showDateRange financialYears={financialYears} showPayrollStatus />

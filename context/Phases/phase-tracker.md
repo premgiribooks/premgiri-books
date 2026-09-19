@@ -2797,6 +2797,66 @@ as usual:
 > Excel Export's own rollout): wire the `pdfDownloadUrl` prop into the
 > remaining 28 report screens.
 
+> **PDF export extended to the remaining 28 report screens, implemented
+> 2026-09-19** (still spec 78), per explicit user request to complete that
+> open follow-up — closing the last piece of feature-spec 78's scope. Built
+> by 7 parallel agents grouped by report module (Customers, Suppliers, Sales
+> transactional, Purchase transactional, Financial Statements + GST
+> dashboard, Inventory, Employees — 4 screens each), all mirroring Trial
+> Balance's own committed reference exactly: each route's own filter Zod
+> schema and service call untouched, a `resolveFormat()` fail-safe helper
+> added (any `?format=` value other than the literal `"pdf"` falls back to
+> `"xlsx"`, never errors), the existing `toXExportTable(report)` shaping
+> called once into a shared `tables` variable consumed by both
+> `exportToExcelBuffer` (xlsx) and `buildReportHtml` + `renderHtmlToPdf`
+> (pdf) — one shaping function, two rendering targets, same convention as
+> the report-PDF core itself. Every route's own `downloadFilename` helper
+> gained a `format` parameter that only swaps the extension, preserving each
+> report's own base-name logic (static, date-derived, or
+> service-response-derived, e.g. `report.customerName`/`report.supplierName`/
+> `report.employeeName`) exactly as it already existed. Every page's
+> `pdfDownloadUrl` reuses the exact same URL-building mechanism the page
+> already had for `downloadUrl`, including the 3 screens (Customer
+> Statement, Supplier Statement, Salary Register) whose export links are
+> conditional on a party being selected first — both props go
+> `undefined`/present together, never independently. The GST dashboard's own
+> `reports`/`view` + `gst`/`view` dual-permission boundary and the Payroll
+> Register/Salary Register's already-documented coarser
+> `reports`/`export`-only permission (see the earlier Excel Export entry's
+> open follow-up) were both preserved unchanged, not disturbed by the format
+> branch.
+>
+> **Code review: APPROVE, 0 CRITICAL/HIGH/MEDIUM** across all 7 agent
+> groups — spot-checked permission-before-format-branch ordering, filename
+> base-name preservation, and test-coverage parity (all 28 `route.test.ts`
+> files gained the same 7-case `format=pdf` block as the Trial Balance
+> reference) across every group; one LOW-severity process note, not a code
+> defect: an unrelated, unexplained, untested one-line change had appeared
+> in the already-committed `src/app/sales/invoices/[id]/pdf/route.ts`
+> (`A5` → `A4`) outside any of the 7 agents' assigned scope — reverted back
+> to the committed `A5` before staging, since nothing justified it and no
+> agent claimed it. **Security review: 0 CRITICAL/HIGH/MEDIUM** — confirmed
+> a single shared permission checkpoint gates both format branches on all 28
+> routes (never two separate, independently-skippable checks), filter
+> validation runs before that checkpoint on both formats, `resolveFormat`'s
+> fail-safe default can't be abused by a malformed/array-valued/malicious
+> `format` value, the PDF branch never bypasses `buildReportHtml`'s
+> `escapeHtml` sanitization or builds a second independently-derived table,
+> filenames stay sanitized for both extensions, and no route's error
+> handling leaks raw internals — identical posture to the already-reviewed
+> Trial Balance reference.
+>
+> Re-verified after the revert: `npx tsc --noEmit` (0 errors), `npx eslint
+> src prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx
+> vitest run` (214 files, **2831 tests** — 196 new), `next build` (all
+> existing `.../export` routes unchanged in the table — PDF is served via
+> the same route with `?format=pdf`, not a new route).
+>
+> **This closes out feature-spec 78 (PDF Generation) in full, with no
+> remaining open scope**: all 29 report screens (Trial Balance + these 28)
+> now offer both Excel and PDF export, all 10 in-scope documents have
+> working PDF downloads, and Purchase Invoice remains permanently excluded.
+
 ---
 
 # Future Roadmap

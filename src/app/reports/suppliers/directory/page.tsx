@@ -49,7 +49,10 @@ export default async function SupplierDirectoryPage({ searchParams }: SupplierDi
             <h1 className="text-xl font-semibold text-foreground">Supplier Directory</h1>
             <p className="text-sm text-muted-foreground">Every supplier&apos;s contact and GST details.</p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/suppliers/directory/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/suppliers/directory/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/suppliers/directory/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <SupplierReportFilterBar showStatus />

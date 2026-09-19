@@ -12,6 +12,8 @@ const {
   getLowStockReportMock,
   exportToExcelBufferMock,
   toLowStockExportTableMock,
+  renderHtmlToPdfMock,
+  buildReportHtmlMock,
   errorMock,
 } = vi.hoisted(() => ({
   getCurrentCompanyUserMock: vi.fn(),
@@ -19,6 +21,8 @@ const {
   getLowStockReportMock: vi.fn(),
   exportToExcelBufferMock: vi.fn(),
   toLowStockExportTableMock: vi.fn(),
+  renderHtmlToPdfMock: vi.fn(),
+  buildReportHtmlMock: vi.fn(),
   errorMock: vi.fn(),
 }));
 
@@ -39,6 +43,12 @@ vi.mock("@/lib/excel-export", () => ({
 vi.mock("@/engines/reporting/inventory-reports", () => ({
   toLowStockExportTable: toLowStockExportTableMock,
 }));
+vi.mock("@/lib/pdf-generation", () => ({
+  renderHtmlToPdf: renderHtmlToPdfMock,
+}));
+vi.mock("@/lib/pdf-templates/report-pdf-template", () => ({
+  buildReportHtml: buildReportHtmlMock,
+}));
 vi.mock("@/lib/logger", () => ({
   logger: { error: errorMock },
 }));
@@ -55,6 +65,8 @@ describe("GET /reports/inventory/low-stock/export", () => {
     getLowStockReportMock.mockResolvedValue({ rows: [] } as LowStockReport);
     toLowStockExportTableMock.mockReturnValue([{ sheetName: "Low Stock", columns: [], rows: [] }]);
     exportToExcelBufferMock.mockResolvedValue(Buffer.from("fake-xlsx"));
+    buildReportHtmlMock.mockReturnValue("<html></html>");
+    renderHtmlToPdfMock.mockResolvedValue(Buffer.from("%PDF-fake"));
   });
 
   it("returns 400 for an invalid warehouseId — never reaching the service", async () => {
@@ -122,5 +134,68 @@ describe("GET /reports/inventory/low-stock/export", () => {
     expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="Low-Stock.xlsx"');
     expect(Buffer.from(await response.arrayBuffer()).toString()).toBe("fake-xlsx");
     expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "reports", "export");
+  });
+
+  describe("format=pdf", () => {
+    it("returns a %PDF--prefixed buffer with the correct headers on success", async () => {
+      const response = await GET(request("?format=pdf"));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe("application/pdf");
+      expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="Low-Stock.pdf"');
+      const buffer = Buffer.from(await response.arrayBuffer());
+      expect(buffer.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    });
+
+    it("reuses the exact same toLowStockExportTable shaping as the xlsx path — one shaping function, two rendering targets", async () => {
+      const sharedTables = [{ sheetName: "Low Stock", columns: [], rows: [] }];
+      toLowStockExportTableMock.mockReturnValue(sharedTables);
+
+      await GET(request("?format=pdf"));
+
+      expect(buildReportHtmlMock).toHaveBeenCalledWith(sharedTables);
+      expect(exportToExcelBufferMock).not.toHaveBeenCalled();
+    });
+
+    it("renders A4 portrait per the reports paper-size convention", async () => {
+      await GET(request("?format=pdf"));
+
+      expect(renderHtmlToPdfMock).toHaveBeenCalledWith(expect.any(String), { format: "A4", orientation: "portrait" });
+    });
+
+    it("applies the same reports:export permission gate as the xlsx path", async () => {
+      assertPermissionMock.mockRejectedValue(new AuthorizationError("You do not have permission to export reports."));
+
+      const response = await GET(request("?format=pdf"));
+
+      expect(response.status).toBe(403);
+      expect(getLowStockReportMock).not.toHaveBeenCalled();
+      expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
+    });
+
+    it("applies the same filter validation as the xlsx path", async () => {
+      const response = await GET(request("?warehouseId=not-a-uuid&format=pdf"));
+
+      expect(response.status).toBe(400);
+      expect(getCurrentCompanyUserMock).not.toHaveBeenCalled();
+    });
+
+    it("returns a generic 500 and logs an unexpected render failure", async () => {
+      renderHtmlToPdfMock.mockRejectedValue(new Error("Chromium launch failed"));
+
+      const response = await GET(request("?format=pdf"));
+
+      expect(response.status).toBe(500);
+      expect(errorMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to xlsx for an unrecognized format value instead of erroring", async () => {
+      const response = await GET(request("?format=something-unknown"));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+    });
   });
 });

@@ -51,7 +51,10 @@ export default async function LowStockPage({ searchParams }: LowStockPageProps) 
               Products below their own configured minimum stock level. Products with no minimum set are excluded.
             </p>
           </div>
-          <ReportExportButton downloadUrl={`/reports/inventory/low-stock/export?${exportParams.toString()}`} />
+          <ReportExportButton
+            downloadUrl={`/reports/inventory/low-stock/export?${exportParams.toString()}`}
+            pdfDownloadUrl={`/reports/inventory/low-stock/export?${exportParams.toString()}&format=pdf`}
+          />
         </div>
 
         <InventoryReportFilterBar warehouses={warehouses} />
