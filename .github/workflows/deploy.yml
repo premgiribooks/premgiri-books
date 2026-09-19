@@ -150,6 +150,19 @@ jobs:
           $remoteScriptPath = Join-Path $env:RUNNER_TEMP "termux_deploy_script.sh"
 
           $lines = @(
+            # Next's standalone server.js reads process.env.PORT (and
+            # code paths that run at startup, like a daily-backup
+            # catch-up check, read process.env.DATABASE_URL) before its
+            # own internal .env-file loading finishes — confirmed by a
+            # real deploy that still listened on the default port 3000
+            # and logged "DATABASE_URL is not set" despite both being
+            # written to ~/next-app/.env below. Exporting them as real
+            # shell env vars first, then starting pm2 with --update-env,
+            # makes them present in process.env from t=0 instead.
+            "export PORT=8903",
+            "export DATABASE_URL='$($env:DEPLOY_DATABASE_URL)'",
+            "export SEED_ADMIN_PASSWORD='$($env:DEPLOY_SEED_ADMIN_PASSWORD)'",
+            "export SEED_SUPER_ADMIN_PASSWORD='$($env:DEPLOY_SEED_SUPER_ADMIN_PASSWORD)'",
             "cat > ~/next-app/.env <<'ENVEOF'",
             "PORT=8903",
             "DATABASE_URL=$($env:DEPLOY_DATABASE_URL)",
@@ -163,7 +176,7 @@ jobs:
             # compiles a binary for the phone's own architecture using
             # Termux's toolchain (clang/make/python must be installed).
             "npm rebuild argon2 --build-from-source",
-            "pm2 restart premgiri-books || pm2 start server.js --name premgiri-books"
+            "pm2 restart premgiri-books --update-env || pm2 start server.js --name premgiri-books --update-env"
           )
           Set-Content -Path $remoteScriptPath -Value ($lines -join "`n") -NoNewline
 
