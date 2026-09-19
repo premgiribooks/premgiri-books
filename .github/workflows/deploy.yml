@@ -40,7 +40,10 @@ jobs:
         # Prepending Git's bin directory to GITHUB_PATH makes `bash`
         # resolve to Git Bash for every later step in this job, including
         # inside those actions.
-        shell: pwsh
+        # pwsh (PowerShell 7) isn't installed on this runner — only
+        # Windows PowerShell 5.1 (powershell.exe), confirmed by an earlier
+        # run failing with "pwsh: command not found".
+        shell: powershell
         run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
 
       - name: Checkout
