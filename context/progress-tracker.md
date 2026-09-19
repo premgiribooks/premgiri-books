@@ -5371,6 +5371,7 @@ build` (all 9 new `.../pdf` routes present, Purchase Invoice has none).
 
 **This closes out feature-spec 78 (PDF Generation) in full.** Open follow-up carried forward
 (not yet scheduled, same mechanical shape as Excel Export's own multi-session rollout): wire
-`pdfDownloadUrl` into the remaining 28 report screens. **Not yet committed** — working-tree
-changes only; git workflow (direct-to-main vs. feature branch/PR) not yet confirmed with the
-user for this task.
+`pdfDownloadUrl` into the remaining 28 report screens. **Git Workflow: committed directly to
+`main` 2026-09-19** (commit `42444d4`), per explicit user direction — matching the same
+delivery preference set for Backup & Restore, Excel Export, and Excel Import earlier this
+session.
