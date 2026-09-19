@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { EmployeeDirectoryTable } from "@/modules/reports/employees/components/employee-directory-table";
 import { EmployeeReportFilterBar } from "@/modules/reports/employees/components/employee-report-filter-bar";
 import { employeeReportService } from "@/modules/reports/employees/services/employee-report-service";
@@ -41,12 +42,27 @@ export default async function EmployeeDirectoryReportPage({ searchParams }: Empl
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams();
+  if (department) {
+    exportParams.set("department", department);
+  }
+  if (designation) {
+    exportParams.set("designation", designation);
+  }
+  if (branchId) {
+    exportParams.set("branchId", branchId);
+  }
+  exportParams.set("status", status);
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Employee Directory</h1>
-          <p className="text-sm text-muted-foreground">Every employee&apos;s code, designation, department, branch, and status.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Employee Directory</h1>
+            <p className="text-sm text-muted-foreground">Every employee&apos;s code, designation, department, branch, and status.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/employees/directory/export?${exportParams.toString()}`} />
         </div>
 
         <EmployeeReportFilterBar branches={branches} showDepartmentDesignation showEmployeeStatus />

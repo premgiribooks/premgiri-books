@@ -1,7 +1,8 @@
 import type { GstFilingRecord } from "@prisma/client";
 
 import type { GstSupplyLine } from "@/engines/gst/gst-report-types";
-import type { GstDashboardFilingOverlay, GstDashboardMonth, GstDashboardTrend } from "@/types/gst-dashboard";
+import type { GstDashboardFilingOverlay, GstDashboardMonth, GstDashboardReport, GstDashboardTrend } from "@/types/gst-dashboard";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -92,4 +93,102 @@ export function resolveMonthlyFilingStatus(
   }
 
   return overlay;
+}
+
+type GstTrendExportRow = Record<string, string | number | null>;
+type HsnSummaryExportRow = Record<string, string | number | null>;
+
+const GST_TREND_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "month", header: "Month", type: "string" },
+  { key: "outputTax", header: "Output Tax", type: "currency" },
+  { key: "inputTax", header: "Input Tax", type: "currency" },
+  { key: "netLiability", header: "Net Liability", type: "currency" },
+  { key: "filingStatus", header: "Filing Status", type: "string" },
+];
+
+const HSN_SUMMARY_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "hsnCode", header: "HSN/SAC Code", type: "string" },
+  { key: "codeType", header: "Type", type: "string" },
+  { key: "description", header: "Description", type: "string" },
+  { key: "ratePercent", header: "Rate %", type: "percent" },
+  { key: "uqcCode", header: "UQC", type: "string" },
+  { key: "quantity", header: "Total Quantity", type: "number" },
+  { key: "taxableAmount", header: "Taxable Value", type: "currency" },
+  { key: "cgst", header: "CGST", type: "currency" },
+  { key: "sgst", header: "SGST", type: "currency" },
+  { key: "igst", header: "IGST", type: "currency" },
+  { key: "cess", header: "CESS", type: "currency" },
+  { key: "totalAmount", header: "Total Value", type: "currency" },
+];
+
+/** Mirrors gst-trend-table.tsx's own Badge text exactly. */
+function filingStatusLabel(status: GstDashboardFilingOverlay["status"]): string {
+  return status === "FILED" ? "Filed" : status === "OPEN" ? "Open" : "Not tracked";
+}
+
+/**
+ * Flattens the GST Dashboard's two independent views — the month-bucketed
+ * trend (with its Filed/Open overlay) and the embedded HSN Summary — into
+ * two sheets matching src/lib/excel-export.ts's shared contract, mirroring
+ * gst-trend-table.tsx/hsn-summary-table.tsx's own column sets exactly. Both
+ * totals footers are copied straight from `report.totals`/
+ * `report.hsnSummary.totals`, never re-summed.
+ */
+export function toGstDashboardExportTable(report: GstDashboardReport): ReportExportTable[] {
+  const trendRows: GstTrendExportRow[] = report.months.map((month) => ({
+    month: month.month,
+    outputTax: month.outputTax,
+    inputTax: month.inputTax,
+    netLiability: month.netLiability,
+    filingStatus: filingStatusLabel(month.status),
+  }));
+
+  const hsnRows: HsnSummaryExportRow[] = report.hsnSummary.rows.map((row) => ({
+    hsnCode: row.hsnCode ?? "No HSN Assigned",
+    codeType: row.codeType ?? "",
+    description: row.description ?? "",
+    ratePercent: row.ratePercent,
+    uqcCode: row.uqcCode ?? "",
+    quantity: row.quantity,
+    taxableAmount: row.taxableAmount,
+    cgst: row.cgst,
+    sgst: row.sgst,
+    igst: row.igst,
+    cess: row.cess,
+    totalAmount: row.totalAmount,
+  }));
+
+  return [
+    {
+      sheetName: "GST Trend",
+      columns: GST_TREND_EXPORT_COLUMNS,
+      rows: trendRows,
+      totals: {
+        month: "Period Total",
+        outputTax: report.totals.outputTax,
+        inputTax: report.totals.inputTax,
+        netLiability: report.totals.netLiability,
+        filingStatus: "",
+      },
+    },
+    {
+      sheetName: "HSN Summary",
+      columns: HSN_SUMMARY_EXPORT_COLUMNS,
+      rows: hsnRows,
+      totals: {
+        hsnCode: "Period Total",
+        codeType: "",
+        description: "",
+        ratePercent: null,
+        uqcCode: "",
+        quantity: null,
+        taxableAmount: report.hsnSummary.totals.taxableAmount,
+        cgst: report.hsnSummary.totals.cgst,
+        sgst: report.hsnSummary.totals.sgst,
+        igst: report.hsnSummary.totals.igst,
+        cess: report.hsnSummary.totals.cess,
+        totalAmount: report.hsnSummary.totals.totalAmount,
+      },
+    },
+  ];
 }

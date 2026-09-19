@@ -5,10 +5,21 @@ import {
   buildEmployeeDirectory,
   buildPayrollRegister,
   buildSalaryRegister,
+  toAttendanceSummaryExportTable,
+  toEmployeeDirectoryExportTable,
+  toPayrollRegisterExportTable,
+  toSalaryRegisterExportTable,
   type AttendanceSummaryEmployeeRow,
 } from "@/engines/reporting/employee-reports";
 import type { AttendanceSummary } from "@/types/attendance";
-import type { EmployeeDirectoryRow, SalaryRegisterRow } from "@/types/employee-report";
+import type {
+  AttendanceSummaryReport,
+  EmployeeDirectoryReport,
+  EmployeeDirectoryRow,
+  PayrollRegisterReport,
+  SalaryRegisterReport,
+  SalaryRegisterRow,
+} from "@/types/employee-report";
 import type { PayrollRunListRow } from "@/types/payroll-run";
 
 function employeeRow(overrides: Partial<AttendanceSummaryEmployeeRow> = {}): AttendanceSummaryEmployeeRow {
@@ -116,5 +127,192 @@ describe("buildEmployeeDirectory", () => {
       },
     ];
     expect(buildEmployeeDirectory(rows).rows).toEqual(rows);
+  });
+});
+
+describe("toAttendanceSummaryExportTable", () => {
+  it("flattens rows into a single sheet with the on-screen table's exact columns, and no totals footer", () => {
+    const report: AttendanceSummaryReport = {
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+      rows: [
+        {
+          employeeId: "emp-1",
+          employeeCode: "EMP-001",
+          fullName: "Asha Rao",
+          presentDays: 20,
+          halfDays: 2,
+          absentDays: 3,
+          onLeaveDays: 1,
+          totalMarkedDays: 26,
+          unmarkedDays: 5,
+        },
+      ],
+    };
+
+    const tables = toAttendanceSummaryExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Attendance Summary");
+    expect(tables[0].totals).toBeUndefined();
+    expect(tables[0].rows).toEqual([
+      {
+        employeeCode: "EMP-001",
+        fullName: "Asha Rao",
+        presentDays: 20,
+        halfDays: 2,
+        absentDays: 3,
+        onLeaveDays: 1,
+        totalMarkedDays: 26,
+        unmarkedDays: 5,
+      },
+    ]);
+  });
+});
+
+describe("toEmployeeDirectoryExportTable", () => {
+  it("flattens rows, mapping isActive to a Status label and null fields to empty strings", () => {
+    const report: EmployeeDirectoryReport = {
+      rows: [
+        {
+          id: "emp-1",
+          employeeCode: "EMP-001",
+          fullName: "Asha Rao",
+          designation: null,
+          department: null,
+          branchName: null,
+          isActive: false,
+        },
+      ],
+    };
+
+    const tables = toEmployeeDirectoryExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Employee Directory");
+    expect(tables[0].totals).toBeUndefined();
+    expect(tables[0].rows).toEqual([
+      {
+        employeeCode: "EMP-001",
+        fullName: "Asha Rao",
+        designation: "",
+        department: "",
+        branchName: "",
+        status: "Inactive",
+      },
+    ]);
+  });
+});
+
+describe("toPayrollRegisterExportTable", () => {
+  it("flattens rows, splitting the combined Period cell into separate Start/End date columns, with no totals footer", () => {
+    const report: PayrollRegisterReport = {
+      rows: [
+        {
+          id: "run-1",
+          payrollNumber: "PAY-0001",
+          periodStart: new Date("2026-01-01"),
+          periodEnd: new Date("2026-01-31"),
+          status: "POSTED",
+          totalNetSalary: 30000,
+          narration: null,
+          createdAt: new Date("2026-02-01"),
+        },
+      ],
+    };
+
+    const tables = toPayrollRegisterExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Payroll Register");
+    expect(tables[0].totals).toBeUndefined();
+    expect(tables[0].rows).toEqual([
+      {
+        payrollNumber: "PAY-0001",
+        periodStart: new Date("2026-01-01"),
+        periodEnd: new Date("2026-01-31"),
+        status: "POSTED",
+        totalNetSalary: 30000,
+      },
+    ]);
+  });
+
+  it("falls back to an empty string for a null payrollNumber", () => {
+    const report: PayrollRegisterReport = {
+      rows: [
+        {
+          id: "run-1",
+          payrollNumber: null,
+          periodStart: new Date("2026-01-01"),
+          periodEnd: new Date("2026-01-31"),
+          status: "DRAFT",
+          totalNetSalary: 0,
+          narration: null,
+          createdAt: new Date("2026-02-01"),
+        },
+      ],
+    };
+
+    expect(toPayrollRegisterExportTable(report)[0].rows[0].payrollNumber).toBe("");
+  });
+});
+
+describe("toSalaryRegisterExportTable", () => {
+  it("flattens rows with the employee's name carried as the sheet title, and no totals footer", () => {
+    const report: SalaryRegisterReport = {
+      employeeId: "emp-1",
+      employeeName: "Asha Rao",
+      rows: [
+        {
+          payrollRunId: "run-1",
+          payrollNumber: "PAY-0001",
+          periodStart: new Date("2026-01-01"),
+          periodEnd: new Date("2026-01-31"),
+          basicSalary: 30000,
+          workedDays: 31,
+          totalDaysInPeriod: 31,
+          netSalary: 30000,
+        },
+      ],
+    };
+
+    const tables = toSalaryRegisterExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Salary Register");
+    expect(tables[0].title).toBe("Asha Rao");
+    expect(tables[0].totals).toBeUndefined();
+    expect(tables[0].rows).toEqual([
+      {
+        payrollNumber: "PAY-0001",
+        periodStart: new Date("2026-01-01"),
+        periodEnd: new Date("2026-01-31"),
+        basicSalary: 30000,
+        workedDays: 31,
+        totalDaysInPeriod: 31,
+        netSalary: 30000,
+      },
+    ]);
+  });
+
+  it("falls back to an empty string for a null payrollNumber", () => {
+    const report: SalaryRegisterReport = {
+      employeeId: "emp-1",
+      employeeName: "Asha Rao",
+      rows: [
+        {
+          payrollRunId: "run-1",
+          payrollNumber: null,
+          periodStart: new Date("2026-01-01"),
+          periodEnd: new Date("2026-01-31"),
+          basicSalary: 30000,
+          workedDays: 31,
+          totalDaysInPeriod: 31,
+          netSalary: 30000,
+        },
+      ],
+    };
+
+    expect(toSalaryRegisterExportTable(report)[0].rows[0].payrollNumber).toBe("");
   });
 });

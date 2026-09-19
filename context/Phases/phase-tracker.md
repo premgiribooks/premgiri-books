@@ -2595,6 +2595,64 @@ as usual:
 > Warehouses, HSN Codes, GST Rates, Margin Profiles, Price Lists,
 > Employees).
 
+> **Excel Export completed for all 29 report screens, implemented
+> 2026-09-19** (still spec 77), finishing the same user request's "export
+> for all reports" scope. Wired the established pattern onto the final 9
+> screens: **GST Reports** dashboard (implemented directly — two sheets,
+> "GST Trend" with a Filed/Open filing-status label mirroring the on-screen
+> Badge text, and "HSN Summary" embedding `hsnSummaryService`'s own output
+> unmodified, both totals footers copied straight from the report), the 4
+> **Inventory** reports (Current Stock, Stock Ledger, Low Stock, Stock
+> Valuation — built by one agent), and the 4 **Employee** reports
+> (Attendance Summary, Directory, Payroll Register, Salary Register — built
+> by a second parallel agent). Both agents completed cleanly this time (no
+> rate-limit interruption, unlike the prior 5-agent wave).
+>
+> Code review + security review (batched across all 9, run in parallel):
+> 0 CRITICAL/HIGH, both independently converged on the same MEDIUM —
+> Payroll Register/Salary Register's new export routes gate on the same
+> coarse `reports`/`export` permission as every other report, even though
+> this catalog already has a more specific `employees` permission module
+> (used elsewhere for payroll-run mutations, `payroll-run-service.ts`).
+> This is **not a regression**: the on-screen Payroll/Salary Register pages
+> already expose this data to any role with `reports`/`view` — the export
+> route only adds a `reports`/`export`-gated download on top of an
+> already-existing view boundary, matching `employeeReportService`'s own
+> pre-existing, documented design choice (the seeded Accountant role has
+> `reports`/view+export but not `employees`/view). Presented to the user as
+> an explicit three-way choice (ship as-is / restrict export only / restrict
+> both view and export); **user chose to ship as-is** and track it as a
+> follow-up rather than decide the broader permission-model question
+> unilaterally mid-export-task. Fixed the one factually-correctable part of
+> the finding: both route doc comments previously claimed "no separate
+> payroll-specific permission module exists in the catalog", which the
+> review showed is inaccurate (`employees` exists and is used elsewhere for
+> payroll writes, just not for this report-read path) — corrected the
+> comments to describe this as a deliberate, tracked design tradeoff rather
+> than an absence of options. **Open follow-up, not yet scheduled**: decide
+> whether Payroll Register/Salary Register (view and/or export) should move
+> to a dedicated payroll-scoped permission gate, mirroring the GST
+> dashboard's own precedent (`gstReportsService.getGstDashboard` requires
+> both `reports`/view AND `gst`/view — confirmed by both review agents to
+> still hold correctly, unweakened by its new export route). Everything
+> else confirmed clean: independent `reports`/export checks on all 9 new
+> routes, company-scoped data access, no new formula-injection surface, safe
+> error messages, and safe filenames (including the two built from
+> service-resolved names — Stock Ledger's `productName`, Salary Register's
+> `employeeName` — never the raw query param).
+>
+> Re-verified after the doc-comment fix: `npx tsc --noEmit` (0 errors),
+> `npx eslint src prisma` (0 errors, same 2 pre-existing unrelated
+> warnings), `npx vitest run` (194 files, **2531 tests** — 92 new since the
+> prior batch), `next build` (all **29** `.../export` routes present —
+> every report screen in the app now has Excel Export).
+>
+> **Next Up** (same user request, remaining scope): Excel Import extended
+> from Products/Customers/Suppliers to the remaining masters (Categories,
+> Brands, Units, Warehouses, HSN Codes, GST Rates, Margin Profiles, Price
+> Lists, Employees) — the only piece of "export for all reports, import for
+> all masters" not yet done.
+
 ---
 
 # Future Roadmap

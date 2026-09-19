@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { EmployeeAttendanceSummaryTable } from "@/modules/reports/employees/components/employee-attendance-summary-table";
 import { EmployeeReportFilterBar } from "@/modules/reports/employees/components/employee-report-filter-bar";
 import { employeeReportService } from "@/modules/reports/employees/services/employee-report-service";
@@ -59,14 +60,25 @@ export default async function AttendanceSummaryReportPage({ searchParams }: Atte
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ periodStart, periodEnd });
+  if (employeeId) {
+    exportParams.set("employeeId", employeeId);
+  }
+  if (branchId) {
+    exportParams.set("branchId", branchId);
+  }
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Attendance Summary</h1>
-          <p className="text-sm text-muted-foreground">
-            Per-employee present/half-day/absent/on-leave counts for the selected period.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Attendance Summary</h1>
+            <p className="text-sm text-muted-foreground">
+              Per-employee present/half-day/absent/on-leave counts for the selected period.
+            </p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/employees/attendance-summary/export?${exportParams.toString()}`} />
         </div>
 
         <EmployeeReportFilterBar showPeriod employees={employees} branches={branches} />

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { InventoryReportFilterBar } from "@/modules/reports/inventory/components/inventory-report-filter-bar";
 import { LowStockTable } from "@/modules/reports/inventory/components/low-stock-table";
 import { inventoryReportService } from "@/modules/reports/inventory/services/inventory-report-service";
@@ -37,14 +38,20 @@ export default async function LowStockPage({ searchParams }: LowStockPageProps) 
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams();
+  if (warehouseId) exportParams.set("warehouseId", warehouseId);
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Low Stock / Reorder</h1>
-          <p className="text-sm text-muted-foreground">
-            Products below their own configured minimum stock level. Products with no minimum set are excluded.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Low Stock / Reorder</h1>
+            <p className="text-sm text-muted-foreground">
+              Products below their own configured minimum stock level. Products with no minimum set are excluded.
+            </p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/inventory/low-stock/export?${exportParams.toString()}`} />
         </div>
 
         <InventoryReportFilterBar warehouses={warehouses} />

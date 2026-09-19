@@ -57,6 +57,8 @@ export default async function GstReportsPage({ searchParams }: GstReportsPagePro
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams({ from, to });
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
@@ -76,7 +78,7 @@ export default async function GstReportsPage({ searchParams }: GstReportsPagePro
               .
             </p>
           </div>
-          <ReportExportButton />
+          <ReportExportButton downloadUrl={`/reports/gst/export?${exportParams.toString()}`} />
         </div>
 
         <GstDashboardFilterBar from={from} to={to} />

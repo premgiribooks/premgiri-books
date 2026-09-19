@@ -5296,3 +5296,30 @@ build` (all 19 `.../export` routes present).
 reports, and Employee reports (the last ~9 report screens), then Excel Import extended to
 the remaining masters (Categories, Brands, Units, Warehouses, HSN Codes, GST Rates, Margin
 Profiles, Price Lists, Employees).
+
+---
+
+**Excel Export completed for all 29 report screens, implemented 2026-09-19** (still spec
+77) — finishes the "export for all reports" half of the user's request. Wired the last 9
+screens: GST Reports dashboard (implemented directly), and the 4 Inventory + 4 Employee
+reports (built by 2 parallel agents, both completed cleanly). Code review + security review
+both flagged the same MEDIUM: Payroll Register/Salary Register export uses the same coarse
+`reports`/export permission as every other report, despite a more specific `employees`
+module existing in the catalog — not a regression (the on-screen pages already have this
+exposure via `reports`/view), but a real product/security tradeoff worth a decision. Asked
+the user directly; **chose to ship as-is and track as a follow-up** rather than decide the
+broader permission question unilaterally. Fixed the one factually-incorrect part of the
+finding (route doc comments wrongly claimed no more-specific permission module exists).
+Full record in `context/Phases/phase-tracker.md`'s Phase 12 section.
+
+Re-verified after the fix: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (194 files, 2531 tests — 92 new), `next
+build` (all 29 `.../export` routes present — every report screen now has Excel Export).
+
+**Open follow-up (not yet scheduled)**: decide whether Payroll Register/Salary Register
+should move to a dedicated payroll-scoped permission gate, mirroring the GST dashboard's
+own `reports`+`gst` dual-permission precedent.
+
+**Next Up**: Excel Import extended from Products/Customers/Suppliers to the remaining
+masters (Categories, Brands, Units, Warehouses, HSN Codes, GST Rates, Margin Profiles,
+Price Lists, Employees) — the last piece of the user's original request.

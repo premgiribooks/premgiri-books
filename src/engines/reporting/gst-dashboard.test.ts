@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { GstFilingRecord } from "@prisma/client";
 
-import { buildGstDashboardReport, resolveMonthlyFilingStatus } from "@/engines/reporting/gst-dashboard";
+import { buildGstDashboardReport, resolveMonthlyFilingStatus, toGstDashboardExportTable } from "@/engines/reporting/gst-dashboard";
 import type { GstSupplyLine } from "@/engines/gst/gst-report-types";
+import type { GstDashboardReport } from "@/types/gst-dashboard";
+import type { HsnSummaryRow } from "@/types/hsn-summary";
 
 function line(overrides: Partial<GstSupplyLine> & { documentDate: Date }): GstSupplyLine {
   return {
@@ -200,5 +202,108 @@ describe("resolveMonthlyFilingStatus", () => {
     const overlay = resolveMonthlyFilingStatus(["2026-07"], []);
 
     expect(overlay.get("2026-07")).toEqual({ status: null, periodStart: null, periodEnd: null });
+  });
+});
+
+function hsnRow(overrides: Partial<HsnSummaryRow> = {}): HsnSummaryRow {
+  return {
+    hsnCode: "3208",
+    codeType: "HSN",
+    description: "Paints",
+    ratePercent: 18,
+    uqcCode: "NOS",
+    isMixedUnit: false,
+    quantity: 10,
+    taxableAmount: 1000,
+    cgst: 90,
+    sgst: 90,
+    igst: 0,
+    cess: 0,
+    totalAmount: 1180,
+    ...overrides,
+  };
+}
+
+function gstDashboardReport(overrides: Partial<GstDashboardReport> = {}): GstDashboardReport {
+  return {
+    months: [{ month: "2026-04", outputTax: 180, inputTax: 90, netLiability: 90, status: "FILED", periodStart: new Date("2026-04-01"), periodEnd: new Date("2026-04-30") }],
+    totals: { outputTax: 180, inputTax: 90, netLiability: 90 },
+    hsnSummary: { rows: [hsnRow()], totals: { taxableAmount: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, totalAmount: 1180 } },
+    ...overrides,
+  };
+}
+
+describe("toGstDashboardExportTable", () => {
+  it("produces a GST Trend sheet with the filing status label mirroring the on-screen Badge text", () => {
+    const tables = toGstDashboardExportTable(gstDashboardReport());
+
+    expect(tables).toHaveLength(2);
+    expect(tables[0].sheetName).toBe("GST Trend");
+    expect(tables[0].rows).toEqual([
+      { month: "2026-04", outputTax: 180, inputTax: 90, netLiability: 90, filingStatus: "Filed" },
+    ]);
+  });
+
+  it("labels an OPEN/untracked month correctly", () => {
+    const report = gstDashboardReport({
+      months: [
+        { month: "2026-05", outputTax: 0, inputTax: 0, netLiability: 0, status: "OPEN", periodStart: new Date(), periodEnd: new Date() },
+        { month: "2026-06", outputTax: 0, inputTax: 0, netLiability: 0, status: null, periodStart: null, periodEnd: null },
+      ],
+    });
+
+    const tables = toGstDashboardExportTable(report);
+
+    expect(tables[0].rows[0]).toMatchObject({ filingStatus: "Open" });
+    expect(tables[0].rows[1]).toMatchObject({ filingStatus: "Not tracked" });
+  });
+
+  it("carries the GST Trend totals footer straight from report.totals — never re-summed", () => {
+    const report = gstDashboardReport();
+
+    const tables = toGstDashboardExportTable(report);
+
+    expect(tables[0].totals).toEqual({
+      month: "Period Total",
+      outputTax: report.totals.outputTax,
+      inputTax: report.totals.inputTax,
+      netLiability: report.totals.netLiability,
+      filingStatus: "",
+    });
+  });
+
+  it("produces an HSN Summary sheet mirroring hsn-summary-table.tsx's own column set, with a 'No HSN Assigned' fallback", () => {
+    const report = gstDashboardReport({
+      hsnSummary: {
+        rows: [hsnRow({ hsnCode: null, codeType: null, description: null, uqcCode: null })],
+        totals: { taxableAmount: 1000, cgst: 90, sgst: 90, igst: 0, cess: 0, totalAmount: 1180 },
+      },
+    });
+
+    const tables = toGstDashboardExportTable(report);
+
+    expect(tables[1].sheetName).toBe("HSN Summary");
+    expect(tables[1].rows[0]).toMatchObject({ hsnCode: "No HSN Assigned", codeType: "", description: "", uqcCode: "" });
+  });
+
+  it("carries the HSN Summary totals footer straight from report.hsnSummary.totals — never re-summed", () => {
+    const report = gstDashboardReport();
+
+    const tables = toGstDashboardExportTable(report);
+
+    expect(tables[1].totals).toEqual({
+      hsnCode: "Period Total",
+      codeType: "",
+      description: "",
+      ratePercent: null,
+      uqcCode: "",
+      quantity: null,
+      taxableAmount: report.hsnSummary.totals.taxableAmount,
+      cgst: report.hsnSummary.totals.cgst,
+      sgst: report.hsnSummary.totals.sgst,
+      igst: report.hsnSummary.totals.igst,
+      cess: report.hsnSummary.totals.cess,
+      totalAmount: report.hsnSummary.totals.totalAmount,
+    });
   });
 });

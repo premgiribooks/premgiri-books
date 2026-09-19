@@ -11,6 +11,7 @@ import type {
   StockLedgerReport,
   StockValuationReport,
 } from "@/types/inventory-report";
+import type { ReportExportColumn, ReportExportTable } from "@/types/report-export";
 
 // 70-inventory-reports.md's Reporting Engine composition layer — pure
 // functions only, no Prisma import anywhere in this file. Every data access
@@ -264,4 +265,177 @@ export function buildLowStockReport(
   }
 
   return { rows };
+}
+
+type CurrentStockExportRow = Record<string, string | number | null>;
+
+const CURRENT_STOCK_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "productName", header: "Product Name", type: "string" },
+  { key: "productCode", header: "Product Code", type: "string" },
+  { key: "warehouseName", header: "Warehouse", type: "string" },
+  { key: "quantity", header: "Current Stock", type: "number" },
+  { key: "unitName", header: "Unit", type: "string" },
+];
+
+/**
+ * Flattens buildCurrentStockReport's rows into the flat rows shape
+ * src/lib/excel-export.ts's shared contract understands, mirroring
+ * current-stock-table.tsx's exact column set — productName/productCode
+ * split into their own columns (a flat sheet has no room for the screen's
+ * stacked two-line product cell), matching toItemWiseSalesExportTable's own
+ * precedent. No totals footer: current-stock-table.tsx renders none, and a
+ * per-(product, warehouse) quantity listing has no meaningful cross-row sum.
+ */
+export function toCurrentStockExportTable(report: CurrentStockReport): ReportExportTable[] {
+  const rows: CurrentStockExportRow[] = report.rows.map((row) => ({
+    productName: row.productName,
+    productCode: row.productCode,
+    warehouseName: row.warehouseName ?? "All Warehouses",
+    quantity: row.quantity,
+    unitName: row.unitName,
+  }));
+
+  return [
+    {
+      sheetName: "Current Stock",
+      columns: CURRENT_STOCK_EXPORT_COLUMNS,
+      rows,
+    },
+  ];
+}
+
+type StockLedgerExportRow = Record<string, string | number | Date | null>;
+
+const STOCK_LEDGER_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "transactionDate", header: "Date", type: "date" },
+  { key: "warehouseName", header: "Warehouse", type: "string" },
+  { key: "referenceLabel", header: "Reference", type: "string" },
+  { key: "narration", header: "Narration", type: "string" },
+  { key: "direction", header: "Direction", type: "string" },
+  { key: "quantity", header: "Quantity", type: "number" },
+  { key: "runningBalance", header: "Running Balance", type: "number" },
+];
+
+/**
+ * Flattens buildStockLedgerReport's dated lines into the flat rows-plus-
+ * totals-footer shape src/lib/excel-export.ts's shared contract understands,
+ * mirroring stock-ledger-table.tsx's exact column set — narration split into
+ * its own column (the screen nests it under Reference; a flat sheet has no
+ * room for a stacked two-line cell), matching toCustomerStatementExportTable's
+ * own precedent. Closing Balance is a synthetic totals-footer row copied
+ * straight from `report.closingBalance`, never re-derived from
+ * `report.lines`, mirroring toCustomerStatementExportTable's identical
+ * Closing Balance row shape.
+ */
+export function toStockLedgerExportTable(report: StockLedgerReport): ReportExportTable[] {
+  const rows: StockLedgerExportRow[] = report.lines.map((line) => ({
+    transactionDate: line.transactionDate,
+    warehouseName: line.warehouseName ?? "—",
+    referenceLabel: line.referenceLabel,
+    narration: line.narration ?? "",
+    direction: line.direction,
+    quantity: line.quantity,
+    runningBalance: line.runningBalance,
+  }));
+
+  return [
+    {
+      sheetName: "Stock Ledger",
+      title: report.productName,
+      columns: STOCK_LEDGER_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        transactionDate: null,
+        warehouseName: "",
+        referenceLabel: "",
+        narration: "Closing Balance",
+        direction: "",
+        quantity: null,
+        runningBalance: report.closingBalance,
+      },
+    },
+  ];
+}
+
+type LowStockExportRow = Record<string, string | number | null>;
+
+const LOW_STOCK_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "productName", header: "Product Name", type: "string" },
+  { key: "productCode", header: "Product Code", type: "string" },
+  { key: "warehouseName", header: "Warehouse", type: "string" },
+  { key: "currentStock", header: "Current Stock", type: "number" },
+  { key: "minStockLevel", header: "Minimum Stock Level", type: "number" },
+  { key: "shortfall", header: "Shortfall", type: "number" },
+];
+
+/**
+ * Flattens buildLowStockReport's rows into the flat rows shape
+ * src/lib/excel-export.ts's shared contract understands, mirroring
+ * low-stock-table.tsx's exact column set — productName/productCode split
+ * into their own columns, matching toCurrentStockExportTable's identical
+ * treatment. No totals footer: low-stock-table.tsx renders none, and summing
+ * Shortfall across unrelated products would not be a meaningful figure.
+ */
+export function toLowStockExportTable(report: LowStockReport): ReportExportTable[] {
+  const rows: LowStockExportRow[] = report.rows.map((row) => ({
+    productName: row.productName,
+    productCode: row.productCode,
+    warehouseName: row.warehouseName ?? "All Warehouses",
+    currentStock: row.currentStock,
+    minStockLevel: row.minStockLevel,
+    shortfall: row.shortfall,
+  }));
+
+  return [
+    {
+      sheetName: "Low Stock",
+      columns: LOW_STOCK_EXPORT_COLUMNS,
+      rows,
+    },
+  ];
+}
+
+type StockValuationExportRow = Record<string, string | number | null>;
+
+const STOCK_VALUATION_EXPORT_COLUMNS: ReportExportColumn[] = [
+  { key: "productName", header: "Product Name", type: "string" },
+  { key: "productCode", header: "Product Code", type: "string" },
+  { key: "quantity", header: "Current Stock", type: "number" },
+  { key: "unitCost", header: "Unit Cost", type: "currency" },
+  { key: "value", header: "Total Value", type: "currency" },
+];
+
+/**
+ * Flattens buildStockValuationReport's rows into the flat rows-plus-totals-
+ * footer shape src/lib/excel-export.ts's shared contract understands,
+ * mirroring stock-valuation-table.tsx's exact column set — an unvalued
+ * row's Unit Cost cell shows "Cost not set" (that screen's own Badge text)
+ * instead of the underlying numeric 0, matching the on-screen conditional
+ * exactly rather than silently exporting a ₹0 as if it were a real cost.
+ * Total Value's totals footer is copied straight from `report.totalValue`,
+ * never re-summed.
+ */
+export function toStockValuationExportTable(report: StockValuationReport): ReportExportTable[] {
+  const rows: StockValuationExportRow[] = report.rows.map((row) => ({
+    productName: row.productName,
+    productCode: row.productCode,
+    quantity: row.quantity,
+    unitCost: row.isUnvalued ? "Cost not set" : row.unitCost,
+    value: row.value,
+  }));
+
+  return [
+    {
+      sheetName: "Stock Valuation",
+      columns: STOCK_VALUATION_EXPORT_COLUMNS,
+      rows,
+      totals: {
+        productName: "Total Value",
+        productCode: "",
+        quantity: null,
+        unitCost: null,
+        value: report.totalValue,
+      },
+    },
+  ];
 }

@@ -5,6 +5,7 @@ import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { financialYearService } from "@/modules/financial-year/services/financial-year-service";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { EmployeePayrollRegisterTable } from "@/modules/reports/employees/components/employee-payroll-register-table";
 import { EmployeeReportFilterBar } from "@/modules/reports/employees/components/employee-report-filter-bar";
 import { employeeReportService } from "@/modules/reports/employees/services/employee-report-service";
@@ -47,12 +48,29 @@ export default async function PayrollRegisterReportPage({ searchParams }: Payrol
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams();
+  if (financialYearId) {
+    exportParams.set("financialYearId", financialYearId);
+  }
+  if (dateFrom) {
+    exportParams.set("dateFrom", dateFrom);
+  }
+  if (dateTo) {
+    exportParams.set("dateTo", dateTo);
+  }
+  if (status) {
+    exportParams.set("status", status);
+  }
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Payroll Register</h1>
-          <p className="text-sm text-muted-foreground">Every payroll run&apos;s number, period, total net salary, and status.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Payroll Register</h1>
+            <p className="text-sm text-muted-foreground">Every payroll run&apos;s number, period, total net salary, and status.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/employees/payroll-register/export?${exportParams.toString()}`} />
         </div>
 
         <EmployeeReportFilterBar showDateRange financialYears={financialYears} showPayrollStatus />

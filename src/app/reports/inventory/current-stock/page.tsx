@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { ReportExportButton } from "@/modules/reports/components/report-export-button";
 import { CurrentStockTable } from "@/modules/reports/inventory/components/current-stock-table";
 import { InventoryReportFilterBar } from "@/modules/reports/inventory/components/inventory-report-filter-bar";
 import { inventoryReportService } from "@/modules/reports/inventory/services/inventory-report-service";
@@ -43,12 +44,20 @@ export default async function CurrentStockPage({ searchParams }: CurrentStockPag
     errorMessage = toActionErrorMessage(error);
   }
 
+  const exportParams = new URLSearchParams();
+  if (productId) exportParams.set("productId", productId);
+  if (warehouseId) exportParams.set("warehouseId", warehouseId);
+  if (includeZeroStock) exportParams.set("includeZeroStock", "true");
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Current Stock</h1>
-          <p className="text-sm text-muted-foreground">Stock on hand (Σ IN − Σ OUT), by product and warehouse.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Current Stock</h1>
+            <p className="text-sm text-muted-foreground">Stock on hand (Σ IN − Σ OUT), by product and warehouse.</p>
+          </div>
+          <ReportExportButton downloadUrl={`/reports/inventory/current-stock/export?${exportParams.toString()}`} />
         </div>
 
         <InventoryReportFilterBar

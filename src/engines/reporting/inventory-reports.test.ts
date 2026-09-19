@@ -5,9 +5,20 @@ import {
   buildLowStockReport,
   buildStockLedgerReport,
   buildStockValuationReport,
+  toCurrentStockExportTable,
+  toLowStockExportTable,
+  toStockLedgerExportTable,
+  toStockValuationExportTable,
 } from "@/engines/reporting/inventory-reports";
 import type { CurrentStockRow, StockLedgerResult, StockValuationResult } from "@/engines/inventory/types";
-import type { InventoryReportProductOption, InventoryReportWarehouseOption } from "@/types/inventory-report";
+import type {
+  CurrentStockReport,
+  InventoryReportProductOption,
+  InventoryReportWarehouseOption,
+  LowStockReport,
+  StockLedgerReport,
+  StockValuationReport,
+} from "@/types/inventory-report";
 
 const PRODUCT_A: InventoryReportProductOption = {
   id: "prod-a",
@@ -264,5 +275,242 @@ describe("buildLowStockReport", () => {
   it("excludes an inactive product even when its minStockLevel is set", () => {
     const report = buildLowStockReport([], [PRODUCT_INACTIVE], [WAREHOUSE_1], {});
     expect(report.rows).toEqual([]);
+  });
+});
+
+describe("toCurrentStockExportTable", () => {
+  it("mirrors current-stock-table.tsx's column set, splitting productName/productCode into their own columns", () => {
+    const report: CurrentStockReport = {
+      rows: [
+        {
+          productId: "prod-a",
+          productName: "Widget",
+          productCode: "WID-1",
+          unitName: "Nos",
+          warehouseId: "wh-1",
+          warehouseName: "Main Warehouse",
+          quantity: 25,
+        },
+      ],
+    };
+
+    const tables = toCurrentStockExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Current Stock");
+    expect(tables[0].rows).toEqual([
+      { productName: "Widget", productCode: "WID-1", warehouseName: "Main Warehouse", quantity: 25, unitName: "Nos" },
+    ]);
+    expect(tables[0].totals).toBeUndefined();
+  });
+
+  it("falls back to 'All Warehouses' for a null warehouseName, matching the on-screen fallback", () => {
+    const report: CurrentStockReport = {
+      rows: [
+        {
+          productId: "prod-a",
+          productName: "Widget",
+          productCode: "WID-1",
+          unitName: "Nos",
+          warehouseId: null,
+          warehouseName: null,
+          quantity: 0,
+        },
+      ],
+    };
+
+    const tables = toCurrentStockExportTable(report);
+
+    expect(tables[0].rows[0]).toMatchObject({ warehouseName: "All Warehouses" });
+  });
+});
+
+describe("toStockLedgerExportTable", () => {
+  function ledgerReport(overrides: Partial<StockLedgerReport> = {}): StockLedgerReport {
+    return {
+      productId: "prod-a",
+      productName: "Widget",
+      closingBalance: 43,
+      lines: [
+        {
+          id: "line-1",
+          transactionType: "SALES",
+          direction: "OUT",
+          quantity: 5,
+          unitCost: 100,
+          transactionDate: new Date("2026-04-01T00:00:00.000Z"),
+          warehouseId: "wh-1",
+          warehouseName: "Main Warehouse",
+          referenceLabel: "Sales Invoice #INV-0001",
+          narration: null,
+          runningBalance: 45,
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("mirrors stock-ledger-table.tsx's column set, carrying the product name as the sheet title", () => {
+    const tables = toStockLedgerExportTable(ledgerReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Stock Ledger");
+    expect(tables[0].title).toBe("Widget");
+    expect(tables[0].rows).toEqual([
+      {
+        transactionDate: new Date("2026-04-01T00:00:00.000Z"),
+        warehouseName: "Main Warehouse",
+        referenceLabel: "Sales Invoice #INV-0001",
+        narration: "",
+        direction: "OUT",
+        quantity: 5,
+        runningBalance: 45,
+      },
+    ]);
+  });
+
+  it("carries the Closing Balance in the totals footer, copied straight from the report — never re-summed", () => {
+    const tables = toStockLedgerExportTable(ledgerReport({ closingBalance: 999 }));
+
+    expect(tables[0].totals).toEqual({
+      transactionDate: null,
+      warehouseName: "",
+      referenceLabel: "",
+      narration: "Closing Balance",
+      direction: "",
+      quantity: null,
+      runningBalance: 999,
+    });
+  });
+
+  it("falls back to an empty narration string and a '—' warehouse, matching the on-screen fallback", () => {
+    const tables = toStockLedgerExportTable(
+      ledgerReport({
+        lines: [
+          {
+            id: "line-2",
+            transactionType: "OPENING_STOCK",
+            direction: "IN",
+            quantity: 40,
+            unitCost: 90,
+            transactionDate: new Date("2026-03-01T00:00:00.000Z"),
+            warehouseId: "wh-1",
+            warehouseName: null,
+            referenceLabel: "Opening Stock",
+            narration: "Damage write-off",
+            runningBalance: 40,
+          },
+        ],
+      })
+    );
+
+    expect(tables[0].rows[0]).toMatchObject({ warehouseName: "—", narration: "Damage write-off" });
+  });
+});
+
+describe("toLowStockExportTable", () => {
+  it("mirrors low-stock-table.tsx's column set, splitting productName/productCode into their own columns", () => {
+    const report: LowStockReport = {
+      rows: [
+        {
+          productId: "prod-a",
+          productName: "Widget",
+          productCode: "WID-1",
+          warehouseId: "wh-1",
+          warehouseName: "Main Warehouse",
+          currentStock: 5,
+          minStockLevel: 10,
+          shortfall: 5,
+        },
+      ],
+    };
+
+    const tables = toLowStockExportTable(report);
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Low Stock");
+    expect(tables[0].rows).toEqual([
+      {
+        productName: "Widget",
+        productCode: "WID-1",
+        warehouseName: "Main Warehouse",
+        currentStock: 5,
+        minStockLevel: 10,
+        shortfall: 5,
+      },
+    ]);
+    expect(tables[0].totals).toBeUndefined();
+  });
+
+  it("falls back to 'All Warehouses' for a null warehouseName, matching the on-screen fallback", () => {
+    const report: LowStockReport = {
+      rows: [
+        {
+          productId: "prod-a",
+          productName: "Widget",
+          productCode: "WID-1",
+          warehouseId: null,
+          warehouseName: null,
+          currentStock: 0,
+          minStockLevel: 10,
+          shortfall: 10,
+        },
+      ],
+    };
+
+    const tables = toLowStockExportTable(report);
+
+    expect(tables[0].rows[0]).toMatchObject({ warehouseName: "All Warehouses" });
+  });
+});
+
+describe("toStockValuationExportTable", () => {
+  function valuationReport(overrides: Partial<StockValuationReport> = {}): StockValuationReport {
+    return {
+      rows: [
+        { productId: "prod-a", productName: "Widget", productCode: "WID-1", quantity: 10, unitCost: 100, value: 1000, isUnvalued: false },
+        { productId: "prod-b", productName: "Gadget", productCode: "GAD-1", quantity: 5, unitCost: 0, value: 0, isUnvalued: true },
+      ],
+      totalValue: 1000,
+      ...overrides,
+    };
+  }
+
+  it("mirrors stock-valuation-table.tsx's column set, splitting productName/productCode into their own columns", () => {
+    const tables = toStockValuationExportTable(valuationReport());
+
+    expect(tables).toHaveLength(1);
+    expect(tables[0].sheetName).toBe("Stock Valuation");
+    expect(tables[0].rows[0]).toEqual({
+      productName: "Widget",
+      productCode: "WID-1",
+      quantity: 10,
+      unitCost: 100,
+      value: 1000,
+    });
+  });
+
+  it("shows 'Cost not set' instead of a numeric 0 for an unvalued row, matching the on-screen Badge", () => {
+    const tables = toStockValuationExportTable(valuationReport());
+
+    expect(tables[0].rows[1]).toEqual({
+      productName: "Gadget",
+      productCode: "GAD-1",
+      quantity: 5,
+      unitCost: "Cost not set",
+      value: 0,
+    });
+  });
+
+  it("carries Total Value in the totals footer, copied straight from the report — never re-summed", () => {
+    const tables = toStockValuationExportTable(valuationReport({ totalValue: 12345 }));
+
+    expect(tables[0].totals).toEqual({
+      productName: "Total Value",
+      productCode: "",
+      quantity: null,
+      unitCost: null,
+      value: 12345,
+    });
   });
 });
