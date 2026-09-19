@@ -18,34 +18,18 @@ jobs:
     # this to a custom label instead if a second self-hosted runner is ever
     # registered for this repo.
     runs-on: [self-hosted, Windows]
-    # `run:` steps use pwsh (the default on a Windows runner). Forcing
-    # `shell: bash` here previously broke the job: this runner's service
-    # process resolves `bash` on PATH to the WSL launcher stub at
-    # C:\Windows\System32\bash.exe rather than Git Bash, and that stub
-    # can't execute the runner's generated temp script
-    # ("No such type or file or directory"). The scp/ssh steps below are
-    # unaffected either way — appleboy's actions run their `script:` on
-    # the remote Termux host over SSH (Termux's own bash), not on this
-    # runner.
+    # `run:` steps use PowerShell (pwsh isn't installed here — only
+    # Windows PowerShell 5.1 — so the default resolves to `powershell`).
+    # Deployment to Termux uses native OpenSSH (ssh.exe/scp.exe, both
+    # present under Git for Windows) with key-based auth rather than the
+    # appleboy/ssh-action / appleboy/scp-action used previously: those are
+    # composite actions that shell out to a Go binary which detects the OS
+    # via `uname`, and Git Bash's `MINGW64_NT-10.0-26200` string isn't one
+    # they recognize ("Unknown, unsupported platform... Bailing out.") —
+    # a hard incompatibility with this runner that can't be fixed from
+    # this workflow file.
 
     steps:
-      - name: Prefer Git Bash over the WSL bash stub on PATH
-        # appleboy/ssh-action and appleboy/scp-action are composite
-        # actions with internal steps hardcoded to `shell: bash` — that
-        # can't be overridden from this workflow. On this runner, `bash`
-        # resolves to the WSL launcher stub at
-        # C:\Windows\System32\bash.exe rather than Git Bash, which can't
-        # run the runner's generated temp scripts and fails every step
-        # that needs bash (confirmed: "No such file or directory").
-        # Prepending Git's bin directory to GITHUB_PATH makes `bash`
-        # resolve to Git Bash for every later step in this job, including
-        # inside those actions.
-        # pwsh (PowerShell 7) isn't installed on this runner — only
-        # Windows PowerShell 5.1 (powershell.exe), confirmed by an earlier
-        # run failing with "pwsh: command not found".
-        shell: powershell
-        run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -88,53 +72,86 @@ jobs:
           New-Item -ItemType Directory -Force -Path deploy | Out-Null
           Copy-Item -Path ".next\standalone\*" -Destination "deploy" -Recurse -Force
 
+      - name: Prepare SSH key and pinned known_hosts for Termux
+        # Writes the deploy private key to a temp file (OpenSSH on Windows
+        # refuses a key file readable by more than the current user, so
+        # icacls locks it down the same way `chmod 600` would on Linux),
+        # and pins the Termux host's real host key fetched directly via
+        # `ssh-keyscan -p 8022 192.168.1.39` — avoids both an interactive
+        # "unknown host key" prompt and blind trust-on-first-use.
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "termux_deploy_key"
+          Set-Content -Path $keyPath -Value $env:TERMUX_SSH_KEY -NoNewline
+          icacls $keyPath /inheritance:r | Out-Null
+          icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
+
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP "termux_known_hosts"
+          Set-Content -Path $knownHostsPath -Value "[$($env:TERMUX_HOST)]:8022 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMEuHf6ttJM/HlHQmawcYdDG3Ho4y2clA3PyOShM1Nc4"
+        env:
+          TERMUX_SSH_KEY: ${{ secrets.TERMUX_SSH_KEY }}
+          TERMUX_HOST: ${{ secrets.TERMUX_HOST }}
+
       - name: Ensure remote app directory exists
         # scp itself won't create a missing target directory, and this
         # keeps folder setup out of your hands entirely — nothing to
         # create by hand on the phone before the first deploy.
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.TERMUX_HOST }}
-          username: ${{ secrets.TERMUX_USER }}
-          password: ${{ secrets.TERMUX_PASSWORD }}
-          port: 8022
-          script: mkdir -p ~/next-app
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "termux_deploy_key"
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP "termux_known_hosts"
+          & ssh -i $keyPath -o UserKnownHostsFile=$knownHostsPath -o StrictHostKeyChecking=yes -o BatchMode=yes -p 8022 "$($env:TERMUX_USER)@$($env:TERMUX_HOST)" "mkdir -p ~/next-app"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          TERMUX_USER: ${{ secrets.TERMUX_USER }}
+          TERMUX_HOST: ${{ secrets.TERMUX_HOST }}
 
       - name: Upload build to webserver
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.TERMUX_HOST }}
-          username: ${{ secrets.TERMUX_USER }}
-          password: ${{ secrets.TERMUX_PASSWORD }}
-          port: 8022
-          source: "deploy/*"
-          target: "~/next-app"
-          strip_components: 1
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "termux_deploy_key"
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP "termux_known_hosts"
+          # Uploading each top-level entry of deploy/ individually (rather
+          # than the deploy folder itself) lands them directly inside
+          # ~/next-app, matching the old appleboy/scp-action's
+          # strip_components:1 behavior.
+          $items = Get-ChildItem -Path "deploy" -Force | ForEach-Object { $_.FullName }
+          & scp -i $keyPath -o UserKnownHostsFile=$knownHostsPath -o StrictHostKeyChecking=yes -o BatchMode=yes -P 8022 -r @items "$($env:TERMUX_USER)@$($env:TERMUX_HOST):~/next-app/"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          TERMUX_USER: ${{ secrets.TERMUX_USER }}
+          TERMUX_HOST: ${{ secrets.TERMUX_HOST }}
 
       - name: Write runtime .env, rebuild native deps, and restart app
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.TERMUX_HOST }}
-          username: ${{ secrets.TERMUX_USER }}
-          password: ${{ secrets.TERMUX_PASSWORD }}
-          port: 8022
-          envs: DATABASE_URL,SEED_ADMIN_PASSWORD,SEED_SUPER_ADMIN_PASSWORD
-          script: |
-            cat > ~/next-app/.env <<ENVEOF
-            PORT=8903
-            DATABASE_URL=$DATABASE_URL
-            SEED_ADMIN_PASSWORD=$SEED_ADMIN_PASSWORD
-            SEED_SUPER_ADMIN_PASSWORD=$SEED_SUPER_ADMIN_PASSWORD
-            ENVEOF
-            cd ~/next-app
+        # Built from an array of lines rather than a PowerShell here-string
+        # (@"..."@) — a here-string's closing delimiter must sit at column
+        # 0 with zero indentation, which YAML's indented block-scalar
+        # syntax can't produce without breaking the YAML itself.
+        run: |
+          $keyPath = Join-Path $env:RUNNER_TEMP "termux_deploy_key"
+          $knownHostsPath = Join-Path $env:RUNNER_TEMP "termux_known_hosts"
+          $remoteScriptPath = Join-Path $env:RUNNER_TEMP "termux_deploy_script.sh"
+
+          $lines = @(
+            "cat > ~/next-app/.env <<'ENVEOF'",
+            "PORT=8903",
+            "DATABASE_URL=$($env:DEPLOY_DATABASE_URL)",
+            "SEED_ADMIN_PASSWORD=$($env:DEPLOY_SEED_ADMIN_PASSWORD)",
+            "SEED_SUPER_ADMIN_PASSWORD=$($env:DEPLOY_SEED_SUPER_ADMIN_PASSWORD)",
+            "ENVEOF",
+            "cd ~/next-app",
             # argon2 is a native addon; the copy above carries whatever
             # binary the build machine (Windows/x64) produced, which won't
             # load on Termux's Android/aarch64 userland. Rebuilding it here
             # compiles a binary for the phone's own architecture using
             # Termux's toolchain (clang/make/python must be installed).
-            npm rebuild argon2 --build-from-source
-            pm2 restart premgiri-books || pm2 start server.js --name premgiri-books
+            "npm rebuild argon2 --build-from-source",
+            "pm2 restart premgiri-books || pm2 start server.js --name premgiri-books"
+          )
+          Set-Content -Path $remoteScriptPath -Value ($lines -join "`n") -NoNewline
+
+          Get-Content $remoteScriptPath -Raw | & ssh -i $keyPath -o UserKnownHostsFile=$knownHostsPath -o StrictHostKeyChecking=yes -o BatchMode=yes -p 8022 "$($env:TERMUX_USER)@$($env:TERMUX_HOST)" "bash -s"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
-          SEED_SUPER_ADMIN_PASSWORD: ${{ secrets.SEED_SUPER_ADMIN_PASSWORD }}
+          TERMUX_USER: ${{ secrets.TERMUX_USER }}
+          TERMUX_HOST: ${{ secrets.TERMUX_HOST }}
+          DEPLOY_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DEPLOY_SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
+          DEPLOY_SEED_SUPER_ADMIN_PASSWORD: ${{ secrets.SEED_SUPER_ADMIN_PASSWORD }}
