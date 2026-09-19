@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { GoodsReceiptNoteDownloadPdfButton } from "@/modules/goods-receipt-notes/components/goods-receipt-note-download-pdf-button";
 import { GoodsReceiptNoteStatusActions } from "@/modules/goods-receipt-notes/components/goods-receipt-note-status-actions";
 import { GoodsReceiptNoteStatusBadge } from "@/modules/goods-receipt-notes/components/goods-receipt-note-status-badge";
 import { formatGoodsReceiptNoteDate } from "@/modules/goods-receipt-notes/utils/format-goods-receipt-note-date";
@@ -70,6 +71,7 @@ export default async function GoodsReceiptNoteDetailPage({ params }: GoodsReceip
                 }
               />
             ) : null}
+            <GoodsReceiptNoteDownloadPdfButton goodsReceiptNoteId={goodsReceiptNote.id} />
             <GoodsReceiptNoteStatusActions
               goodsReceiptNote={goodsReceiptNote}
               canEdit={canEdit}

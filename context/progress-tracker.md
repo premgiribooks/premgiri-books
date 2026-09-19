@@ -5346,3 +5346,31 @@ build` (all 12 `/masters/*/import` routes present).
 **This closes out the user's full request**: Excel Export covers all 29 report screens,
 Excel Import covers all 12 masters. Open follow-up carried forward (not yet scheduled):
 whether Payroll Register/Salary Register export should move to a dedicated permission gate.
+
+---
+
+## 2026-09-19 — PDF Generation (#76, spec 78): remaining scope completed
+
+Per explicit user choice (offered PDF Generation's remaining scope, Barcode Billing, and
+Audit Logs; user picked PDF Generation). Before starting, confirmed the spec's own v3-gate
+hold (`⚠️ v3 Supersession Note`) was satisfied — v3 hasn't started, and v3's own PDF Engine
+Migration item depends on this spec, not the other way round. Full implementation record —
+the 9 remaining document templates (Quotation, Sales Order, Delivery Challan, Sales Return,
+Credit Note, Debit Note, Purchase Order, Goods Receipt Note, Purchase Return), the
+report-to-PDF half (`buildReportHtml`, Trial Balance's `?format=pdf` reference wiring, the
+`ReportExportButton`'s additive `pdfDownloadUrl` prop), the real field-shape deviations found
+per document (no totals box for Delivery Challan/Goods Receipt Note, no rate column for Sales
+Return, freeform-line shape for Credit/Debit Notes), and both review agents' findings (code
+review: 0 CRITICAL/HIGH/MEDIUM, 1 cosmetic LOW fixed; security review: 0 CRITICAL/HIGH/MEDIUM,
+2 LOW/informational accepted as-is) — is recorded in full in
+`context/Phases/phase-tracker.md`'s Phase 12 section, per the Tracker Update Rule.
+
+Re-verified after the fix: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (214 files, 2635 tests — 51 new), `next
+build` (all 9 new `.../pdf` routes present, Purchase Invoice has none).
+
+**This closes out feature-spec 78 (PDF Generation) in full.** Open follow-up carried forward
+(not yet scheduled, same mechanical shape as Excel Export's own multi-session rollout): wire
+`pdfDownloadUrl` into the remaining 28 report screens. **Not yet committed** — working-tree
+changes only; git workflow (direct-to-main vs. feature branch/PR) not yet confirmed with the
+user for this task.

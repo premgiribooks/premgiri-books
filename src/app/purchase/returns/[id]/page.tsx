@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { PurchaseReturnDownloadPdfButton } from "@/modules/purchase-returns/components/purchase-return-download-pdf-button";
 import { PurchaseReturnStatusActions } from "@/modules/purchase-returns/components/purchase-return-status-actions";
 import { PurchaseReturnStatusBadge } from "@/modules/purchase-returns/components/purchase-return-status-badge";
 import { formatPurchaseReturnDate } from "@/modules/purchase-returns/utils/format-purchase-return-date";
@@ -74,6 +75,7 @@ export default async function PurchaseReturnDetailPage({ params }: PurchaseRetur
                 }
               />
             ) : null}
+            <PurchaseReturnDownloadPdfButton purchaseReturnId={purchaseReturn.id} />
             <PurchaseReturnStatusActions purchaseReturn={purchaseReturn} canPost={canPost} canCancel={canCancel} />
           </div>
         </div>

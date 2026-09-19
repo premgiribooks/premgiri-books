@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { CreditNoteDownloadPdfButton } from "@/modules/credit-notes/components/credit-note-download-pdf-button";
 import { CreditNoteStatusActions } from "@/modules/credit-notes/components/credit-note-status-actions";
 import { CreditNoteStatusBadge } from "@/modules/credit-notes/components/credit-note-status-badge";
 import { formatCreditNoteDate } from "@/modules/credit-notes/utils/format-credit-note-date";
@@ -79,6 +80,7 @@ export default async function CreditNoteDetailPage({ params }: CreditNoteDetailP
                 }
               />
             ) : null}
+            <CreditNoteDownloadPdfButton creditNoteId={creditNote.id} />
             <CreditNoteStatusActions creditNote={creditNote} canPost={canPost} canCancel={canCancel} />
           </div>
         </div>

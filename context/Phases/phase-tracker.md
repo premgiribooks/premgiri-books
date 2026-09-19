@@ -2085,7 +2085,7 @@ as usual:
 | 73  | Global Search    | Masters    | ✅     |
 | 74  | Excel Import     | Masters    | ✅     |
 | 75  | Excel Export     | Reports    | ✅     |
-| 76  | PDF Generation   | Reports    | 🟨     |
+| 76  | PDF Generation   | Reports    | ✅     |
 | 77  | Barcode Billing  | Sales      | ⬜     |
 | 78  | Audit Logs       | Platform   | ⬜     |
 | 79  | Backup & Restore | Database   | ✅     |
@@ -2715,6 +2715,87 @@ as usual:
 > covers all 12 masters. **Open follow-up carried forward, not yet
 > scheduled**: the Payroll Register/Salary Register export permission-gating
 > question recorded above.
+
+> **#76 PDF Generation completed 2026-09-19** (spec 78,
+> `context/feature-specs/78-pdf-generation.md`), closing out its remaining
+> scope — the earlier 2026-09-14 session had shipped only the shared core
+> (`renderHtmlToPdf`, `PRINT_STYLESHEET`, `escapeHtml`) plus one reference
+> document template, Sales Invoice. Before starting, confirmed the spec's own
+> "⚠️ v3 Supersession Note" gate (must not implement before v3 spec 103, PDF
+> Engine Migration, is confirmed out of scope for the current milestone) was
+> satisfied: `context-v3/` work has not started at all (its own tracker shows
+> every item, including #94 PDF Engine Migration, as "Not Started"), and that
+> v3 item's own dependency line names "v2 spec 78 PDF Generation" as its
+> prerequisite — i.e. v3's migration is scoped as a follow-up **to** this
+> spec, not a reason to withhold it. Puppeteer, as originally specified, was
+> used without deviation.
+>
+> Built by 4 parallel agents in disjoint files: one added the remaining 9
+> document templates + Route Handlers + download buttons (Quotation, Sales
+> Order, Delivery Challan, Sales Return, Credit Note, Debit Note, Purchase
+> Order, Goods Receipt Note, Purchase Return — split across 3 agents by
+> document group), and one built the report-to-PDF half (`buildReportHtml`
+> in `src/lib/pdf-templates/report-pdf-template.ts`, reusing the exact
+> `ReportExportTable[]` shaping each report's Reporting Engine file already
+> produces for Excel Export, spec 77 — "one shaping function, two rendering
+> targets"), wired end-to-end for Trial Balance as the spec's required
+> reference implementation (`src/app/reports/trial-balance/export/route.ts`
+> gained a `?format=xlsx|pdf` branch, permission/filter-validation shared by
+> both; `ReportExportButton` gained an additive, backward-compatible
+> `pdfDownloadUrl?` prop — the other 28 report screens' existing `downloadUrl`-
+> only usage is unaffected, matching Excel Export's own "reference screen
+> first, remaining screens a mechanical follow-up" precedent). Purchase
+> Invoice remains permanently excluded (no template, route, or button;
+> guarded by a new negative regression test asserting neither file exists).
+>
+> Each of the 9 new document templates deliberately has **no DRAFT/status
+> gate** — unlike Sales Invoice (which upgrades an existing browser Print
+> View with its own `status !== "DRAFT"` restriction), none of these 9 had
+> any prior print precedent to mirror a gate from, so their "Download PDF"
+> buttons and routes are unconditional. Real field-shape deviations were
+> found and respected rather than papered over: Delivery Challan and Goods
+> Receipt Note carry no pricing/GST fields at all (pure record-keeping
+> documents — their templates have no totals box); Sales Return has no
+> per-unit `rate` column (its line amounts are prorated straight from the
+> source Sales Invoice item); Credit Note and Debit Note are freeform-line
+> documents (description + rate% + computed tax), not product/qty/rate
+> documents; Purchase Return has no `subtotal`/`totalDiscount` concept and
+> reaches its party only via its source Purchase Invoice snapshot, not a
+> direct supplier relation.
+>
+> **Code review: APPROVE, 0 CRITICAL/HIGH/MEDIUM** — 1 cosmetic LOW (Purchase
+> Return's null-`returnNumber` fallback text/filename differed slightly from
+> the other 3 nullable-number documents' own "Draft" + document-id
+> convention) — fixed for consistency. **Security review: 0 CRITICAL/HIGH/
+> MEDIUM** — traced all 9 new `get*` service calls' company-scoping and
+> permission gates (`sales`/`view` for the 6 sales-side documents,
+> `purchase`/`view` for the 3 purchase-side documents, `reports`/`export`
+> for the Trial Balance PDF branch), confirmed every user-entered field
+> across all 10 templates (9 new + `buildReportHtml`) is `escapeHtml`'d
+> before interpolation, confirmed the report route's `?format=` param can't
+> skip its permission/validation guards (both run unconditionally before the
+> format branch), and confirmed filename/`Content-Disposition` sanitization
+> matches the Sales Invoice reference on every new route. 2 LOW/informational
+> notes accepted as-is (the same DRAFT-gate-inconsistency observation as code
+> review's own note, not a vulnerability; the shared core's pre-existing
+> `--no-sandbox` Chromium flag, already reasoned-through and committed in the
+> 2026-09-14 session).
+>
+> Re-verified after the consistency fix: `npx tsc --noEmit` (0 errors), `npx
+> eslint src prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx
+> vitest run` (214 files, **2635 tests** — 51 new), `next build` (all 9 new
+> `.../pdf` routes present, Trial Balance's `/export` route unchanged in the
+> table, Purchase Invoice has no `pdf` route). One full-suite run hit a
+> flaky Puppeteer-teardown failure in `pdf-generation.test.ts`'s `afterAll`
+> hook under parallel-worker contention (passed in isolation, and passed
+> clean on an immediate re-run) — not a regression, not investigated further.
+>
+> **This closes out feature-spec 78 in full**: all 10 in-scope document
+> types have working "Download PDF" actions, Purchase Invoice is confirmed
+> excluded, and the report-to-PDF half is proven end-to-end via Trial
+> Balance. **Open follow-up, not yet scheduled** (mechanical, same shape as
+> Excel Export's own rollout): wire the `pdfDownloadUrl` prop into the
+> remaining 28 report screens.
 
 ---
 

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { SalesOrderDownloadPdfButton } from "@/modules/sales-orders/components/sales-order-download-pdf-button";
 import { SalesOrderStatusActions } from "@/modules/sales-orders/components/sales-order-status-actions";
 import { SalesOrderStatusBadge } from "@/modules/sales-orders/components/sales-order-status-badge";
 import { SalesOrderTotalsSummary } from "@/modules/sales-orders/components/sales-order-totals-summary";
@@ -72,6 +73,7 @@ export default async function SalesOrderDetailPage({ params }: SalesOrderDetailP
                 }
               />
             ) : null}
+            <SalesOrderDownloadPdfButton salesOrderId={salesOrder.id} />
             <SalesOrderStatusActions
               salesOrder={salesOrder}
               canEdit={canEdit}

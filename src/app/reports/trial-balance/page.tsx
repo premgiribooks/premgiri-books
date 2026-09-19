@@ -82,6 +82,7 @@ export default async function TrialBalancePage({ searchParams }: TrialBalancePag
           </div>
           <ReportExportButton
             downloadUrl={`/reports/trial-balance/export?financialYearId=${selectedFinancialYear.id}&asOfDate=${asOfDate}`}
+            pdfDownloadUrl={`/reports/trial-balance/export?financialYearId=${selectedFinancialYear.id}&asOfDate=${asOfDate}&format=pdf`}
           />
         </div>
 

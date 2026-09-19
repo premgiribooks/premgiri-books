@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { QuotationDownloadPdfButton } from "@/modules/quotations/components/quotation-download-pdf-button";
 import { QuotationStatusActions } from "@/modules/quotations/components/quotation-status-actions";
 import { QuotationStatusBadge } from "@/modules/quotations/components/quotation-status-badge";
 import { QuotationTotalsSummary } from "@/modules/quotations/components/quotation-totals-summary";
@@ -72,6 +73,7 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
                 }
               />
             ) : null}
+            <QuotationDownloadPdfButton quotationId={quotation.id} />
             <QuotationStatusActions
               quotation={quotation}
               canEdit={canEdit}

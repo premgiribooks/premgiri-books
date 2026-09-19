@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { DebitNoteDownloadPdfButton } from "@/modules/debit-notes/components/debit-note-download-pdf-button";
 import { DebitNoteStatusActions } from "@/modules/debit-notes/components/debit-note-status-actions";
 import { DebitNoteStatusBadge } from "@/modules/debit-notes/components/debit-note-status-badge";
 import { formatDebitNoteDate } from "@/modules/debit-notes/utils/format-debit-note-date";
@@ -74,6 +75,7 @@ export default async function DebitNoteDetailPage({ params }: DebitNoteDetailPag
                 }
               />
             ) : null}
+            <DebitNoteDownloadPdfButton debitNoteId={debitNote.id} />
             <DebitNoteStatusActions debitNote={debitNote} canPost={canPost} canCancel={canCancel} />
           </div>
         </div>

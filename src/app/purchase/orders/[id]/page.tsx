@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { PurchaseOrderDownloadPdfButton } from "@/modules/purchase-orders/components/purchase-order-download-pdf-button";
 import { PurchaseOrderStatusActions } from "@/modules/purchase-orders/components/purchase-order-status-actions";
 import { PurchaseOrderStatusBadge } from "@/modules/purchase-orders/components/purchase-order-status-badge";
 import { PurchaseOrderTotalsSummary } from "@/modules/purchase-orders/components/purchase-order-totals-summary";
@@ -72,6 +73,7 @@ export default async function PurchaseOrderDetailPage({ params }: PurchaseOrderD
                 }
               />
             ) : null}
+            <PurchaseOrderDownloadPdfButton purchaseOrderId={purchaseOrder.id} />
             <PurchaseOrderStatusActions
               purchaseOrder={purchaseOrder}
               canEdit={canEdit}

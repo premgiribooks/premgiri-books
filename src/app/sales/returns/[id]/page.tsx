@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { SalesReturnDownloadPdfButton } from "@/modules/sales-returns/components/sales-return-download-pdf-button";
 import { SalesReturnStatusActions } from "@/modules/sales-returns/components/sales-return-status-actions";
 import { SalesReturnStatusBadge } from "@/modules/sales-returns/components/sales-return-status-badge";
 import { formatSalesReturnDate } from "@/modules/sales-returns/utils/format-sales-return-date";
@@ -74,6 +75,7 @@ export default async function SalesReturnDetailPage({ params }: SalesReturnDetai
                 }
               />
             ) : null}
+            <SalesReturnDownloadPdfButton salesReturnId={salesReturn.id} />
             <SalesReturnStatusActions salesReturn={salesReturn} canPost={canPost} canCancel={canCancel} />
           </div>
         </div>

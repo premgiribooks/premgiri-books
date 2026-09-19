@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { DeliveryChallanDownloadPdfButton } from "@/modules/delivery-challans/components/delivery-challan-download-pdf-button";
 import { DeliveryChallanStatusActions } from "@/modules/delivery-challans/components/delivery-challan-status-actions";
 import { DeliveryChallanStatusBadge } from "@/modules/delivery-challans/components/delivery-challan-status-badge";
 import { formatDeliveryChallanDate } from "@/modules/delivery-challans/utils/format-delivery-challan-date";
@@ -70,6 +71,7 @@ export default async function DeliveryChallanDetailPage({ params }: DeliveryChal
                 }
               />
             ) : null}
+            <DeliveryChallanDownloadPdfButton deliveryChallanId={deliveryChallan.id} />
             <DeliveryChallanStatusActions
               deliveryChallan={deliveryChallan}
               canEdit={canEdit}
