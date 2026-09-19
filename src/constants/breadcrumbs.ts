@@ -165,6 +165,7 @@ export const BREADCRUMB_LABELS: Record<string, string> = {
   new: "New",
   edit: "Edit",
   select: "Select",
+  import: "Import",
 };
 
 export const BREADCRUMB_ID_PATTERN =

@@ -66,15 +66,22 @@ export default async function SupplierListPage({ searchParams }: SupplierListPag
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/suppliers/new">
-                  <Plus size={18} />
-                  New Supplier
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/suppliers/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/suppliers/new">
+                    <Plus size={18} />
+                    New Supplier
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

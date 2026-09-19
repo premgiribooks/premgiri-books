@@ -2083,7 +2083,7 @@ as usual:
 | #   | Feature          | Depends On | Status |
 | --- | ---------------- | ---------- | ------ |
 | 73  | Global Search    | Masters    | ✅     |
-| 74  | Excel Import     | Masters    | ⬜     |
+| 74  | Excel Import     | Masters    | ✅     |
 | 75  | Excel Export     | Reports    | ✅     |
 | 76  | PDF Generation   | Reports    | 🟨     |
 | 77  | Barcode Billing  | Sales      | ⬜     |
@@ -2354,6 +2354,127 @@ as usual:
 > **Committed directly to `main` 2026-09-19** (commit `9238433`), matching
 > the same delivery preference set for Backup & Restore earlier this
 > session.
+
+> **#74 Excel Import implemented 2026-09-19** (spec 76,
+> `context/feature-specs/76-excel-import.md`), per explicit user direction to
+> pick this item next once Excel Export was done. A generic,
+> target-parameterized bulk-create pipeline for Products/Customers/Suppliers
+> (`src/types/bulk-import.ts`'s `ImportTarget<TInput>` contract) — no new
+> Prisma model, no new permission action (gated entirely by each target's
+> existing `masters`/`create`), and, per the spec's central rule, **every
+> row is run through the target's own real, unmodified Zod create schema and
+> create service** (`productService.createProduct`,
+> `customerService.createCustomer`, `supplierService.createSupplier`) —
+> never a parallel or looser validation path. Each
+> `src/modules/bulk-import/targets/*-import-target.ts` file's `resolveRow`
+> resolves a spreadsheet's natural-key columns (Category/Brand/Unit *names*,
+> HSN/Warehouse *codes* for Products; a Ledger Group *name* for
+> Customers/Suppliers) into internal ids — company-scoped, sourced only from
+> the session — before handing the result to that schema; `createRow` is a
+> thin pass-through to the real service. A shared
+> `BulkImportResolutionCache` (a `Map` threaded through every `resolveRow`
+> call, scoped to one preview/commit run) memoizes each master's reference
+> data so a 1,000-row file resolves with a handful of queries total, not
+> five queries per row — an extension of the spec's own drafted
+> `resolveRow(rawRow, companyId)` signature, needed since the spec didn't
+> address per-row lookup cost directly.
+>
+> Two-phase flow exactly per spec: `previewImport` (zero writes, dry-run
+> validation) then `commitImport` (creates each still-valid row
+> independently, row-by-row, never an all-or-nothing transaction —
+> re-resolves every row again rather than trusting the preview result, so a
+> duplicate created concurrently between preview and commit is still
+> caught). Customer/Supplier's own `ledgerGroupId` resolution
+> (`resolve-ledger-group.ts`) auto-selects the sole Sundry-Debtors/
+> Sundry-Creditors-subtree ledger group when the "Ledger Group" column is
+> left blank (mirroring the codebase's own `autoSelectSingleOption` UI
+> convention), requiring an explicit name only when a company has created
+> more than one such group — a deliberate reading beyond the spec's own
+> (slightly imprecise) claim that these two targets need "no natural-key
+> resolution," since `ledgerGroupId` is in fact a uuid reference no
+> spreadsheet can carry directly. Template Download and Error Report
+> Download both reuse Excel Export's shared `src/lib/excel-export.ts`
+> utility unmodified — no second Excel-writing code path, per the spec's own
+> explicit instruction. `BulkImportWizard` (`src/modules/bulk-import/
+> components/`) is the shared, target-parameterized 4-step UI (choose file →
+> preview → commit → report) mirroring the manual-voucher module's shared-
+> form precedent; a new "Import" button sits beside each of the three
+> targets' own existing "New" button on `/masters/products`,
+> `/masters/customers`, `/masters/suppliers`.
+>
+> **Bug found via live browser testing, fixed before review**: the
+> feature's own downloadable template didn't round-trip through its own
+> parser — `buildImportTemplate` appends `" *"` to a required column's
+> header text, but `parseImportFile` matched header text exactly, so
+> re-uploading the app's own just-downloaded template recognized zero
+> columns (every row showed blank/invalid). Fixed by stripping a trailing
+> `" *"` before matching in `parseImportFile`, with a regression test
+> (`bulk-import-service.test.ts`) asserting the template round-trips.
+>
+> **Code review (parallel subagent) found 2 HIGH, both fixed, no
+> CRITICAL/MEDIUM**: (1) the 1,000-row cap was enforced only in
+> `parseImportFile` (the upload/preview path) — `commitImportAction` takes
+> `rows` directly as a Server Action argument, reachable independently of
+> the wizard UI (e.g. a scripted call), so an ordinary `masters:create` user
+> could bypass the cap entirely and force an unbounded synchronous
+> commit-time loop. Fixed by re-checking the cap inside `commitImport`
+> itself, with a regression test. (2) Customer/Supplier's `openingBalance`
+> is declared `required: true` (rendered `"Opening Balance *"` on the
+> template) but a blank cell silently defaulted to `0` via
+> `parseOptionalNumber(...) ?? 0` instead of erroring — a business migrating
+> real customers with a handful of blank Opening Balance cells (a mistake,
+> not an intentional zero) would have them silently created with incorrect
+> financial data and no error shown at preview or commit time. Fixed by
+> switching both targets to the already-written-but-unused
+> `parseRequiredNumber` helper, with a regression test per target.
+>
+> **Security review (parallel subagent) found 1 MEDIUM (the same row-cap
+> gap code review found, independently), both fixed together, plus 1 LOW
+> accepted**: additionally flagged that `commitImportAction`'s `rows`
+> parameter had no runtime shape validation at all (a TypeScript type is
+> erased at runtime for a Server Action invoked over the network) — a
+> malformed non-string cell value could throw an uncaught `TypeError` deep
+> inside `resolveRow`'s own `.trim()` calls, aborting an in-progress commit
+> after some rows had already been created, with no report reaching the
+> client. Fixed by adding `parsedImportRowsSchema` (Zod, also re-enforcing
+> the row cap) and validating `rows` at the top of `commitImportAction`. LOW
+> (accepted, fixed anyway since it was cheap): file size was bounded only
+> implicitly by Next's own default `serverActions.bodySizeLimit`, not by
+> explicit application code — added an explicit `MAX_IMPORT_FILE_SIZE_BYTES`
+> (5 MB) check in `uploadAndPreviewAction` for defense-in-depth, decoupled
+> from an unrelated global config knob. Authorization, cross-tenant
+> isolation (natural-key resolution → schema → create service → repository's
+> own `verifyReferences`, all independently company-scoped), the
+> error-report download's reuse of Excel Export's formula-injection
+> sanitization, and information disclosure were all confirmed clean by both
+> agents. Code review also flagged a genuine gap against
+> `code-standards.md`'s Logging section (no `logger.*` call anywhere in
+> `src/modules/bulk-import/`, despite the spec's own Data Model section
+> naming Pino logging as the deliberate substitute for a persisted
+> import-history table) — fixed by adding one `logger.info` call in
+> `commitImport` recording target/companyId/created/failed counts.
+>
+> Re-verified after all fixes: `npx tsc --noEmit`, `npx eslint src prisma`
+> (0 errors, same 2 pre-existing unrelated warnings), `npx vitest run` (166
+> files, **2242 tests** — 70 new across the bulk-import module plus its
+> template route), `next build` (`/masters/products/import`,
+> `/masters/customers/import`, `/masters/suppliers/import`, and
+> `/api/bulk-import/template` all in the route table). Browser-verified live
+> end-to-end (`next dev` + Playwright): downloaded the Products template,
+> filled a real `.xlsx` with one valid and one deliberately invalid
+> (missing-Unit) row, uploaded it, confirmed an accurate 1-valid/1-invalid
+> preview, committed, confirmed the created product appears on
+> `/masters/products` (then deactivated it — this codebase has no hard
+> delete), re-ran the same file to confirm a genuine duplicate is correctly
+> caught at commit time (not silently skipped), and downloaded the
+> resulting Error Report — a real, valid, re-uploadable `.xlsx` with the
+> correct columns and error message. Customers'/Suppliers' own import pages
+> and template downloads were spot-checked (render correctly, template
+> fetches 200 OK) but not given the same full upload → commit → report
+> round-trip, since the underlying pipeline is identical and already
+> covered by the target-level unit tests. Zero console errors throughout.
+> Git Workflow (branch/commit/PR/merge) not yet done — pending user
+> decision, see `progress-tracker.md`'s matching dated entry.
 
 ---
 

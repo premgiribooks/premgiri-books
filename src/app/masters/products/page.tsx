@@ -87,15 +87,22 @@ export default async function ProductListPage({ searchParams }: ProductListPageP
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/products/new">
-                  <Plus size={18} />
-                  New Product
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/products/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/products/new">
+                    <Plus size={18} />
+                    New Product
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

@@ -5223,7 +5223,30 @@ Trial Balance's Export button downloads a real, valid `.xlsx` (parsed back and c
 **Git Workflow: committed directly to `main` 2026-09-19** (commit `9238433`), matching the
 same delivery preference set for Backup & Restore earlier this session.
 
+---
+
+**#74 Excel Import implemented 2026-09-19** (spec 76,
+`context/feature-specs/76-excel-import.md`), per explicit user direction to pick this item
+next. Full implementation record — the target-parameterized `ImportTarget<TInput>`
+pipeline, the three Product/Customer/Supplier targets reusing each master's own real Zod
+schema and create service verbatim, the batch-scoped `BulkImportResolutionCache`, the
+two-phase preview/commit wizard UI, a real bug caught and fixed via live testing (the
+template's own `" *"` required-field marker broke round-tripping through its own parser),
+and both review agents' findings (code review: 2 HIGH fixed — a commit-time row-cap bypass
+and a silent-zero `openingBalance` gap; security review: 1 MEDIUM fixed — the same row-cap
+gap plus unvalidated row shape, 1 LOW fixed — an explicit file-size cap; a Logging-section
+gap also fixed) — is recorded in full in `context/Phases/phase-tracker.md`'s Phase 12
+section, per the Tracker Update Rule's "detail lives in phase-tracker, this file
+cross-references it" convention.
+
+Re-verified after all fixes: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (166 files, 2242 tests — 70 new), `next
+build` (all four new routes in the route table). Browser-verified live end-to-end for
+Products (template download → fill → upload → preview → commit → created product visible
+on the list → re-upload correctly caught as a duplicate → Error Report downloaded and
+validated); Customers/Suppliers spot-checked (render correctly, template fetches 200 OK),
+full round-trip left to their already-passing unit tests since the pipeline is identical.
+Git Workflow (branch/commit/PR/merge) not yet done — pending user decision.
+
 **Next Up**: PDF Generation's remaining scope (#76 — see its own recorded v3-gate hold),
-Excel Import (#74, now the earliest remaining item in `context/Phases/phase-tracker.md`'s
-own phase sequence), Barcode Billing (#77), or Audit Logs (#78) — in whatever order the
-user prefers.
+Barcode Billing (#77), or Audit Logs (#78) — in whatever order the user prefers.
