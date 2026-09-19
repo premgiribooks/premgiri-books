@@ -29,6 +29,20 @@ jobs:
     # runner.
 
     steps:
+      - name: Prefer Git Bash over the WSL bash stub on PATH
+        # appleboy/ssh-action and appleboy/scp-action are composite
+        # actions with internal steps hardcoded to `shell: bash` — that
+        # can't be overridden from this workflow. On this runner, `bash`
+        # resolves to the WSL launcher stub at
+        # C:\Windows\System32\bash.exe rather than Git Bash, which can't
+        # run the runner's generated temp scripts and fails every step
+        # that needs bash (confirmed: "No such file or directory").
+        # Prepending Git's bin directory to GITHUB_PATH makes `bash`
+        # resolve to Git Bash for every later step in this job, including
+        # inside those actions.
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files\Git\bin"
+
       - name: Checkout
         uses: actions/checkout@v4
 
