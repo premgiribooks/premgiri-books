@@ -35,15 +35,22 @@ export default async function BrandListPage() {
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/brands/new">
-                  <Plus size={18} />
-                  New Brand
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/brands/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/brands/new">
+                    <Plus size={18} />
+                    New Brand
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

@@ -90,7 +90,7 @@ describe("uploadAndPreviewAction", () => {
   });
 
   it("rejects an invalid target", async () => {
-    const result = await uploadAndPreviewAction(fileFormData({ target: "categories" }));
+    const result = await uploadAndPreviewAction(fileFormData({ target: "not-a-real-target" }));
 
     expect(result.success).toBe(false);
   });
@@ -114,6 +114,13 @@ describe("uploadAndPreviewAction", () => {
     expect(result.data?.columns).toBe(FAKE_TARGET.columns);
     expect(result.data?.preview).toEqual({ validCount: 1, invalidCount: 0, rows: [] });
     expect(previewImportMock).toHaveBeenCalledWith(FAKE_TARGET, [{ rowNumber: 2, row: { name: "Alpha" } }], "company-1");
+  });
+
+  it("gates the employees target on employees:create, not masters:create — TARGET_PERMISSION_MODULE's one deliberate divergence", async () => {
+    const result = await uploadAndPreviewAction(fileFormData({ target: "employees" }));
+
+    expect(result.success).toBe(true);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "employees", "create");
   });
 });
 
@@ -169,6 +176,15 @@ describe("commitImportAction", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("gates the employees target on employees:create, not masters:create — TARGET_PERMISSION_MODULE's one deliberate divergence", async () => {
+    commitImportMock.mockResolvedValue({ createdCount: 0, failedCount: 0, rows: [] });
+
+    const result = await commitImportAction("employees", []);
+
+    expect(result.success).toBe(true);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "employees", "create");
+  });
 });
 
 describe("downloadErrorReportAction", () => {
@@ -196,5 +212,15 @@ describe("downloadErrorReportAction", () => {
     expect(result.success).toBe(true);
     expect(result.data?.filename).toBe("Products-import-errors.xlsx");
     expect(Buffer.from(result.data?.base64 ?? "", "base64").toString()).toBe("fake-xlsx");
+  });
+
+  it("gates the employees target on employees:create, not masters:create — TARGET_PERMISSION_MODULE's one deliberate divergence", async () => {
+    getImportTargetMock.mockReturnValue({ key: "employees", label: "Employees", columns: [] });
+    buildImportErrorReportMock.mockResolvedValue(Buffer.from("fake-xlsx"));
+
+    const result = await downloadErrorReportAction("employees", { createdCount: 0, failedCount: 1, rows: [] });
+
+    expect(result.success).toBe(true);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "employees", "create");
   });
 });

@@ -5323,3 +5323,26 @@ own `reports`+`gst` dual-permission precedent.
 **Next Up**: Excel Import extended from Products/Customers/Suppliers to the remaining
 masters (Categories, Brands, Units, Warehouses, HSN Codes, GST Rates, Margin Profiles,
 Price Lists, Employees) — the last piece of the user's original request.
+
+---
+
+**Excel Import completed for all 12 masters, implemented 2026-09-19** (still spec 76) —
+finishes the user's full "export for all reports, import for all masters" request. Extended
+the existing target-parameterized pipeline to Categories, Brands, Units, Warehouses, HSN
+Codes, GST Rates, Margin Profiles, Price Lists, and Employees (9 more targets, built by 3
+parallel agents grouped by complexity, all completed cleanly). Made one central plumbing
+fix myself before dispatching them: added a `TARGET_PERMISSION_MODULE` map so Employees
+correctly gates on the `employees` permission module instead of the generic `masters` one
+every other target uses (matching `employeeService.createEmployee`'s own gate). Code review
++ security review: 0 CRITICAL/HIGH, 1 MEDIUM fixed (added regression tests asserting the
+employees-vs-masters permission split at the action/route level, since only direct code
+reading had verified it before). Full record in `context/Phases/phase-tracker.md`'s Phase
+12 section.
+
+Re-verified after the fix: `npx tsc --noEmit`, `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (203 files, 2584 tests — 224 new), `next
+build` (all 12 `/masters/*/import` routes present).
+
+**This closes out the user's full request**: Excel Export covers all 29 report screens,
+Excel Import covers all 12 masters. Open follow-up carried forward (not yet scheduled):
+whether Payroll Register/Salary Register export should move to a dedicated permission gate.

@@ -35,15 +35,22 @@ export default async function CategoryListPage() {
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/categories/new">
-                  <Plus size={18} />
-                  New Category
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/categories/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/categories/new">
+                    <Plus size={18} />
+                    New Category
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

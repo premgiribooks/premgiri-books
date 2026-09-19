@@ -44,7 +44,7 @@ describe("GET /api/bulk-import/template", () => {
   });
 
   it("returns 400 for a missing/invalid target", async () => {
-    const response = await GET(request("?target=categories"));
+    const response = await GET(request("?target=not-a-real-target"));
 
     expect(response.status).toBe(400);
     expect(getCurrentCompanyUserMock).not.toHaveBeenCalled();
@@ -94,5 +94,14 @@ describe("GET /api/bulk-import/template", () => {
     expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="Products-import-template.xlsx"');
     expect(Buffer.from(await response.arrayBuffer()).toString()).toBe("fake-xlsx");
     expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "masters", "view");
+  });
+
+  it("gates the employees target on employees:view, not masters:view — TARGET_PERMISSION_MODULE's one deliberate divergence", async () => {
+    getImportTargetMock.mockReturnValue({ key: "employees", label: "Employees", columns: [] });
+
+    const response = await GET(request("?target=employees"));
+
+    expect(response.status).toBe(200);
+    expect(assertPermissionMock).toHaveBeenCalledWith(expect.anything(), "employees", "view");
   });
 });

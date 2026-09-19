@@ -6,15 +6,17 @@ import { AuthenticationError, AuthorizationError, getCurrentCompanyUser } from "
 import { logger } from "@/lib/logger";
 import { assertPermission } from "@/lib/permissions";
 import { bulkImportService } from "@/modules/bulk-import/services/bulk-import-service";
-import { bulkImportUploadRequestSchema } from "@/modules/bulk-import/validation/bulk-import-schema";
+import { bulkImportUploadRequestSchema, TARGET_PERMISSION_MODULE } from "@/modules/bulk-import/validation/bulk-import-schema";
 
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /**
- * Delivers a blank import template for the given target — gated on
- * `masters`/`view` only (76-excel-import.md's Security section: "reading
- * the column shape is not itself a write"), independently of the page's own
- * permission gate.
+ * Delivers a blank import template for the given target — gated on that
+ * target's own `view` permission only (76-excel-import.md's Security
+ * section: "reading the column shape is not itself a write"), independently
+ * of the page's own permission gate. Most targets are gated on
+ * `masters`/`view`; `employees` is gated on `employees`/`view` instead,
+ * matching `TARGET_PERMISSION_MODULE`'s own mapping.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
@@ -22,7 +24,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     const { target: targetKey } = bulkImportUploadRequestSchema.parse({ target: url.searchParams.get("target") });
 
     const user = await getCurrentCompanyUser();
-    await assertPermission(user, "masters", "view");
+    await assertPermission(user, TARGET_PERMISSION_MODULE[targetKey], "view");
 
     const target = bulkImportService.getImportTarget(targetKey);
     const buffer = await bulkImportService.buildImportTemplate(target);

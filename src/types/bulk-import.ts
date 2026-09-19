@@ -3,7 +3,19 @@
 // (src/modules/bulk-import/targets/*.ts), rather than three near-duplicate
 // import modules.
 
-export type BulkImportTargetKey = "products" | "customers" | "suppliers";
+export type BulkImportTargetKey =
+  | "products"
+  | "customers"
+  | "suppliers"
+  | "categories"
+  | "brands"
+  | "units"
+  | "warehouses"
+  | "hsn-codes"
+  | "gst-rates"
+  | "margin-profiles"
+  | "price-lists"
+  | "employees";
 
 export interface ImportColumn {
   key: string;

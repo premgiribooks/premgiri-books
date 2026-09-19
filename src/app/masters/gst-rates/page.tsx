@@ -35,15 +35,22 @@ export default async function GstRateListPage() {
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/gst-rates/new">
-                  <Plus size={18} />
-                  New GST Rate
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/gst-rates/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/gst-rates/new">
+                    <Plus size={18} />
+                    New GST Rate
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

@@ -70,15 +70,22 @@ export default async function MarginProfileListPage({
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/margin-profiles/new">
-                  <Plus size={18} />
-                  New Margin Profile
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/margin-profiles/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/margin-profiles/new">
+                    <Plus size={18} />
+                    New Margin Profile
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

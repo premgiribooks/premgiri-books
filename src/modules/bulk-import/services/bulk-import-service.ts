@@ -5,9 +5,18 @@ import ExcelJS from "exceljs";
 import { AppError } from "@/lib/app-error";
 import { exportToExcelBuffer } from "@/lib/excel-export";
 import { logger } from "@/lib/logger";
+import { brandImportTarget } from "@/modules/bulk-import/targets/brand-import-target";
+import { categoryImportTarget } from "@/modules/bulk-import/targets/category-import-target";
 import { customerImportTarget } from "@/modules/bulk-import/targets/customer-import-target";
+import { employeeImportTarget } from "@/modules/bulk-import/targets/employee-import-target";
+import { gstRateImportTarget } from "@/modules/bulk-import/targets/gst-rate-import-target";
+import { hsnCodeImportTarget } from "@/modules/bulk-import/targets/hsn-code-import-target";
+import { marginProfileImportTarget } from "@/modules/bulk-import/targets/margin-profile-import-target";
+import { priceListImportTarget } from "@/modules/bulk-import/targets/price-list-import-target";
 import { productImportTarget } from "@/modules/bulk-import/targets/product-import-target";
 import { supplierImportTarget } from "@/modules/bulk-import/targets/supplier-import-target";
+import { unitImportTarget } from "@/modules/bulk-import/targets/unit-import-target";
+import { warehouseImportTarget } from "@/modules/bulk-import/targets/warehouse-import-target";
 import { isCsvFilename, MAX_IMPORT_ROWS } from "@/modules/bulk-import/validation/bulk-import-schema";
 import type {
   BulkImportResolutionCache,
@@ -29,6 +38,15 @@ const IMPORT_TARGETS: Record<BulkImportTargetKey, ImportTarget<unknown>> = {
   products: productImportTarget as ImportTarget<unknown>,
   customers: customerImportTarget as ImportTarget<unknown>,
   suppliers: supplierImportTarget as ImportTarget<unknown>,
+  categories: categoryImportTarget as ImportTarget<unknown>,
+  brands: brandImportTarget as ImportTarget<unknown>,
+  units: unitImportTarget as ImportTarget<unknown>,
+  warehouses: warehouseImportTarget as ImportTarget<unknown>,
+  "hsn-codes": hsnCodeImportTarget as ImportTarget<unknown>,
+  "gst-rates": gstRateImportTarget as ImportTarget<unknown>,
+  "margin-profiles": marginProfileImportTarget as ImportTarget<unknown>,
+  "price-lists": priceListImportTarget as ImportTarget<unknown>,
+  employees: employeeImportTarget as ImportTarget<unknown>,
 };
 
 export function getImportTarget(key: BulkImportTargetKey): ImportTarget<unknown> {

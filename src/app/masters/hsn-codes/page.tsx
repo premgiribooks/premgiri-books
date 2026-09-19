@@ -35,15 +35,22 @@ export default async function HsnCodeListPage() {
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/hsn-codes/new">
-                  <Plus size={18} />
-                  New HSN/SAC Code
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/hsn-codes/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/hsn-codes/new">
+                    <Plus size={18} />
+                    New HSN/SAC Code
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

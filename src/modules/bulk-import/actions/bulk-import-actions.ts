@@ -12,6 +12,7 @@ import {
   isAllowedImportFilename,
   MAX_IMPORT_FILE_SIZE_BYTES,
   parsedImportRowsSchema,
+  TARGET_PERMISSION_MODULE,
 } from "@/modules/bulk-import/validation/bulk-import-schema";
 import { runAction } from "@/lib/run-action";
 import type { ImportColumn, ImportPreviewResult, ImportReport } from "@/types/bulk-import";
@@ -21,6 +22,15 @@ const TARGET_LIST_PATH: Record<string, string> = {
   products: "/masters/products",
   customers: "/masters/customers",
   suppliers: "/masters/suppliers",
+  categories: "/masters/categories",
+  brands: "/masters/brands",
+  units: "/masters/units",
+  warehouses: "/masters/warehouses",
+  "hsn-codes": "/masters/hsn-codes",
+  "gst-rates": "/masters/gst-rates",
+  "margin-profiles": "/masters/margin-profiles",
+  "price-lists": "/masters/price-lists",
+  employees: "/masters/employees",
 };
 
 export interface UploadAndPreviewResult {
@@ -31,17 +41,21 @@ export interface UploadAndPreviewResult {
 
 /**
  * Upload + dry-run preview in one step — zero writes (76-excel-import.md's
- * two-phase flow). Gated on `masters`/`create` directly here, not only via
- * each target's own `createRow` (which is never reached during preview) —
- * otherwise a user with no create permission could still preview an import,
- * which this spec never intends to allow.
+ * two-phase flow). Gated on the target's own create permission directly
+ * here, not only via each target's own `createRow` (which is never reached
+ * during preview) — otherwise a user with no create permission could still
+ * preview an import, which this spec never intends to allow. Most targets
+ * are gated on `masters`/`create`, matching their own create service; the
+ * `employees` target is gated on `employees`/`create` instead, matching
+ * `employeeService.createEmployee`'s own permission module (see
+ * `TARGET_PERMISSION_MODULE`'s own comment).
  */
 export async function uploadAndPreviewAction(formData: FormData): Promise<ActionResult<UploadAndPreviewResult>> {
   return runAction(async () => {
-    const user = await getCurrentCompanyUser();
-    await assertPermission(user, "masters", "create");
-
     const { target: targetKey } = bulkImportUploadRequestSchema.parse({ target: formData.get("target") });
+
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, TARGET_PERMISSION_MODULE[targetKey], "create");
 
     const file = formData.get("file");
     if (!(file instanceof File) || file.size === 0) {
@@ -81,7 +95,7 @@ export async function commitImportAction(
     // assumed (security review finding).
     const validatedRows = parsedImportRowsSchema.parse(rows);
     const user = await getCurrentCompanyUser();
-    await assertPermission(user, "masters", "create");
+    await assertPermission(user, TARGET_PERMISSION_MODULE[validatedKey], "create");
 
     const target = bulkImportService.getImportTarget(validatedKey);
     return bulkImportService.commitImport(target, validatedRows, user.companyId);
@@ -108,7 +122,7 @@ export async function downloadErrorReportAction(
   return runAction(async () => {
     const { target: validatedKey } = bulkImportUploadRequestSchema.parse({ target: targetKey });
     const user = await getCurrentCompanyUser();
-    await assertPermission(user, "masters", "create");
+    await assertPermission(user, TARGET_PERMISSION_MODULE[validatedKey], "create");
 
     const target = bulkImportService.getImportTarget(validatedKey);
     const buffer = await bulkImportService.buildImportErrorReport(target, report);

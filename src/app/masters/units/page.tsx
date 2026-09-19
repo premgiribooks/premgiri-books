@@ -35,15 +35,22 @@ export default async function UnitListPage() {
             </p>
           </div>
           {canCreate ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href="/masters/units/new">
-                  <Plus size={18} />
-                  New Unit
-                </Link>
-              }
-            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/masters/units/import">Import</Link>}
+              />
+              <Button
+                nativeButton={false}
+                render={
+                  <Link href="/masters/units/new">
+                    <Plus size={18} />
+                    New Unit
+                  </Link>
+                }
+              />
+            </div>
           ) : null}
         </div>
 

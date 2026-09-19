@@ -2653,6 +2653,69 @@ as usual:
 > Lists, Employees) — the only piece of "export for all reports, import for
 > all masters" not yet done.
 
+> **Excel Import completed for all 12 masters, implemented 2026-09-19**
+> (still spec 76), finishing the user's full "export for all reports,
+> import for all masters" request. Extended the existing target-
+> parameterized pipeline (`ImportTarget<TInput>`, `bulk-import-service.ts`)
+> from Products/Customers/Suppliers to **Categories**, **Brands**,
+> **Units**, **Warehouses**, **HSN Codes**, **GST Rates**, **Margin
+> Profiles**, **Price Lists**, and **Employees** — 9 more targets, built by
+> 3 parallel agents grouped by complexity (Brands/Units/HSN Codes and GST
+> Rates/Margin Profiles/Price Lists: no natural-key resolution at all;
+> Categories/Warehouses/Employees: resolve an optional parent-
+> category-by-name or Branch-by-name respectively, the latter via a new
+> shared `resolve-branch.ts` helper reused by both). All 3 agents completed
+> cleanly this time (no rate-limit interruption). Price Lists deliberately
+> imports only the header row (name/customerType/effective dates/
+> description) — its own create schema has no line-item field at all, items
+> remain addable via the existing detail screen, mirroring Products' own
+> batches/serials exclusion.
+>
+> Before dispatching the agents, made one central plumbing change myself:
+> added a `TARGET_PERMISSION_MODULE: Record<BulkImportTargetKey,
+> PermissionModule>` map (`bulk-import-schema.ts`) so `bulk-import-
+> actions.ts`'s three Server Actions and the template Route Handler gate
+> each target's permission check on the module that target's own create
+> service actually requires — 11 of 12 targets share the generic `masters`
+> module, but `employees` correctly gates on the more specific `employees`
+> module instead (matching `employeeService.createEmployee`'s own existing
+> gate), replacing a previously-hardcoded `"masters"` check that would
+> otherwise have let a user with only generic `masters`/`create` preview
+> (though not commit, since `createEmployee` re-checks itself) an Employees
+> import. Reordered `uploadAndPreviewAction` to parse the target string
+> before the permission check (needed to know which module to assert) —
+> confirmed safe by both review agents, since parsing a plain enum leaks
+> nothing.
+>
+> Code review: 0 CRITICAL/HIGH, 1 MEDIUM fixed — no regression test existed
+> asserting the employees-vs-masters permission split at the Server
+> Action/route level itself (only verified by direct code reading), leaving
+> a future one-line typo in `TARGET_PERMISSION_MODULE` uncaught; added one
+> test per Server Action (upload/preview, commit, download-error-report)
+> plus the template route, each asserting `assertPermission`/`hasPermission`
+> is called with `"employees"` (not `"masters"`) when `target: "employees"`.
+> Security review: 0 CRITICAL/HIGH/MEDIUM/LOW — independently confirmed the
+> permission-routing change isn't a privilege-escalation path, the
+> `uploadAndPreviewAction` reordering leaks nothing, both new natural-key
+> resolvers (`resolve-branch.ts`, Categories' local parent lookup) stay
+> company-scoped and per-run cached, `basicSalary`/other employee PII flows
+> unmodified through `employeeService.createEmployee`'s own existing
+> validation and is never logged (only aggregate counts are), and no new
+> formula-injection surface exists (all 9 new targets reuse the same
+> already-reviewed `buildImportTemplate`/`buildImportErrorReport` path).
+>
+> Re-verified after the test fix: `npx tsc --noEmit` (0 errors), `npx eslint
+> src prisma` (0 errors, same 2 pre-existing unrelated warnings), `npx
+> vitest run` (203 files, **2584 tests** — 224 new since the prior batch),
+> `next build` (all 12 `/masters/*/import` routes present — every master in
+> the app now supports Excel Import).
+>
+> **This closes out the user's full request**: Excel Export now covers all
+> 29 report screens (previous entries in this section) and Excel Import now
+> covers all 12 masters. **Open follow-up carried forward, not yet
+> scheduled**: the Payroll Register/Salary Register export permission-gating
+> question recorded above.
+
 ---
 
 # Future Roadmap
