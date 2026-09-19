@@ -5246,7 +5246,8 @@ Products (template download → fill → upload → preview → commit → creat
 on the list → re-upload correctly caught as a duplicate → Error Report downloaded and
 validated); Customers/Suppliers spot-checked (render correctly, template fetches 200 OK),
 full round-trip left to their already-passing unit tests since the pipeline is identical.
-Git Workflow (branch/commit/PR/merge) not yet done — pending user decision.
+**Git Workflow: committed directly to `main` 2026-09-19** (commit `ee57039`), matching the
+same delivery preference set for Backup & Restore and Excel Export earlier this session.
 
 **Next Up**: PDF Generation's remaining scope (#76 — see its own recorded v3-gate hold),
 Barcode Billing (#77), or Audit Logs (#78) — in whatever order the user prefers.

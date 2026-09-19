@@ -2473,8 +2473,9 @@ as usual:
 > fetches 200 OK) but not given the same full upload → commit → report
 > round-trip, since the underlying pipeline is identical and already
 > covered by the target-level unit tests. Zero console errors throughout.
-> Git Workflow (branch/commit/PR/merge) not yet done — pending user
-> decision, see `progress-tracker.md`'s matching dated entry.
+> **Committed directly to `main` 2026-09-19** (commit `ee57039`), matching
+> the same delivery preference set for Backup & Restore and Excel Export
+> earlier this session.
 
 ---
 
