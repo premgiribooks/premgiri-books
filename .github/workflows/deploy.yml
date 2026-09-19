@@ -87,8 +87,20 @@ jobs:
         # how the runner marshals a multi-line secret into the Windows
         # process environment block. Base64 travels as a single line, so
         # there's nothing left for that to corrupt.
+        #
+        # Unlike a GitHub-hosted runner, this self-hosted runner reuses
+        # the same _work/_temp directory across job runs rather than
+        # starting from a clean VM — a leftover key file from an earlier
+        # run, already locked read-only by the icacls call below, made
+        # WriteAllBytes fail with "Access to the path ... is denied."
+        # Resetting ACLs and removing any existing file first makes this
+        # step safe to re-run.
         run: |
           $keyPath = Join-Path $env:RUNNER_TEMP "termux_deploy_key"
+          if (Test-Path $keyPath) {
+            icacls $keyPath /reset | Out-Null
+            Remove-Item -Path $keyPath -Force
+          }
           [IO.File]::WriteAllBytes($keyPath, [Convert]::FromBase64String($env:TERMUX_SSH_KEY_B64))
           icacls $keyPath /inheritance:r | Out-Null
           icacls $keyPath /grant:r "$($env:USERNAME):(R)" | Out-Null
