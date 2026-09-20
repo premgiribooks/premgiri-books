@@ -1,5 +1,8 @@
 import puppeteer, { type Browser } from "puppeteer";
 
+import { logger } from "@/lib/logger";
+import { getSafeErrorMessage } from "@/lib/redact-error";
+
 /** `ui-context.md`'s paper-size convention — reports default `A4` portrait,
  * documents default `A5` (see each caller's own template). */
 export interface PdfMargin {
@@ -68,8 +71,7 @@ function getBrowser(): Promise<Browser> {
  * any kind — every caller re-checks its own permission before invoking this
  * (78-pdf-generation.md's shared-core contract).
  */
-export async function renderHtmlToPdf(html: string, options: PdfOptions): Promise<Buffer> {
-  const browser = await getBrowser();
+async function renderWithBrowser(browser: Browser, html: string, options: PdfOptions): Promise<Buffer> {
   const page = await browser.newPage();
   try {
     // Every template embeds its own inline/base64 assets — no external
@@ -89,6 +91,46 @@ export async function renderHtmlToPdf(html: string, options: PdfOptions): Promis
   } finally {
     await page.close();
   }
+}
+
+export async function renderHtmlToPdf(html: string, options: PdfOptions): Promise<Buffer> {
+  const browser = await getBrowser();
+  return renderWithBrowser(browser, html, options);
+}
+
+export type PdfRenderResult = { kind: "pdf"; buffer: Buffer } | { kind: "html"; html: string };
+
+/**
+ * Same rendering as {@link renderHtmlToPdf}, but falls back to handing back
+ * the raw HTML when Chromium itself can't be launched, instead of throwing —
+ * confirmed on a real device: Puppeteer has no Chromium build for Android at
+ * all (`Cannot download a binary for the provided platform: android (arm)`),
+ * so every Termux deployment of this app hits this on every single PDF
+ * export, not as a transient failure. Callers serve that HTML directly so
+ * the browser the *client* is running in (a real desktop/mobile browser,
+ * unlike the server) can print-to-PDF itself instead.
+ *
+ * Deployments where Chromium actually launches (the Electron desktop app;
+ * a real Windows/Mac/Linux host) are unaffected — they still get an instant
+ * server-rendered PDF exactly as before. Only the browser-*launch* step
+ * (`getBrowser()`) is caught here, deliberately not the page-rendering step
+ * (`renderWithBrowser`) — a genuine template bug during rendering must still
+ * throw and surface as a real error, not get silently papered over as if it
+ * were this same platform limitation.
+ */
+export async function renderHtmlToPdfOrHtml(html: string, options: PdfOptions): Promise<PdfRenderResult> {
+  let browser: Browser;
+  try {
+    browser = await getBrowser();
+  } catch (error) {
+    logger.warn(
+      { error: getSafeErrorMessage(error) },
+      "Server-side PDF rendering unavailable on this platform (no Chromium) — falling back to HTML"
+    );
+    return { kind: "html", html };
+  }
+  const buffer = await renderWithBrowser(browser, html, options);
+  return { kind: "pdf", buffer };
 }
 
 /** Closes the shared browser instance, if one was launched. Only needed for

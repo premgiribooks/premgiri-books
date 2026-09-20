@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
 import puppeteer from "puppeteer";
 
-import { closePdfBrowser, renderHtmlToPdf } from "@/lib/pdf-generation";
+import { closePdfBrowser, renderHtmlToPdf, renderHtmlToPdfOrHtml } from "@/lib/pdf-generation";
 
 const MINIMAL_HTML = "<html><body><h1>Test Document</h1></body></html>";
 
@@ -71,6 +71,58 @@ describe("renderHtmlToPdf", () => {
 
       expect(launchSpy).not.toHaveBeenCalled();
       launchSpy.mockRestore();
+    },
+    20000
+  );
+});
+
+describe("renderHtmlToPdfOrHtml", () => {
+  afterAll(async () => {
+    await closePdfBrowser();
+  });
+
+  it(
+    "returns {kind: 'pdf'} when Chromium launches normally",
+    async () => {
+      const result = await renderHtmlToPdfOrHtml(MINIMAL_HTML, { format: "A4" });
+
+      expect(result.kind).toBe("pdf");
+      if (result.kind === "pdf") {
+        expect(result.buffer.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+      }
+    },
+    20000
+  );
+
+  // The actual bug this exists for: Puppeteer has no Chromium build for
+  // Android at all, so every Termux deployment hits a launch failure on
+  // every single PDF export — confirmed live as
+  // "Cannot download a binary for the provided platform: android (arm)".
+  it(
+    "falls back to {kind: 'html'} instead of throwing when the browser can't launch",
+    async () => {
+      await closePdfBrowser();
+      const launchSpy = vi.spyOn(puppeteer, "launch");
+      launchSpy.mockRejectedValueOnce(new Error("Cannot download a binary for the provided platform: android (arm)"));
+
+      const result = await renderHtmlToPdfOrHtml(MINIMAL_HTML, { format: "A4" });
+
+      expect(result).toEqual({ kind: "html", html: MINIMAL_HTML });
+      launchSpy.mockRestore();
+    },
+    20000
+  );
+
+  // Only the browser-*launch* step is caught — a genuine rendering bug once
+  // Chromium is already up (a real template/PDF-options error) must still
+  // throw normally instead of being silently mistaken for the platform
+  // limitation above.
+  it(
+    "still throws when rendering itself fails after a successful launch",
+    async () => {
+      await expect(
+        renderHtmlToPdfOrHtml(MINIMAL_HTML, { format: "BAD_FORMAT" as never })
+      ).rejects.toThrow();
     },
     20000
   );

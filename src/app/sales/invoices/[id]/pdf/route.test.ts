@@ -9,7 +9,7 @@ import { GET } from "./route";
 const {
   getSalesInvoiceMock,
   buildSalesInvoiceHtmlMock,
-  renderHtmlToPdfMock,
+  renderHtmlToPdfOrHtmlMock,
   getCompanyMock,
   listBankAccountsMock,
   readCompanyLogoAsDataUriMock,
@@ -18,7 +18,7 @@ const {
 } = vi.hoisted(() => ({
   getSalesInvoiceMock: vi.fn(),
   buildSalesInvoiceHtmlMock: vi.fn(),
-  renderHtmlToPdfMock: vi.fn(),
+  renderHtmlToPdfOrHtmlMock: vi.fn(),
   getCompanyMock: vi.fn(),
   listBankAccountsMock: vi.fn(),
   readCompanyLogoAsDataUriMock: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("@/modules/sales-invoices/pdf/sales-invoice-pdf", () => ({
   buildSalesInvoiceHtml: buildSalesInvoiceHtmlMock,
 }));
 vi.mock("@/lib/pdf-generation", () => ({
-  renderHtmlToPdf: renderHtmlToPdfMock,
+  renderHtmlToPdfOrHtml: renderHtmlToPdfOrHtmlMock,
 }));
 vi.mock("@/modules/company/services/company-service", () => ({
   companyService: { getCompany: getCompanyMock },
@@ -88,7 +88,7 @@ describe("GET /sales/invoices/[id]/pdf", () => {
     listBankAccountsMock.mockResolvedValue([FAKE_BANK_ACCOUNT]);
     readCompanyLogoAsDataUriMock.mockResolvedValue(null);
     buildSalesInvoiceHtmlMock.mockReturnValue("<html></html>");
-    renderHtmlToPdfMock.mockResolvedValue(Buffer.from("%PDF-fake"));
+    renderHtmlToPdfOrHtmlMock.mockResolvedValue({ kind: "pdf", buffer: Buffer.from("%PDF-fake") });
   });
 
   it("returns 404 when the invoice doesn't exist (or belongs to another company)", async () => {
@@ -107,7 +107,7 @@ describe("GET /sales/invoices/[id]/pdf", () => {
     const response = await GET(new Request("http://localhost/sales/invoices/inv-1/pdf"), params("inv-1"));
 
     expect(response.status).toBe(400);
-    expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
+    expect(renderHtmlToPdfOrHtmlMock).not.toHaveBeenCalled();
     expect(getCompanyMock).not.toHaveBeenCalled();
   });
 
@@ -137,8 +137,11 @@ describe("GET /sales/invoices/[id]/pdf", () => {
   });
 
   it("returns a generic 500 and logs a render failure — not just a getSalesInvoice failure", async () => {
+    // A genuine rendering crash (not the Chromium-unavailable case, which
+    // renderHtmlToPdfOrHtml itself catches and turns into the {kind:"html"}
+    // fallback below rather than a throw) must still surface as a real 500.
     getSalesInvoiceMock.mockResolvedValue(baseInvoice());
-    renderHtmlToPdfMock.mockRejectedValue(new Error("Chromium launch failed"));
+    renderHtmlToPdfOrHtmlMock.mockRejectedValue(new Error("Unexpected template rendering crash"));
 
     const response = await GET(new Request("http://localhost/sales/invoices/inv-1/pdf"), params("inv-1"));
 
@@ -156,7 +159,19 @@ describe("GET /sales/invoices/[id]/pdf", () => {
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="INV_2026_0001.pdf"');
     expect(Buffer.from(await response.arrayBuffer()).toString()).toBe("%PDF-fake");
-    expect(renderHtmlToPdfMock).toHaveBeenCalledWith(expect.any(String), { format: "A4" });
+    expect(renderHtmlToPdfOrHtmlMock).toHaveBeenCalledWith(expect.any(String), { format: "A4" });
+  });
+
+  it("falls back to the raw HTML (no Content-Disposition) when server-side Chromium isn't available", async () => {
+    getSalesInvoiceMock.mockResolvedValue(baseInvoice());
+    renderHtmlToPdfOrHtmlMock.mockResolvedValue({ kind: "html", html: "<html>fallback</html>" });
+
+    const response = await GET(new Request("http://localhost/sales/invoices/inv-1/pdf"), params("inv-1"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(response.headers.get("Content-Disposition")).toBeNull();
+    expect(await response.text()).toBe("<html>fallback</html>");
   });
 
   it("resolves the company by the invoice's own companyId and passes company/bankAccount/logo through to buildSalesInvoiceHtml", async () => {

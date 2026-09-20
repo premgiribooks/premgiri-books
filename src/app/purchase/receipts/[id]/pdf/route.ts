@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError } from "@/lib/current-user";
 import { logger } from "@/lib/logger";
-import { renderHtmlToPdf } from "@/lib/pdf-generation";
+import { renderHtmlToPdfOrHtml } from "@/lib/pdf-generation";
 import { buildGoodsReceiptNoteHtml } from "@/modules/goods-receipt-notes/pdf/goods-receipt-note-pdf";
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
 
@@ -34,9 +34,17 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     }
 
     const html = buildGoodsReceiptNoteHtml(goodsReceiptNote);
-    const pdf = await renderHtmlToPdf(html, { format: "A5" });
+    const result = await renderHtmlToPdfOrHtml(html, { format: "A5" });
 
-    return new NextResponse(new Uint8Array(pdf), {
+    // See renderHtmlToPdfOrHtml's docstring: when Chromium can't launch on
+    // this platform, this is the raw HTML instead of a real PDF, and the
+    // client (src/lib/pdf-client.ts) falls back to opening its own print
+    // dialog on it rather than downloading it as-is.
+    if (result.kind === "html") {
+      return new NextResponse(result.html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    }
+
+    return new NextResponse(new Uint8Array(result.buffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${downloadFilename(goodsReceiptNote.grnNumber)}"`,

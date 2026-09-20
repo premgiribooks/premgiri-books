@@ -1,26 +1,48 @@
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
 import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { downloadOrPrintDocument } from "@/lib/pdf-client";
 
 interface DebitNoteDownloadPdfButtonProps {
   debitNoteId: string;
 }
 
-/** Links to the `[id]/pdf` Route Handler (78-pdf-generation.md) — a plain,
- * server-renderable download link (no client JS needed). Debit Note has no
- * pre-existing print precedent, so this is its first printing capability of
- * any kind, rendered unconditionally in the detail page's action row. */
+/**
+ * Fetches the `[id]/pdf` Route Handler (78-pdf-generation.md) and downloads
+ * the PDF it returns. No longer a plain `<a href download>` link: the route
+ * can now respond with the printable HTML instead of a real PDF when
+ * server-side Chromium isn't available (Termux/Android has none at all —
+ * see pdf-generation.ts), and a plain download link can't tell which one it
+ * got. `downloadOrPrintDocument` (src/lib/pdf-client.ts) does — it opens the
+ * browser's own print dialog on that HTML instead, so this stays a working
+ * one-click action either way, just with a hint to use "Save as PDF" on the
+ * deployments where the instant download isn't available.
+ */
 export function DebitNoteDownloadPdfButton({ debitNoteId }: DebitNoteDownloadPdfButtonProps) {
-  return (
-    <Button
-      variant="outline"
-      nativeButton={false}
-      render={
-        <a href={`/sales/debit-notes/${debitNoteId}/pdf`} download>
-          <Download size={16} />
-          Download PDF
-        </a>
+  const [isPreparing, setIsPreparing] = useState(false);
+
+  async function handleDownload() {
+    setIsPreparing(true);
+    try {
+      const { usedPrintFallback } = await downloadOrPrintDocument(`/sales/debit-notes/${debitNoteId}/pdf`);
+      if (usedPrintFallback) {
+        toast.info('Choose "Save as PDF" in the print dialog to download this debit note.');
       }
-    />
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to prepare the debit note PDF.");
+    } finally {
+      setIsPreparing(false);
+    }
+  }
+
+  return (
+    <Button type="button" variant="outline" onClick={handleDownload} disabled={isPreparing}>
+      <Download size={16} />
+      {isPreparing ? "Preparing…" : "Download PDF"}
+    </Button>
   );
 }

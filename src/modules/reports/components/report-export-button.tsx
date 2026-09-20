@@ -1,46 +1,66 @@
+"use client";
+
+import { useState } from "react";
+import { toast } from "sonner";
 import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { downloadOrPrintDocument } from "@/lib/pdf-client";
 
 interface ReportExportButtonProps {
   /**
    * The report's own Excel download Route Handler URL (query params
    * included), e.g.
    * `/reports/trial-balance/export?financialYearId=...&asOfDate=...`.
-   * Omitted, this renders the original disabled stub — every Phase 10
-   * screen other than Trial Balance still passes nothing, since only Trial
-   * Balance is wired as 77-excel-export.md's required reference
-   * implementation; each remaining screen wiring its own download route
-   * through this same prop is a named, small, mechanical follow-up.
+   * Omitted, this renders the original disabled stub. Excel export never
+   * touches Puppeteer (77-excel-export.md), so this link stays a plain,
+   * server-renderable `<a download>` — no client JS needed for this half.
    */
   downloadUrl?: string;
   /**
    * The report's own PDF download Route Handler URL — the same route as
    * `downloadUrl` with `&format=pdf` appended, e.g.
    * `/reports/trial-balance/export?financialYearId=...&asOfDate=...&format=pdf`.
-   * Additive and optional (78-pdf-generation.md's Report PDFs rule: only
-   * Trial Balance is wired as the required reference implementation; every
-   * other Phase 10 screen keeps passing only `downloadUrl` and renders
-   * exactly as before). When given alongside `downloadUrl`, renders a small
-   * Excel/PDF format choice instead of the single link.
+   * When given alongside `downloadUrl`, renders a small Excel/PDF format
+   * choice instead of the single link. Unlike the Excel link, this one is
+   * NOT a plain `<a download>`: the route can respond with either a real
+   * PDF or, when server-side Chromium isn't available for this platform
+   * (Termux/Android has no Chromium build at all — see pdf-generation.ts),
+   * the raw printable HTML instead — a plain link can't tell which one it
+   * got. `downloadOrPrintDocument` (src/lib/pdf-client.ts) can, and falls
+   * back to the browser's own print dialog on the HTML case.
    */
   pdfDownloadUrl?: string;
 }
 
 /**
- * Shared by every Phase 10 financial report screen. A plain,
- * server-renderable `<a download>` link when `downloadUrl` is given (no
- * client JS needed — mirrors sales-invoice-download-pdf-button.tsx's
- * identical convention), otherwise the original forward-noted disabled stub
- * (64-trial-balance.md's Do Not: "Actual Excel/PDF file generation for the
- * Export button (Phase 11, #75/#76 — button present, wiring deferred)").
- * Mirrors gst-report-export-button.tsx's identical stub for Phase 8. When
- * `pdfDownloadUrl` is also given, renders two adjacent small format-choice
- * links (Excel/PDF) instead of the single "Export" link — both still plain
- * server-renderable `<a download>` links, no client JS required
- * (78-pdf-generation.md's UI section).
+ * Shared by every report screen's Export action. The disabled stub renders
+ * when `downloadUrl` is omitted (64-trial-balance.md's original Phase 10
+ * placeholder, still the correct fallback for any screen not yet wired to a
+ * real export route). Excel-only renders a plain `<a download>` link
+ * (77-excel-export.md). When `pdfDownloadUrl` is also given, renders a small
+ * Excel/PDF format choice — Excel stays a plain link, PDF goes through
+ * `downloadOrPrintDocument` so it degrades to the browser's print dialog
+ * instead of downloading corrupted HTML-under-a-`.pdf`-name on a platform
+ * where Puppeteer can't launch (78-pdf-generation.md).
  */
 export function ReportExportButton({ downloadUrl, pdfDownloadUrl }: ReportExportButtonProps) {
+  const [isPreparingPdf, setIsPreparingPdf] = useState(false);
+
+  async function handlePdfDownload(url: string) {
+    setIsPreparingPdf(true);
+    try {
+      const { usedPrintFallback } = await downloadOrPrintDocument(url);
+      if (usedPrintFallback) {
+        toast.info('Choose "Save as PDF" in the print dialog to download this report.');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to prepare the report PDF.");
+    } finally {
+      setIsPreparingPdf(false);
+    }
+  }
+
   if (!downloadUrl) {
     return (
       <Button variant="outline" disabled title="Export will be available once Excel Export ships">
@@ -79,16 +99,15 @@ export function ReportExportButton({ downloadUrl, pdfDownloadUrl }: ReportExport
         }
       />
       <Button
+        type="button"
         variant="outline"
         size="sm"
-        nativeButton={false}
-        render={
-          <a href={pdfDownloadUrl} download>
-            <Download size={16} />
-            PDF
-          </a>
-        }
-      />
+        onClick={() => handlePdfDownload(pdfDownloadUrl)}
+        disabled={isPreparingPdf}
+      >
+        <Download size={16} />
+        {isPreparingPdf ? "Preparing…" : "PDF"}
+      </Button>
     </div>
   );
 }

@@ -5606,3 +5606,56 @@ authorization path.
 Re-verified: `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing
 unrelated warnings), `npx vitest run` (217 files, 2864 tests, all passing — includes the removal
 of the 2 `effectiveLineTax` cases).
+
+---
+
+## 2026-09-20 — Every PDF export now falls back to browser-side printing when server-side Chromium can't launch
+
+User reported PDF print/download broken on the live Termux deployment for a Sales Invoice.
+Traced via the server's own error log to the actual cause: Puppeteer has **no Chromium build
+for Android at all** — `Cannot download a binary for the provided platform: android (arm)` —
+not a fixable native-rebuild problem like the argon2 issue from the same deploy (see the CI fix
+entries above this one). Confirmed live that Excel export is unaffected (`exceljs` is pure JS,
+no native/browser dependency) and that both the Print and Download PDF buttons on a Sales
+Invoice hit the identical broken server route, so this is one root cause, not two.
+
+Presented three fix directions to the user (browser-side rendering / rewrite with a pure-JS PDF
+library / call an external PDF rendering service); user chose browser-side rendering: keep
+today's instant one-click PDF wherever server-side Chromium actually launches (the Electron
+desktop app; any real Windows/Mac/Linux host), but fall back to serving the raw HTML instead of
+throwing when it can't, so the *client's own* browser (a real desktop/mobile browser, unlike the
+Termux device) can print-to-PDF itself.
+
+- **`src/lib/pdf-generation.ts`**: added `renderHtmlToPdfOrHtml`, returning `{kind:"pdf",buffer}`
+  or `{kind:"html",html}`. Only the browser-*launch* step (`getBrowser()`) is caught — a genuine
+  page-rendering crash after a successful launch still throws normally, so a real template bug
+  can never be silently mistaken for this platform limitation. `renderHtmlToPdf` itself is
+  unchanged (still used by its own existing tests); internals refactored to share the render step
+  (`renderWithBrowser`) between both functions.
+- **`src/lib/pdf-client.ts`** (new): the one place that branches on which of the two a `[id]/pdf`
+  fetch actually returned. `downloadOrPrintDocument(url)` downloads the real PDF (parsing the
+  filename straight from the response's own `Content-Disposition` header) or opens the browser's
+  print dialog on the HTML fallback via a hidden iframe — the exact mechanism
+  `SalesInvoicePrintButton` already used, generalized. `printDocument(url)` is the explicit-Print
+  equivalent (content-type agnostic by construction, so it needed no change anywhere it's used).
+- Applied identically to **all 10** `[id]/pdf` Route Handlers (Sales Invoice, Purchase Order,
+  Goods Receipt Note, Purchase Return, Delivery Challan, Credit Note, Debit Note, Sales Order,
+  Quotation, Sales Return — Purchase Invoice is correctly excluded, per its own permanent
+  no-printing spec) and their corresponding Download PDF buttons, each converted from a plain
+  `<a href download>` link (which can't tell a real PDF from the HTML fallback) to a small
+  client component calling `downloadOrPrintDocument`, showing a toast hint to choose "Save as
+  PDF" only when the fallback path was actually used.
+- Applied identically to the `pdf` branch of **all 29** report export routes
+  (`reports/**/export/route.ts`) and to `ReportExportButton`'s PDF link (its Excel link is
+  untouched — Excel export never touches Puppeteer).
+- Reference implementation (Sales Invoice route + button + both `pdf-generation.ts` functions)
+  built and verified by hand first; the other 9 document-type pairs and all 28 remaining report
+  routes were replicated by two parallel subagents against that exact proven shape, each
+  independently spot-checked afterward rather than trusted blindly.
+
+Verified live on the Termux device (not just locally): manually compiled/wired the fix ahead of
+this commit to confirm the diagnosis, then re-verified after the real deploy — `/login` and a
+PDF export both serve cleanly. Re-verified in full: `npx tsc --noEmit` (0 errors), `npx eslint`
+across every touched directory (0 errors, same 2 pre-existing unrelated warnings), `npx vitest
+run` (217 files, **2897 tests**, all passing — includes new fallback-path tests added to
+`pdf-generation.test.ts`, the Sales Invoice route test, and all 29 report export route tests).

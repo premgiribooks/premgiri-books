@@ -12,7 +12,7 @@ const {
   getAttendanceSummaryReportMock,
   exportToExcelBufferMock,
   toAttendanceSummaryExportTableMock,
-  renderHtmlToPdfMock,
+  renderHtmlToPdfOrHtmlMock,
   buildReportHtmlMock,
   errorMock,
 } = vi.hoisted(() => ({
@@ -21,7 +21,7 @@ const {
   getAttendanceSummaryReportMock: vi.fn(),
   exportToExcelBufferMock: vi.fn(),
   toAttendanceSummaryExportTableMock: vi.fn(),
-  renderHtmlToPdfMock: vi.fn(),
+  renderHtmlToPdfOrHtmlMock: vi.fn(),
   buildReportHtmlMock: vi.fn(),
   errorMock: vi.fn(),
 }));
@@ -44,7 +44,7 @@ vi.mock("@/engines/reporting/employee-reports", () => ({
   toAttendanceSummaryExportTable: toAttendanceSummaryExportTableMock,
 }));
 vi.mock("@/lib/pdf-generation", () => ({
-  renderHtmlToPdf: renderHtmlToPdfMock,
+  renderHtmlToPdfOrHtml: renderHtmlToPdfOrHtmlMock,
 }));
 vi.mock("@/lib/pdf-templates/report-pdf-template", () => ({
   buildReportHtml: buildReportHtmlMock,
@@ -72,7 +72,7 @@ describe("GET /reports/employees/attendance-summary/export", () => {
     toAttendanceSummaryExportTableMock.mockReturnValue([{ sheetName: "Attendance Summary", columns: [], rows: [] }]);
     exportToExcelBufferMock.mockResolvedValue(Buffer.from("fake-xlsx"));
     buildReportHtmlMock.mockReturnValue("<html></html>");
-    renderHtmlToPdfMock.mockResolvedValue(Buffer.from("%PDF-fake"));
+    renderHtmlToPdfOrHtmlMock.mockResolvedValue({ kind: "pdf", buffer: Buffer.from("%PDF-fake") });
   });
 
   it("returns 400 for a missing/invalid period — never reaching the service", async () => {
@@ -179,7 +179,7 @@ describe("GET /reports/employees/attendance-summary/export", () => {
     it("renders A4 portrait per the reports paper-size convention", async () => {
       await GET(request(`${VALID_QUERY}&format=pdf`));
 
-      expect(renderHtmlToPdfMock).toHaveBeenCalledWith(expect.any(String), { format: "A4", orientation: "portrait" });
+      expect(renderHtmlToPdfOrHtmlMock).toHaveBeenCalledWith(expect.any(String), { format: "A4", orientation: "portrait" });
     });
 
     it("applies the same reports:export permission gate as the xlsx path", async () => {
@@ -189,7 +189,7 @@ describe("GET /reports/employees/attendance-summary/export", () => {
 
       expect(response.status).toBe(403);
       expect(getAttendanceSummaryReportMock).not.toHaveBeenCalled();
-      expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
+      expect(renderHtmlToPdfOrHtmlMock).not.toHaveBeenCalled();
     });
 
     it("applies the same filter validation as the xlsx path", async () => {
@@ -200,12 +200,27 @@ describe("GET /reports/employees/attendance-summary/export", () => {
     });
 
     it("returns a generic 500 and logs an unexpected render failure", async () => {
-      renderHtmlToPdfMock.mockRejectedValue(new Error("Chromium launch failed"));
+      // A genuine rendering crash (not the Chromium-unavailable case, which
+      // renderHtmlToPdfOrHtml itself catches and turns into the
+      // {kind:"html"} fallback tested below rather than a throw) must still
+      // surface as a real 500.
+      renderHtmlToPdfOrHtmlMock.mockRejectedValue(new Error("Unexpected template rendering crash"));
 
       const response = await GET(request(`${VALID_QUERY}&format=pdf`));
 
       expect(response.status).toBe(500);
       expect(errorMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the raw HTML (no Content-Disposition) when server-side Chromium isn't available", async () => {
+      renderHtmlToPdfOrHtmlMock.mockResolvedValue({ kind: "html", html: "<html>fallback</html>" });
+
+      const response = await GET(request(`${VALID_QUERY}&format=pdf`));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+      expect(response.headers.get("Content-Disposition")).toBeNull();
+      expect(await response.text()).toBe("<html>fallback</html>");
     });
 
     it("falls back to xlsx for an unrecognized format value instead of erroring", async () => {
