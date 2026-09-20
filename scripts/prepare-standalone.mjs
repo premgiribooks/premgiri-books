@@ -5,13 +5,14 @@
 // https://nextjs.org/docs/app/api-reference/config/next-config-js/output
 // before electron-builder packages `.next/standalone` as a resource.
 import { cp, lstat, readdir, readFile, realpath, rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const standaloneDir = path.join(projectRoot, ".next", "standalone");
+const pnpmStoreDir = path.join(projectRoot, "node_modules", ".pnpm");
 const require = createRequire(import.meta.url);
 
 if (!existsSync(standaloneDir)) {
@@ -25,6 +26,31 @@ async function copyInto(from, to) {
   await cp(from, to, { recursive: true, dereference: true });
 }
 
+/**
+ * pnpm's own store directory names a package "<name>@<version>[...]"
+ * (scoped packages use "+" in place of "/", e.g. "@prisma+client@7.8.0...").
+ * Fallback for when require.resolve() can't see a package at all — true for
+ * any package that's only a *transitive* dependency of something else, and
+ * so was never hoisted into this project's own top-level node_modules under
+ * pnpm's strict no-phantom-dependencies isolation. Confirmed by a real
+ * deploy: Turbopack externalized `rimraf` (a dependency of electron-builder's
+ * own `fstream`/`temp` — nothing this app's own code imports) right alongside
+ * `instrumentation.js` in the same bundled chunk, but
+ * require.resolve("rimraf", {paths:[projectRoot]}) can't find it there, since
+ * nothing in package.json's own "dependencies" list needs it directly. The
+ * package is still real and fully installed — just only reachable by
+ * searching pnpm's own store directly, exactly like the CI deploy script's
+ * `find node_modules/.pnpm -iname 'argon2@*'` does for the same reason.
+ */
+function findInPnpmStore(packageName) {
+  if (!existsSync(pnpmStoreDir)) {
+    return null;
+  }
+  const storeName = packageName.replace("/", "+");
+  const match = readdirSync(pnpmStoreDir).find((entry) => entry.startsWith(`${storeName}@`));
+  return match ? path.join(pnpmStoreDir, match, "node_modules", ...packageName.split("/")) : null;
+}
+
 // Some packages (e.g. next's own "baseline-browser-mapping" dependency)
 // restrict their own package.json via an "exports" map, so
 // require.resolve(`${pkg}/package.json`) throws ERR_PACKAGE_PATH_NOT_EXPORTED
@@ -32,6 +58,18 @@ async function copyInto(from, to) {
 // package's real entry file instead (which exports maps do allow) and walk
 // up to the nearest package.json.
 function resolvePackageDir(packageName, fromFile) {
+  try {
+    return resolvePackageDirViaRequire(packageName, fromFile);
+  } catch (requireError) {
+    const storeDir = findInPnpmStore(packageName);
+    if (storeDir && existsSync(path.join(storeDir, "package.json"))) {
+      return storeDir;
+    }
+    throw requireError;
+  }
+}
+
+function resolvePackageDirViaRequire(packageName, fromFile) {
   let entryFile = require.resolve(packageName, { paths: [fromFile] });
 
   // A handful of npm package names (e.g. "punycode") collide with a

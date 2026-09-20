@@ -5659,3 +5659,59 @@ PDF export both serve cleanly. Re-verified in full: `npx tsc --noEmit` (0 errors
 across every touched directory (0 errors, same 2 pre-existing unrelated warnings), `npx vitest
 run` (217 files, **2897 tests**, all passing — includes new fallback-path tests added to
 `pdf-generation.test.ts`, the Sales Invoice route test, and all 29 report export route tests).
+
+---
+
+## 2026-09-20 — Fixed a second, separate bug the same deploy exposed: a masked instrumentation crash on every request error
+
+User confirmed the Sales Invoice PDF fix worked, then reported report Excel/PDF export still
+failing (Trial Balance, Profit & Loss). Traced via the browser's own Network tab (the origin
+server's logs showed nothing useful, which turned out to be the actual clue): the PDF export
+request returned a bare **500** in ~488ms with a 21-byte `text/plain` body — not this app's own
+JSON error envelope every route's `catch` block already returns. Too fast to be a real render
+attempt, and too generic to be our code.
+
+Root cause, confirmed by reading Next's own `next-server.js`: `loadInstrumentationModule()`
+wraps any non-`MODULE_NOT_FOUND` failure loading `instrumentation.js` and rethrows it as "An
+error occurred while loading the instrumentation hook" — and `prepare()`'s
+`this.preparedPromise = this.prepareImpl().then(...)` has no `.catch()`, so once that promise
+rejects once, it stays rejected and cached forever, permanently wedging **every subsequent
+request** (not just backup-related ones) behind the same generic crash — an unrelated
+production-only manifestation of the exact "cached rejected Promise" class of bug
+`pdf-generation.ts`'s own `getBrowser()` already explicitly guards against, just missing here.
+The real trigger: Turbopack bundles `instrumentation.js` together with everything `register()`
+transitively reaches (`backup-scheduler.ts` → ... → whatever pulled in `rimraf`, a dependency
+of electron-builder's own `fstream`/`temp` that nothing in this app's own code imports), and
+externalizes `rimraf` into `.next/node_modules/rimraf-<hash>/` same as argon2/pg/pino/jsdom —
+but `rimraf` is only ever a *transitive* dependency, never hoisted into this project's own
+top-level `node_modules` under pnpm's strict no-phantom-dependencies isolation, so
+`prepare-standalone.mjs`'s existing `resolvePackageDir()` (which resolves via
+`require.resolve(name, {paths:[projectRoot]})`) could find and copy `rimraf` itself (its
+*own* dereferencing step uses `realpath()` on the original symlink, not `require.resolve`) but
+had no way to find *rimraf's own* dependency (`glob`) afterward — leaving every "Failed to load
+external module rimraf-...: Cannot find module 'glob'" instrumentation crash logged instead of
+ever reaching this app's report-export code at all. This explains everything the user saw:
+PDF's real client-side error handling correctly surfaced the crash as a toast; Excel's older
+plain `<a href download>` link has none, so it just silently saved the generic error body under
+a `.xlsx` filename — "a file downloaded but it's wrong."
+
+Fixed the general case, not just `rimraf`: **`scripts/prepare-standalone.mjs`** gets a new
+`findInPnpmStore(packageName)` fallback, used by `resolvePackageDir()` whenever
+`require.resolve()` can't see a package at all — scans `node_modules/.pnpm/` directly for a
+`<name>@<version>` entry and returns its own `node_modules/<name>`, exactly mirroring the CI
+deploy script's own `find node_modules/.pnpm -iname 'argon2@*'` trick for the identical
+"transitive-only dependency, pnpm won't hoist it" reason. This self-heals *any* future
+Turbopack-externalized transitive-only package the same way, not only this one.
+
+Verified locally end-to-end before shipping: real `next build` + `node
+scripts/prepare-standalone.mjs`, confirmed `glob` (and its own further dependencies —
+`fs.realpath`, `inflight`, `inherits`, `minimatch`, `once`, `path-is-absolute`, all resolved
+recursively) now sits inside the `rimraf-<hash>` proxy, and `node -e "require('./rimraf.js')"`
+from inside that exact directory loads cleanly (previously threw the exact production error).
+Re-verified in full: `npx tsc --noEmit` (0 errors), `npx eslint` (0 errors, same 2 pre-existing
+unrelated warnings), `npx vitest run` (217 files, 2897 tests, all passing).
+
+Still open, deliberately not fixed here: whatever the *actual* Profit & Loss/Trial Balance
+export failure was is still unknown — this fix only removes the mask hiding it. Once deployed,
+the next attempt should surface the real error (in the response body and/or the server log)
+instead of this generic crash, and that real error still needs diagnosing.
