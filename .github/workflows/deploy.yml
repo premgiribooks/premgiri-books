@@ -172,10 +172,40 @@ jobs:
             "cd ~/next-app",
             # argon2 is a native addon; the copy above carries whatever
             # binary the build machine (Windows/x64) produced, which won't
-            # load on Termux's Android/aarch64 userland. Rebuilding it here
-            # compiles a binary for the phone's own architecture using
-            # Termux's toolchain (clang/make/python must be installed).
-            "npm rebuild argon2 --build-from-source",
+            # load on Termux's Android/aarch64 userland (confirmed on a
+            # real device: "No native build was found for
+            # platform=android arch=arm ... libc=glibc").
+            #
+            # `npm rebuild argon2` doesn't work: it also runs argon2's
+            # own "prepare": "tsc" lifecycle script, which fails because
+            # this deploy only ships compiled runtime files, not argon2's
+            # TypeScript sources/devDependencies (confirmed: real error
+            # was tsc printing its own --help text and exiting 1). Call
+            # its actual native-build step directly instead — this is
+            # literally the body of argon2's own "install" script
+            # (node-gyp-build, found via package.json) — bypassing that
+            # broken "prepare" step entirely.
+            "ARGON2_DIR=$(find node_modules/.pnpm -maxdepth 1 -iname 'argon2@*' -print -quit)/node_modules/argon2",
+            "(cd \"$ARGON2_DIR\" && npx --yes node-gyp-build)",
+            # The line above can fail (missing clang/make/python on the
+            # Termux side, or a node-gyp-build bug) without the *script's*
+            # exit code reflecting it, since nothing later checks it and
+            # the final `pm2 restart ... || pm2 start ...` line always
+            # succeeds on its own. That previously let a broken rebuild
+            # go unnoticed: CI reported green while the server kept
+            # running with no native argon2 binary at all. Verify the
+            # actual compiled artifact exists and fail the whole deploy
+            # loudly (surfacing in the Actions log) if it doesn't, rather
+            # than silently restarting pm2 with a still-broken build.
+            "if [ ! -f \"$ARGON2_DIR/build/Release/argon2.node\" ]; then echo 'ERROR: argon2 native rebuild failed on Termux - build/Release/argon2.node was not produced. Check that clang, make, and python are installed (pkg install clang make python).' >&2; exit 1; fi",
+            # Next/Turbopack's build also externalizes argon2 into its
+            # own separate physical copy under .next/node_modules/ (see
+            # scripts/prepare-standalone.mjs) — the actual server process
+            # loads *that* copy, not the one above, and it has no
+            # node-gyp of its own to compile with (confirmed: "spawn
+            # node-gyp ENOENT" there). Reuse the build we just produced
+            # rather than trying to make that isolated copy compile too.
+            "for proxy in .next/node_modules/argon2-*; do [ -d \"$proxy\" ] && rm -rf \"$proxy/build\" && cp -r \"$ARGON2_DIR/build\" \"$proxy/build\"; done",
             "pm2 restart premgiri-books --update-env || pm2 start server.js --name premgiri-books --update-env"
           )
           Set-Content -Path $remoteScriptPath -Value ($lines -join "`n") -NoNewline
