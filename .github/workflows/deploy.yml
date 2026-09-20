@@ -185,8 +185,19 @@ jobs:
             # literally the body of argon2's own "install" script
             # (node-gyp-build, found via package.json) — bypassing that
             # broken "prepare" step entirely.
-            "ARGON2_DIR=$(find node_modules/.pnpm -maxdepth 1 -iname 'argon2@*' -print -quit)/node_modules/argon2",
-            "(cd \"$ARGON2_DIR\" && npx --yes node-gyp-build)",
+            # These four lines are PowerShell *single*-quoted (unlike every
+            # other line in this array) so their $ARGON2_DIR/$proxy and
+            # $(...) are passed through to bash literally. PowerShell has
+            # no backslash escaping — only double-quoted strings interpolate
+            # $variables and $(...) subexpressions, and \" inside one does
+            # NOT escape a quote (it just closes the string early, which is
+            # exactly what broke this the first time: a parser error before
+            # the step ever reached Termux). Single-quoted strings are
+            # fully literal, so the embedded "..." bash quoting needs no
+            # escaping at all; the one literal PowerShell single quote
+            # (in 'argon2@*') is doubled ('') per PowerShell's own rule.
+            'ARGON2_DIR=$(find node_modules/.pnpm -maxdepth 1 -iname ''argon2@*'' -print -quit)/node_modules/argon2',
+            '(cd "$ARGON2_DIR" && npx --yes node-gyp-build)',
             # The line above can fail (missing clang/make/python on the
             # Termux side, or a node-gyp-build bug) without the *script's*
             # exit code reflecting it, since nothing later checks it and
@@ -197,7 +208,7 @@ jobs:
             # actual compiled artifact exists and fail the whole deploy
             # loudly (surfacing in the Actions log) if it doesn't, rather
             # than silently restarting pm2 with a still-broken build.
-            "if [ ! -f \"$ARGON2_DIR/build/Release/argon2.node\" ]; then echo 'ERROR: argon2 native rebuild failed on Termux - build/Release/argon2.node was not produced. Check that clang, make, and python are installed (pkg install clang make python).' >&2; exit 1; fi",
+            'if [ ! -f "$ARGON2_DIR/build/Release/argon2.node" ]; then echo ''ERROR: argon2 native rebuild failed on Termux - build/Release/argon2.node was not produced. Check that clang, make, and python are installed (pkg install clang make python).'' >&2; exit 1; fi',
             # Next/Turbopack's build also externalizes argon2 into its
             # own separate physical copy under .next/node_modules/ (see
             # scripts/prepare-standalone.mjs) — the actual server process
@@ -205,7 +216,7 @@ jobs:
             # node-gyp of its own to compile with (confirmed: "spawn
             # node-gyp ENOENT" there). Reuse the build we just produced
             # rather than trying to make that isolated copy compile too.
-            "for proxy in .next/node_modules/argon2-*; do [ -d \"$proxy\" ] && rm -rf \"$proxy/build\" && cp -r \"$ARGON2_DIR/build\" \"$proxy/build\"; done",
+            'for proxy in .next/node_modules/argon2-*; do [ -d "$proxy" ] && rm -rf "$proxy/build" && cp -r "$ARGON2_DIR/build" "$proxy/build"; done',
             "pm2 restart premgiri-books --update-env || pm2 start server.js --name premgiri-books --update-env"
           )
           Set-Content -Path $remoteScriptPath -Value ($lines -join "`n") -NoNewline
