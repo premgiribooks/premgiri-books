@@ -3641,6 +3641,25 @@ Branch: `feature/installer-database-setup`, not yet merged into `main`.
 
 ---
 
+# Hidden Temporary Margin Override — Ctrl+Shift+M (2026-09-21)
+
+Per explicit user instruction — see `progress-tracker.md`'s matching entry for the full record.
+Not tied to a ROADMAP Phase; plan at `C:\Users\kamlesh\.claude\plans\i-want-some-hidden-rosy-cosmos.md`.
+
+- **Phase 1 — implemented**: reserved `Ctrl+Shift+M` shortcut (cannot be reassigned, no shortcut
+  can be rebound onto it), a 10-day client-side cookie store, the Pricing-Engine-hosted markup
+  calculation, the dialog + navbar indicator, Sales Invoice Create/Edit (non-destructive rate
+  preview only) and Sales Invoice Detail/Print/PDF (full display+print replace, `?marginOverride=`
+  query param on the PDF route). `npx tsc --noEmit`, `npx eslint`, `next build` all clean.
+  Branch: `feature/margin-override-shortcut`, not yet merged into `main`. Not yet manually
+  verified by the user in a running app.
+- **Phase 2 — not started**: replicate the same Create/Edit-preview + Detail/Print-replace pattern
+  to Quotations, Sales Orders, Delivery Challans, Credit Notes, Debit Notes.
+- **Phase 3 — not started**: Price List item rows (preview-only overlay, same risk profile as
+  Create/Edit forms — this page also saves data).
+
+---
+
 # Notes
 
 - Complete one feature at a time.

@@ -14,6 +14,7 @@ import { gstEngine } from "@/engines/gst/gst-engine";
 import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engines/gst/types";
 import { inventoryEngine } from "@/engines/inventory/inventory-engine";
 import { takeFromAllocationQueue, type WarehouseAllocationLine } from "@/engines/inventory/warehouse-allocation";
+import { applyMarginOverride } from "@/engines/pricing/margin-override";
 import { pricingEngine } from "@/engines/pricing/pricing-engine";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import { voucherQueries } from "@/engines/voucher/voucher-queries";
@@ -797,6 +798,79 @@ export const salesInvoiceService = {
       return null;
     }
     return invoice;
+  },
+
+  /**
+   * Backs the hidden "temporary margin override" feature (Ctrl+Shift+M) on
+   * the Sales Invoice detail page and its Print/Download buttons — NEVER
+   * persisted, purely a display/print-time recomputation. Reuses
+   * pricingEngine.resolvePrice (for each line's current latest purchase
+   * cost, the same source `resolveLinePrice` already uses) and this
+   * service's own `previewSalesInvoice` (the exact GST Engine path real
+   * invoices go through) so no tax math is duplicated here — only the
+   * per-line `rate` fed into that computation changes. Returns `null` when
+   * the invoice itself isn't found/visible, mirroring `getSalesInvoice`.
+   */
+  async previewSalesInvoiceWithMarginOverride(id: string, marginPercent: number): Promise<SalesInvoiceDetail | null> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const salesInvoice = await this.getSalesInvoice(id);
+    if (!salesInvoice) {
+      return null;
+    }
+
+    const costs = await Promise.all(
+      salesInvoice.items.map((item) =>
+        pricingEngine.resolvePrice({ companyId: user.companyId, productId: item.productId, quantity: item.quantity })
+      )
+    );
+
+    const overrideLines = salesInvoice.items.map((item, index) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      rate: applyMarginOverride(costs[index].purchaseCost, marginPercent) ?? item.rate,
+      discountPercent: item.discountPercent || undefined,
+      discountAmount: item.discountAmount || undefined,
+      isTaxOverridden: item.isTaxOverridden,
+      overriddenCgst: item.overriddenCgst ?? undefined,
+      overriddenSgst: item.overriddenSgst ?? undefined,
+      overriddenIgst: item.overriddenIgst ?? undefined,
+      overriddenCess: item.overriddenCess ?? undefined,
+      overrideReason: item.overrideReason ?? undefined,
+    }));
+
+    const preview = await this.previewSalesInvoice({
+      customerMode: salesInvoice.customerMode,
+      customerId: salesInvoice.customerId ?? undefined,
+      invoiceDate: salesInvoice.invoiceDate.toISOString().slice(0, 10),
+      placeOfSupplyStateCode: salesInvoice.placeOfSupplyStateCode,
+      lines: overrideLines,
+      payments: [],
+    });
+
+    return {
+      ...salesInvoice,
+      items: salesInvoice.items.map((item, index) => ({
+        ...item,
+        rate: overrideLines[index].rate,
+        taxableAmount: preview.lines[index].taxableAmount,
+        cgst: preview.lines[index].cgst,
+        sgst: preview.lines[index].sgst,
+        igst: preview.lines[index].igst,
+        cess: preview.lines[index].cess,
+        totalAmount: preview.lines[index].totalAmount,
+      })),
+      subtotal: preview.totals.subtotal,
+      totalDiscount: preview.totals.totalDiscount,
+      taxableAmount: preview.totals.taxableAmount,
+      totalCgst: preview.totals.totalCgst,
+      totalSgst: preview.totals.totalSgst,
+      totalIgst: preview.totals.totalIgst,
+      totalCess: preview.totals.totalCess,
+      roundOff: preview.totals.roundOff,
+      grandTotal: preview.totals.grandTotal,
+    };
   },
 
   /**

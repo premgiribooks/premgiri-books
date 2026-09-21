@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,8 @@ import { ProductOptionSelector, type ProductOptionItem } from "@/modules/product
 import { resolveLinePriceAction } from "@/modules/sales-invoices/actions/sales-invoice-actions";
 import { ITEM_SEARCH_SHORTCUT_ATTRIBUTE } from "@/lib/shortcut-dom-targets";
 import { SalesInvoiceTaxOverridePopover } from "@/modules/sales-invoices/components/sales-invoice-tax-override-popover";
+import { useMarginOverride } from "@/hooks/use-margin-override";
+import { previewMarginOverrideRateAction } from "@/lib/margin-override-actions";
 import type { CreateSalesInvoiceInput } from "@/modules/sales-invoices/validation/sales-invoice-schema";
 import type { SalesInvoiceLineComputation } from "@/types/sales-invoice";
 
@@ -58,8 +60,22 @@ export function SalesInvoiceLineRow({
   const { control, setValue, getValues } = useFormContext<CreateSalesInvoiceInput>();
   const [isResolvingPrice, setIsResolvingPrice] = React.useState(false);
 
+  // Temporary margin override preview (Ctrl+Shift+M) — display-only, never
+  // written into the `rate` field above, so what gets submitted/saved is
+  // always the real Pricing-Engine value regardless of whether this is
+  // active. See src/components/margin-override/margin-override-dialog.tsx.
+  const marginOverride = useMarginOverride();
+  const [resolvedCost, setResolvedCost] = React.useState<number | null>(null);
+  // Keyed by the cost it was computed from, so a stale preview from the
+  // previous product/cost never renders while a new one resolves — avoids
+  // an unconditional `setPreviewRate(null)` reset inside the effect below.
+  const [previewRate, setPreviewRate] = React.useState<{ cost: number; rate: number | null } | null>(null);
+  const watchedProductId = useWatch({ control, name: `lines.${index}.productId` });
+  const watchedQuantity = useWatch({ control, name: `lines.${index}.quantity` });
+
   async function handleProductChange(productId: string | undefined) {
     setValue(`lines.${index}.productId`, productId ?? "", { shouldValidate: true });
+    setResolvedCost(null);
     if (!productId) {
       return;
     }
@@ -67,13 +83,56 @@ export function SalesInvoiceLineRow({
     setIsResolvingPrice(true);
     try {
       const result = await resolveLinePriceAction({ productId, quantity, customerId, asOfDate: invoiceDate || undefined });
-      if (result.success && result.data && result.data.price !== null) {
-        setValue(`lines.${index}.rate`, result.data.price, { shouldValidate: true });
+      if (result.success && result.data) {
+        setResolvedCost(result.data.purchaseCost);
+        if (result.data.price !== null) {
+          setValue(`lines.${index}.rate`, result.data.price, { shouldValidate: true });
+        }
       }
     } finally {
       setIsResolvingPrice(false);
     }
   }
+
+  // Lazily resolves purchase cost for an already-selected line (edit mode,
+  // or a line the user isn't actively re-picking) once an override is
+  // active — read-only, never touches the `rate` field.
+  React.useEffect(() => {
+    if (!marginOverride || !watchedProductId || resolvedCost !== null) {
+      return;
+    }
+    let cancelled = false;
+    void resolveLinePriceAction({
+      productId: watchedProductId,
+      quantity: watchedQuantity || 1,
+      customerId,
+      asOfDate: invoiceDate || undefined,
+    }).then((result) => {
+      if (!cancelled && result.success && result.data) {
+        setResolvedCost(result.data.purchaseCost);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [marginOverride, watchedProductId, watchedQuantity, resolvedCost, customerId, invoiceDate]);
+
+  React.useEffect(() => {
+    if (!marginOverride || resolvedCost === null) {
+      return;
+    }
+    let cancelled = false;
+    void previewMarginOverrideRateAction({ purchaseCost: resolvedCost, marginPercent: marginOverride.marginPercent }).then(
+      (result) => {
+        if (!cancelled) {
+          setPreviewRate({ cost: resolvedCost, rate: result.success ? (result.data ?? null) : null });
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [marginOverride, resolvedCost]);
 
   return (
     <TableRow>
@@ -154,6 +213,11 @@ export function SalesInvoiceLineRow({
             </FormItem>
           )}
         />
+        {marginOverride && previewRate && previewRate.cost === resolvedCost && previewRate.rate !== null ? (
+          <div className="mt-1 text-xs whitespace-nowrap text-ai-foreground">
+            Custom: {previewRate.rate.toFixed(2)} @ {marginOverride.marginPercent}%
+          </div>
+        ) : null}
       </TableCell>
 
       <TableCell>

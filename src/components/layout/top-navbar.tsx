@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/common/theme-toggle";
+import { MarginOverrideBadge } from "@/components/margin-override/margin-override-badge";
 import { useAuth } from "@/components/providers/auth-provider";
 import { logoutAction } from "@/lib/auth-actions";
 import { openCommandPalette } from "@/hooks/use-command-palette";
@@ -87,6 +88,7 @@ export function TopNavbar({ onOpenMobileNav }: TopNavbarProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        <MarginOverrideBadge />
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger

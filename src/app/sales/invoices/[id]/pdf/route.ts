@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError } from "@/lib/current-user";
 import { logger } from "@/lib/logger";
 import { renderHtmlToPdfOrHtml } from "@/lib/pdf-generation";
+import { isValidMarginOverridePercent } from "@/engines/pricing/margin-override";
 import { bankAccountService } from "@/modules/bank-accounts/services/bank-account-service";
 import { companyService } from "@/modules/company/services/company-service";
 import { readCompanyLogoAsDataUri } from "@/modules/company/services/company-logo-service";
@@ -54,11 +55,24 @@ async function resolveBankAccountForInvoice(): Promise<BankAccountWithLedger | n
  * document, and `renderHtmlToPdf` turns it into a buffer
  * (78-pdf-generation.md).
  */
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { id } = await params;
 
   try {
-    const salesInvoice = await salesInvoiceService.getSalesInvoice(id);
+    // Hidden "temporary margin override" feature (Ctrl+Shift+M) — an
+    // optional, request-scoped rendering instruction the client appends
+    // only when it has an active override cookie (see
+    // margin-override-cookie.ts). NEVER written to the DB: an invalid or
+    // out-of-range value is silently ignored and the real invoice prints,
+    // rather than erroring out a normal print/download.
+    const marginOverrideParam = new URL(request.url).searchParams.get("marginOverride");
+    const marginOverridePercent = marginOverrideParam === null ? null : Number(marginOverrideParam);
+    const hasValidMarginOverride =
+      marginOverridePercent !== null && isValidMarginOverridePercent(marginOverridePercent);
+
+    const salesInvoice = hasValidMarginOverride
+      ? await salesInvoiceService.previewSalesInvoiceWithMarginOverride(id, marginOverridePercent)
+      : await salesInvoiceService.getSalesInvoice(id);
     if (!salesInvoice) {
       return NextResponse.json({ error: "Sales invoice not found." }, { status: 404 });
     }
