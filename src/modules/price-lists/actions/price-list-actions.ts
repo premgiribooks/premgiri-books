@@ -59,3 +59,10 @@ export async function removePriceListItemAction(
 ): Promise<ActionResult<void>> {
   return runAction(() => priceListService.removeItem(listId, itemId), [editPath(listId)]);
 }
+
+// Read-only — no revalidation. Backs the items editor's temporary margin
+// override (Ctrl+Shift+M) — never persisted, see
+// price-list-service.ts's resolveProductPurchaseCost.
+export async function resolveProductPurchaseCostAction(productId: string): Promise<ActionResult<number | null>> {
+  return runAction(() => priceListService.resolveProductPurchaseCost(productId), []);
+}

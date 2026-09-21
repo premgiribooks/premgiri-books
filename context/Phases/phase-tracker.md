@@ -3646,17 +3646,26 @@ Branch: `feature/installer-database-setup`, not yet merged into `main`.
 Per explicit user instruction — see `progress-tracker.md`'s matching entry for the full record.
 Not tied to a ROADMAP Phase; plan at `C:\Users\kamlesh\.claude\plans\i-want-some-hidden-rosy-cosmos.md`.
 
-- **Phase 1 — implemented**: reserved `Ctrl+Shift+M` shortcut (cannot be reassigned, no shortcut
-  can be rebound onto it), a 10-day client-side cookie store, the Pricing-Engine-hosted markup
-  calculation, the dialog + navbar indicator, Sales Invoice Create/Edit (non-destructive rate
-  preview only) and Sales Invoice Detail/Print/PDF (full display+print replace, `?marginOverride=`
-  query param on the PDF route). `npx tsc --noEmit`, `npx eslint`, `next build` all clean.
-  Branch: `feature/margin-override-shortcut`, not yet merged into `main`. Not yet manually
-  verified by the user in a running app.
-- **Phase 2 — not started**: replicate the same Create/Edit-preview + Detail/Print-replace pattern
-  to Quotations, Sales Orders, Delivery Challans, Credit Notes, Debit Notes.
-- **Phase 3 — not started**: Price List item rows (preview-only overlay, same risk profile as
-  Create/Edit forms — this page also saves data).
+- **Phase 1 — implemented, user-tested and confirmed correct**: reserved `Ctrl+Shift+M` shortcut
+  (cannot be reassigned, no shortcut can be rebound onto it), a 10-day client-side cookie store,
+  the Pricing-Engine-hosted markup calculation, the dialog + navbar CM badge, Sales Invoice
+  Create/Edit (writes the override rate directly into the Rate field, per user decision — not the
+  originally-planned non-destructive preview) and Sales Invoice Detail/Print/PDF (full
+  display+print replace, `?marginOverride=` query param on the PDF route).
+- **Phase 2 — implemented**: Quotations and Sales Orders, same pattern as Sales Invoice exactly
+  (Create/Edit writes to Rate, Detail/Print fully replaces). Delivery Challan, Credit Note, and
+  Debit Note investigated and found **not applicable** — none of the three has a
+  product+cost-driven Rate/margin concept at all (Delivery Challan has no pricing whatsoever;
+  Credit/Debit Notes are freeform description+amount adjustment lines, not product-priced) — see
+  `progress-tracker.md`'s matching entry for the detail.
+- **Phase 3 — implemented**: Price List item editor (add-row form and the inline per-row edit
+  form) — writes the override-computed price directly into `sellingPrice`, same risk profile as
+  Sales Create/Edit since this page also saves data. New `resolveProductPurchaseCost`
+  service method/action backs the cost lookup this module didn't previously need.
+
+All three phases: `npx tsc --noEmit`, `npx eslint` on every touched file, and `next build` all
+clean. Branch: `feature/margin-override-shortcut`, not yet merged into `main`. Phase 1 confirmed
+working by the user in a running app; Phases 2/3 not yet manually exercised.
 
 ---
 

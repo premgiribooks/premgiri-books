@@ -2,6 +2,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import { pricingEngine } from "@/engines/pricing/pricing-engine";
 import {
   priceListRepository,
   type PriceListItemPersistData,
@@ -110,6 +111,23 @@ export const priceListService = {
       return null;
     }
     return priceList;
+  },
+
+  /**
+   * Backs the hidden "temporary margin override" feature (Ctrl+Shift+M) on
+   * the Price List items editor — resolves a product's current latest
+   * purchase cost so the row can compute an override-priced `sellingPrice`
+   * (see margin-override.ts's applyMarginOverride). Quantity is fixed at 1:
+   * purchase cost itself never varies by quantity (pricingEngine.resolvePrice
+   * always sources it from `product.purchasePrice` directly), only the
+   * price-list-break resolution this call doesn't use does.
+   */
+  async resolveProductPurchaseCost(productId: string): Promise<number | null> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+
+    const result = await pricingEngine.resolvePrice({ companyId: user.companyId, productId, quantity: 1 });
+    return result.purchaseCost;
   },
 
   async createPriceList(input: CreatePriceListInput): Promise<PriceListDetail> {
