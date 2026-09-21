@@ -69,3 +69,13 @@ export async function previewQuotationAction(
 ): Promise<ActionResult<QuotationPreview>> {
   return runAction(() => quotationService.previewQuotation(input), []);
 }
+
+// Read-only — no revalidation. Backs the detail page's temporary margin
+// override preview (Ctrl+Shift+M) — never persisted, see
+// quotation-service.ts's previewQuotationWithMarginOverride.
+export async function previewQuotationMarginOverrideAction(
+  id: string,
+  marginPercent: number
+): Promise<ActionResult<QuotationDetail | null>> {
+  return runAction(() => quotationService.previewQuotationWithMarginOverride(id, marginPercent), []);
+}

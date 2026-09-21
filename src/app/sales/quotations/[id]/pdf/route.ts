@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 import { AuthenticationError, AuthorizationError } from "@/lib/current-user";
 import { logger } from "@/lib/logger";
 import { renderHtmlToPdfOrHtml } from "@/lib/pdf-generation";
+import { isValidMarginOverridePercent } from "@/engines/pricing/margin-override";
 import { buildQuotationHtml } from "@/modules/quotations/pdf/quotation-pdf";
 import { quotationService } from "@/modules/quotations/services/quotation-service";
 
@@ -23,11 +24,22 @@ function downloadFilename(quotationNumber: string): string {
  * `buildQuotationHtml` renders the already-loaded document, and
  * `renderHtmlToPdf` turns it into a buffer (78-pdf-generation.md).
  */
-export async function GET(_request: Request, { params }: RouteParams): Promise<NextResponse> {
+export async function GET(request: Request, { params }: RouteParams): Promise<NextResponse> {
   const { id } = await params;
 
   try {
-    const quotation = await quotationService.getQuotation(id);
+    // Hidden "temporary margin override" feature (Ctrl+Shift+M) — an
+    // optional, request-scoped rendering instruction the client appends
+    // only when it has an active override cookie. NEVER written to the DB:
+    // an invalid or out-of-range value is silently ignored.
+    const marginOverrideParam = new URL(request.url).searchParams.get("marginOverride");
+    const marginOverridePercent = marginOverrideParam === null ? null : Number(marginOverrideParam);
+    const hasValidMarginOverride =
+      marginOverridePercent !== null && isValidMarginOverridePercent(marginOverridePercent);
+
+    const quotation = hasValidMarginOverride
+      ? await quotationService.previewQuotationWithMarginOverride(id, marginOverridePercent)
+      : await quotationService.getQuotation(id);
     if (!quotation) {
       return NextResponse.json({ error: "Quotation not found." }, { status: 404 });
     }

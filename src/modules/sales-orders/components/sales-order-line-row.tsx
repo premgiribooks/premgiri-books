@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { numericFieldWidth } from "@/lib/utils";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import { resolveSalesOrderLinePriceAction } from "@/modules/sales-orders/actions/sales-order-actions";
+import { useMarginOverride } from "@/hooks/use-margin-override";
+import { previewMarginOverrideRateAction } from "@/lib/margin-override-actions";
 import type { CreateSalesOrderInput } from "@/modules/sales-orders/validation/sales-order-schema";
 import type { SalesOrderLineComputation } from "@/types/sales-order";
 
@@ -44,8 +46,17 @@ export function SalesOrderLineRow({
   const { control, setValue, getValues } = useFormContext<CreateSalesOrderInput>();
   const [isResolvingPrice, setIsResolvingPrice] = React.useState(false);
 
+  // Temporary margin override (Ctrl+Shift+M) — writes the override-computed
+  // rate directly into the `rate` field, same as normal price resolution.
+  // See src/components/margin-override/margin-override-dialog.tsx.
+  const marginOverride = useMarginOverride();
+  const [resolvedCost, setResolvedCost] = React.useState<number | null>(null);
+  const watchedProductId = useWatch({ control, name: `lines.${index}.productId` });
+  const watchedQuantity = useWatch({ control, name: `lines.${index}.quantity` });
+
   async function handleProductChange(productId: string | undefined) {
     setValue(`lines.${index}.productId`, productId ?? "", { shouldValidate: true });
+    setResolvedCost(null);
     if (!productId) {
       return;
     }
@@ -59,13 +70,58 @@ export function SalesOrderLineRow({
         customerId,
         asOfDate: orderDate || undefined,
       });
-      if (result.success && result.data && result.data.price !== null) {
-        setValue(`lines.${index}.rate`, result.data.price, { shouldValidate: true });
+      if (result.success && result.data) {
+        setResolvedCost(result.data.purchaseCost);
+        if (result.data.price !== null) {
+          setValue(`lines.${index}.rate`, result.data.price, { shouldValidate: true });
+        }
       }
     } finally {
       setIsResolvingPrice(false);
     }
   }
+
+  // Lazily resolves purchase cost for an already-selected line (edit mode)
+  // once an override is active.
+  React.useEffect(() => {
+    if (!marginOverride || !watchedProductId || resolvedCost !== null) {
+      return;
+    }
+    let cancelled = false;
+    void resolveSalesOrderLinePriceAction({
+      productId: watchedProductId,
+      quantity: watchedQuantity || 1,
+      customerId,
+      asOfDate: orderDate || undefined,
+    }).then((result) => {
+      if (!cancelled && result.success && result.data) {
+        setResolvedCost(result.data.purchaseCost);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [marginOverride, watchedProductId, watchedQuantity, resolvedCost, customerId, orderDate]);
+
+  // Applies the override rate straight into the form field — downstream
+  // taxable/tax/total figures follow through the form's own live-preview
+  // debounce, exactly like any other rate change.
+  React.useEffect(() => {
+    if (!marginOverride || resolvedCost === null) {
+      return;
+    }
+    let cancelled = false;
+    void previewMarginOverrideRateAction({ purchaseCost: resolvedCost, marginPercent: marginOverride.marginPercent }).then(
+      (result) => {
+        if (!cancelled && result.success && result.data !== null && result.data !== undefined) {
+          setValue(`lines.${index}.rate`, result.data, { shouldValidate: true });
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [marginOverride, resolvedCost, index, setValue]);
 
   return (
     <TableRow>
