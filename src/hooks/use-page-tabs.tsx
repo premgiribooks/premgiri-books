@@ -8,8 +8,14 @@ import { resolvePageTitle } from "@/lib/breadcrumb-trail";
 import {
   INITIAL_PAGE_TABS_STATE,
   activateTab,
+  closeAllTabs,
+  closeOtherTabs,
   closeTab,
-  visitPage,
+  closeTabsToTheLeft,
+  closeTabsToTheRight,
+  navigateInPlace,
+  openTab,
+  type BulkCloseResult,
   type PageTabsState,
 } from "@/lib/page-tabs-reducer";
 
@@ -44,6 +50,15 @@ let lastVisited: { pathname: string; pageContent: React.ReactNode; title: string
 // it with the newly (re-)rendered — and reconciliation-reset — payload Next
 // just produced for the same route.
 let pendingRouterSkip = false;
+// Set right before `useOpenPageInNewTab`'s own `router.push` — tells the
+// next `recordVisit` to go through `openTab` (genuinely open a new tab)
+// instead of its default `navigateInPlace` (rename the active tab). Every
+// OTHER navigation — sidebar left-click, a table-row link, a form-save
+// redirect, breadcrumb, global search, browser back/forward — takes the
+// default path, per a 2026-09-20 user-reported bug: this store used to open
+// a new tab for literally every navigation (see page-tabs-reducer.ts's own
+// `openTab` doc comment, formerly `visitPage`).
+let pendingOpenAsNewTab = false;
 
 const listeners = new Set<() => void>();
 function emitChange(): void {
@@ -77,6 +92,7 @@ function recordVisit(pathname: string, pageContent: React.ReactNode, title: stri
 
   if (pendingRouterSkip && contentSnapshot.has(pathname)) {
     pendingRouterSkip = false;
+    pendingOpenAsNewTab = false;
     const nextTabs = activateTab(tabsSnapshot, pathname);
     if (nextTabs !== tabsSnapshot) {
       tabsSnapshot = nextTabs;
@@ -86,13 +102,30 @@ function recordVisit(pathname: string, pageContent: React.ReactNode, title: stri
   }
   pendingRouterSkip = false;
 
-  const result = visitPage(tabsSnapshot, pathname, title);
+  if (pendingOpenAsNewTab) {
+    pendingOpenAsNewTab = false;
+    const result = openTab(tabsSnapshot, pathname, title);
+    tabsSnapshot = result.state;
+    const existing = contentSnapshot.get(pathname);
+    if (!existing || existing.node !== pageContent || existing.title !== title) {
+      const next = new Map(contentSnapshot);
+      if (result.evictedHref) {
+        next.delete(result.evictedHref);
+      }
+      next.set(pathname, { title, node: pageContent });
+      contentSnapshot = next;
+    }
+    emitChange();
+    return;
+  }
+
+  const result = navigateInPlace(tabsSnapshot, pathname, title);
   tabsSnapshot = result.state;
   const existing = contentSnapshot.get(pathname);
   if (!existing || existing.node !== pageContent || existing.title !== title) {
     const next = new Map(contentSnapshot);
-    if (result.evictedHref) {
-      next.delete(result.evictedHref);
+    if (result.replacedHref) {
+      next.delete(result.replacedHref);
     }
     next.set(pathname, { title, node: pageContent });
     contentSnapshot = next;
@@ -146,6 +179,30 @@ function closeStoredTab(href: string): CloseOutcome {
   return { fallbackHref: result.fallbackHref, fallbackIsCached };
 }
 
+/** Shared plumbing for the tab strip's own right-click "Close Others"/"Close
+ * All"/"Close to the Right"/"Close to the Left" — applies a `BulkCloseResult`
+ * to the store exactly like `closeStoredTab` does for a single href. */
+function applyBulkClose(result: BulkCloseResult): CloseOutcome {
+  tabsSnapshot = result.state;
+  if (result.closedHrefs.length > 0) {
+    const next = new Map(contentSnapshot);
+    for (const href of result.closedHrefs) {
+      next.delete(href);
+    }
+    contentSnapshot = next;
+  }
+  emitChange();
+
+  if (!result.fallbackHref) {
+    return { fallbackIsCached: false };
+  }
+  const fallbackIsCached = contentSnapshot.has(result.fallbackHref);
+  if (fallbackIsCached) {
+    pendingRouterSkip = true;
+  }
+  return { fallbackHref: result.fallbackHref, fallbackIsCached };
+}
+
 /**
  * Feature-spec 94 (Multi-Tab Page Navigation). Call once from `AppShell`/
  * `PlatformShell` with the page's own `children` — records the current
@@ -170,6 +227,11 @@ interface PageTabsContextValue {
   activeHref: string;
   activate: (href: string) => void;
   close: (href: string) => void;
+  /** Right-click tab actions (page-tabs-bar.tsx's own context menu). */
+  closeOthers: (href: string) => void;
+  closeAll: () => void;
+  closeToRight: (href: string) => void;
+  closeToLeft: (href: string) => void;
 }
 
 /** Read by `PageTabsBar`. */
@@ -188,19 +250,64 @@ export function usePageTabs(): PageTabsContextValue {
     router.replace(href, { scroll: false });
   }
 
-  function close(href: string): void {
-    const { fallbackHref, fallbackIsCached } = closeStoredTab(href);
-    if (!fallbackHref) {
+  function navigateAfterClose(outcome: CloseOutcome): void {
+    if (!outcome.fallbackHref) {
       return;
     }
-    if (fallbackIsCached) {
-      router.replace(fallbackHref, { scroll: false });
+    if (outcome.fallbackIsCached) {
+      router.replace(outcome.fallbackHref, { scroll: false });
     } else {
-      router.push(fallbackHref);
+      router.push(outcome.fallbackHref);
     }
   }
 
-  return { tabs, activeHref: tabsState.activeHref, activate, close };
+  function close(href: string): void {
+    navigateAfterClose(closeStoredTab(href));
+  }
+
+  function closeOthers(href: string): void {
+    navigateAfterClose(applyBulkClose(closeOtherTabs(tabsSnapshot, href)));
+  }
+
+  function closeAll(): void {
+    navigateAfterClose(applyBulkClose(closeAllTabs(tabsSnapshot)));
+  }
+
+  function closeToRight(href: string): void {
+    navigateAfterClose(applyBulkClose(closeTabsToTheRight(tabsSnapshot, href)));
+  }
+
+  function closeToLeft(href: string): void {
+    navigateAfterClose(applyBulkClose(closeTabsToTheLeft(tabsSnapshot, href)));
+  }
+
+  return { tabs, activeHref: tabsState.activeHref, activate, close, closeOthers, closeAll, closeToRight, closeToLeft };
+}
+
+/**
+ * Backs the sidebar's right-click "Open in new tab" (sidebar-item.tsx) — the
+ * one and only way a new tab is created any more (see page-tabs-reducer.ts's
+ * `openTab` doc comment). If `href` is already open elsewhere, this just
+ * switches to it instead of creating a duplicate entry — tab identity is 1:1
+ * with href in this design, so a second tab for the same route isn't
+ * representable.
+ */
+export function useOpenPageInNewTab(): (href: string) => void {
+  const router = useRouter();
+  return React.useCallback(
+    (href: string) => {
+      if (href !== tabsSnapshot.activeHref && tabsSnapshot.order.includes(href)) {
+        const outcome = activateStoredTab(href);
+        if (outcome === "activated") {
+          router.replace(href, { scroll: false });
+          return;
+        }
+      }
+      pendingOpenAsNewTab = true;
+      router.push(href);
+    },
+    [router]
+  );
 }
 
 interface PageTabsContentValue {

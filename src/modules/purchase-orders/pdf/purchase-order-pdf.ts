@@ -10,7 +10,7 @@ function lineTax(item: PurchaseOrderItemDetail): number {
 function itemRow(item: PurchaseOrderItemDetail): string {
   return `
     <tr>
-      <td>${escapeHtml(item.product.name)} (${escapeHtml(item.product.productCode)})</td>
+      <td>${escapeHtml(item.product.name)}${item.product.productCode ? ` (${escapeHtml(item.product.productCode)})` : ""}</td>
       <td class="text-right">${item.quantity}</td>
       <td class="text-right">${item.rate.toFixed(2)}</td>
       <td class="text-right">${item.taxableAmount.toFixed(2)}</td>

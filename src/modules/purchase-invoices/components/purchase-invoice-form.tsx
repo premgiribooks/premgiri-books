@@ -23,6 +23,7 @@ import {
 } from "@/modules/purchase-invoices/actions/purchase-invoice-actions";
 import { PurchaseInvoiceLineEditor } from "@/modules/purchase-invoices/components/purchase-invoice-line-editor";
 import { PurchaseInvoicePaymentEditor } from "@/modules/purchase-invoices/components/purchase-invoice-payment-editor";
+import { useShortcutEffect } from "@/lib/shortcut-events";
 import {
   createPurchaseInvoiceSchema,
   type CreatePurchaseInvoiceInput,
@@ -187,6 +188,14 @@ export function PurchaseInvoiceForm({ options, purchaseInvoice, goodsReceiptNote
       setIsSubmitting(false);
     }
   }
+
+  // "Save/Post" keyboard shortcut (src/config/shortcuts.ts) — mirrors
+  // sales-invoice-form.tsx's identical wiring.
+  useShortcutEffect("save", () => {
+    if (!isSubmitting) {
+      void form.handleSubmit(handleSubmit)();
+    }
+  });
 
   return (
     <Form {...form}>

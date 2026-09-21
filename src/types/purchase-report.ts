@@ -31,7 +31,7 @@ export interface PurchaseRegisterReport {
 export interface ItemWisePurchaseRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   quantity: number;
   taxableAmount: number;
   totalTax: number;

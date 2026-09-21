@@ -51,7 +51,7 @@ export default async function ProductBatchesPage({ params }: ProductBatchesPageP
       <div className="flex flex-col gap-6 p-6">
         <div>
           <h1 className="text-xl font-semibold text-foreground">{product.name}</h1>
-          <p className="text-sm text-muted-foreground">{product.productCode}</p>
+          <p className="text-sm text-muted-foreground">{product.productCode ?? "—"}</p>
         </div>
 
         <ProductDetailTabs

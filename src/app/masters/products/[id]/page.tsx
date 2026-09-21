@@ -53,7 +53,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
               <ProductTypeBadge productType={product.productType} />
               <ProductStatusBadge isActive={product.isActive} />
             </div>
-            <p className="text-sm text-muted-foreground">{product.productCode}</p>
+            <p className="text-sm text-muted-foreground">{product.productCode ?? "—"}</p>
           </div>
 
           {canEdit ? (

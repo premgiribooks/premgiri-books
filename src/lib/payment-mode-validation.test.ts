@@ -91,12 +91,28 @@ describe("assertPaymentModeMatchesLedger", () => {
     ).rejects.toThrow('Payment mode "Bank Transfer" requires a bank-linked ledger.');
   });
 
-  it("rejects an ANY-class mode against a ledger that is neither Cash nor Bank", async () => {
+  it("accepts an ANY-class mode against a ledger that is neither Cash nor Bank (e.g. a Customer ledger)", async () => {
     paymentModeFindUniqueMock.mockResolvedValue({ id: PAYMENT_MODE_ID, companyId: COMPANY_ID, name: "Flexible", ledgerClass: "ANY", isActive: true });
     findLedgersForValidationMock.mockResolvedValue([OTHER_LEDGER]);
     await expect(
       assertPaymentModeMatchesLedger(fakeClient(), PAYMENT_MODE_ID, OTHER_LEDGER_ID, COMPANY_ID)
-    ).rejects.toThrow("requires a Cash-in-Hand or bank-linked ledger");
+    ).resolves.toBeUndefined();
+  });
+
+  it("accepts a CASH-class mode against a ledger that is neither Cash nor Bank (e.g. a Customer ledger)", async () => {
+    paymentModeFindUniqueMock.mockResolvedValue({ id: PAYMENT_MODE_ID, companyId: COMPANY_ID, name: "Cash", ledgerClass: "CASH", isActive: true });
+    findLedgersForValidationMock.mockResolvedValue([OTHER_LEDGER]);
+    await expect(
+      assertPaymentModeMatchesLedger(fakeClient(), PAYMENT_MODE_ID, OTHER_LEDGER_ID, COMPANY_ID)
+    ).resolves.toBeUndefined();
+  });
+
+  it("accepts a BANK-class mode against a ledger that is neither Cash nor Bank (e.g. a Supplier ledger)", async () => {
+    paymentModeFindUniqueMock.mockResolvedValue({ id: PAYMENT_MODE_ID, companyId: COMPANY_ID, name: "Bank Transfer", ledgerClass: "BANK", isActive: true });
+    findLedgersForValidationMock.mockResolvedValue([OTHER_LEDGER]);
+    await expect(
+      assertPaymentModeMatchesLedger(fakeClient(), PAYMENT_MODE_ID, OTHER_LEDGER_ID, COMPANY_ID)
+    ).resolves.toBeUndefined();
   });
 
   it("rejects an inactive payment mode outright, even with a matching ledger class", async () => {

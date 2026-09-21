@@ -21,7 +21,7 @@ export type GoodsReceiptNote = PrismaGoodsReceiptNote;
 export interface GoodsReceiptNoteProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
 }
 
@@ -81,7 +81,7 @@ export interface GoodsReceiptNoteListFilters {
 export interface GoodsReceiptNoteProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;
@@ -115,7 +115,7 @@ export interface OpenPurchaseOrderLineOption {
   purchaseOrderItemId: string;
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   unitSymbol: string;
   unitDecimalPlaces: number;
   orderedQuantity: number;

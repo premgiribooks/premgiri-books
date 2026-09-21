@@ -64,7 +64,7 @@ export default async function CurrentStockPage({ searchParams }: CurrentStockPag
         </div>
 
         <InventoryReportFilterBar
-          products={products.map((product) => ({ id: product.id, name: `${product.name} (${product.productCode})` }))}
+          products={products.map((product) => ({ id: product.id, name: product.productCode ? `${product.name} (${product.productCode})` : product.name }))}
           warehouses={warehouses}
           showZeroStockToggle
         />

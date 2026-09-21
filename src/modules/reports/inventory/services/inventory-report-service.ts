@@ -213,7 +213,7 @@ export const inventoryReportService = {
   },
 
   /** The Stock Ledger view's own required product picker. */
-  async listProductOptions(): Promise<{ id: string; name: string; productCode: string }[]> {
+  async listProductOptions(): Promise<{ id: string; name: string; productCode: string | null }[]> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "reports", "view");
 

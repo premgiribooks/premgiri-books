@@ -26,6 +26,7 @@ import {
   type TransferStockInput,
 } from "@/engines/inventory/inventory-validation";
 import { getBatchStock, getCurrentStock, getStockLedger, getStockValuation } from "@/engines/inventory/inventory-queries";
+import { allocateFifoQuantity, type WarehouseAllocationLine } from "@/engines/inventory/warehouse-allocation";
 import type { RecordedStockTransaction, TransferStockResult } from "@/engines/inventory/types";
 import {
   stockTransactionRepository,
@@ -480,6 +481,62 @@ export async function transferStock(
   return runInTransaction((innerTx) => transferStockInTransaction(innerTx, companyId, input), SERIALIZABLE_RETRY);
 }
 
+/**
+ * The FIFO-by-warehouse-age auto-allocator's own DB-touching half — the pure
+ * decision logic lives in warehouse-allocation.ts's `allocateFifoQuantity`,
+ * unit-tested there. Ranks every ACTIVE warehouse that has ever carried
+ * `productId` by its own earliest stock-IN date (oldest first), then
+ * greedily fills `requiredQuantity` from that ranking. Always run on the
+ * caller's transaction (mirrors `recordMovements`'s own OUT-line contract —
+ * this is always followed by a `recordMovements` call inside the SAME
+ * Serializable transaction, so both observe one consistent snapshot).
+ *
+ * A shortfall (no combination of existing stock covers the requirement) is
+ * resolved the same way a single manually-chosen warehouse's own shortfall
+ * always has been: rejected outright unless the company's `allowNegativeStock`
+ * setting permits it, in which case the whole shortfall is dumped into a
+ * single fallback warehouse (the product's own default, else the company's
+ * default) rather than split further — going negative is already an
+ * exceptional state; which warehouse absorbs it doesn't need its own
+ * ranking.
+ */
+export async function resolveWarehouseFifoAllocation(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  productId: string,
+  productName: string,
+  requiredQuantity: number
+): Promise<WarehouseAllocationLine[]> {
+  const candidates = await stockTransactionRepository.findWarehouseFifoCandidates(tx, companyId, productId);
+  const { allocations, shortfall } = allocateFifoQuantity(candidates, requiredQuantity);
+  if (shortfall <= 0) {
+    return allocations;
+  }
+
+  const allowNegativeStock = await stockTransactionRepository.findAllowNegativeStock(companyId);
+  if (!allowNegativeStock) {
+    const available = requiredQuantity - shortfall;
+    throw new AppError(
+      `Insufficient stock for "${productName}" across all warehouses (need ${requiredQuantity}, have ${available}).`
+    );
+  }
+
+  const fallbackWarehouseId = await stockTransactionRepository.findFallbackWarehouseId(companyId, productId);
+  if (!fallbackWarehouseId) {
+    throw new AppError(
+      `No warehouse is available to record stock for "${productName}" — set a Default Warehouse in Warehouse Management, or set this product's own Default Warehouse.`
+    );
+  }
+
+  const existing = allocations.find((allocation) => allocation.warehouseId === fallbackWarehouseId);
+  if (existing) {
+    existing.quantity += shortfall;
+  } else {
+    allocations.push({ warehouseId: fallbackWarehouseId, quantity: shortfall });
+  }
+  return allocations;
+}
+
 export const inventoryEngine = {
   recordMovement,
   recordMovements,
@@ -491,4 +548,5 @@ export const inventoryEngine = {
   // exactly this consumer), so this is exposure only, not a new query.
   getStockLedger,
   getStockValuation,
+  resolveWarehouseFifoAllocation,
 };

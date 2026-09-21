@@ -48,7 +48,7 @@ export interface Quotation
 export interface QuotationProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
 }
 
@@ -98,7 +98,7 @@ export interface QuotationListFilters {
 export interface QuotationProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;

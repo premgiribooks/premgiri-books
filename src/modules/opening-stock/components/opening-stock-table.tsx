@@ -38,7 +38,10 @@ export function OpeningStockTable({ entries }: OpeningStockTableProps) {
         {entries.map((entry) => (
           <TableRow key={entry.id}>
             <TableCell className="font-medium text-foreground">
-              {entry.productName} <span className="text-muted-foreground">({entry.productCode})</span>
+              {entry.productName}
+              {entry.productCode ? (
+                <span className="text-muted-foreground"> ({entry.productCode})</span>
+              ) : null}
             </TableCell>
             <TableCell>{entry.warehouseName}</TableCell>
             <TableCell className="text-right font-financial">

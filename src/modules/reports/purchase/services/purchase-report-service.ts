@@ -122,7 +122,7 @@ export const purchaseReportService = {
   },
 
   /** Item-wise Purchase Report's own Product filter options. */
-  async listProductOptions(): Promise<{ id: string; name: string; productCode: string }[]> {
+  async listProductOptions(): Promise<{ id: string; name: string; productCode: string | null }[]> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "reports", "view");
 

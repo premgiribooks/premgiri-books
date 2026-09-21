@@ -15,7 +15,7 @@ import { getCell, getOptionalCell, parseBoolean, parseOptionalNumber } from "@/m
 // unmentioned; both remain editable afterward via the existing Edit screen.
 export const PRODUCT_IMPORT_COLUMNS: ImportColumn[] = [
   { key: "name", header: "Product Name", required: true, example: "Premium Emulsion Paint 1L" },
-  { key: "productCode", header: "Product Code", required: true, example: "PEP-1L-001" },
+  { key: "productCode", header: "Product Code", required: false, example: "PEP-1L-001" },
   { key: "productType", header: "Product Type (TRADING/SERVICE/EXPENSE)", required: true, example: "TRADING" },
   { key: "unit", header: "Unit", required: true, example: "Litre" },
   { key: "barcode", header: "Barcode", required: false, example: "" },
@@ -110,7 +110,7 @@ export const productImportTarget: ImportTarget<CreateProductInput> = {
 
     const candidate = {
       name: getCell(rawRow, "name"),
-      productCode: getCell(rawRow, "productCode"),
+      productCode: getOptionalCell(rawRow, "productCode"),
       barcode: getOptionalCell(rawRow, "barcode"),
       productType: getCell(rawRow, "productType").toUpperCase(),
       categoryId: resolveOptionalReference(getOptionalCell(rawRow, "category"), lookups.categoryByName, "Category", errors),

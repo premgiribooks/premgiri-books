@@ -10,6 +10,7 @@ import { StatusBar } from "@/components/layout/status-bar";
 import { BreadcrumbBar } from "@/components/layout/breadcrumb-bar";
 import { PageTabsBar } from "@/components/layout/page-tabs-bar";
 import { PageTabsOutlet } from "@/components/layout/page-tabs-outlet";
+import { ShortcutListener } from "@/components/layout/shortcut-listener";
 import { useRecordPageVisit } from "@/hooks/use-page-tabs";
 
 interface PlatformShellProps {
@@ -43,6 +44,7 @@ export function PlatformShell({ children }: PlatformShellProps) {
         </Content>
       </div>
       <StatusBar />
+      <ShortcutListener />
     </div>
   );
 }

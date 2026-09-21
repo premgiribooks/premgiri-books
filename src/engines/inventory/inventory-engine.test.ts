@@ -17,6 +17,8 @@ const {
   sumStockForBatchTriplesMock,
   createManyMock,
   createTransferPairMock,
+  findWarehouseFifoCandidatesMock,
+  findFallbackWarehouseIdMock,
   runInTransactionMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
@@ -30,6 +32,8 @@ const {
   sumStockForBatchTriplesMock: vi.fn(),
   createManyMock: vi.fn(),
   createTransferPairMock: vi.fn(),
+  findWarehouseFifoCandidatesMock: vi.fn(),
+  findFallbackWarehouseIdMock: vi.fn(),
   runInTransactionMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
@@ -46,6 +50,8 @@ vi.mock("@/modules/stock-transactions/repositories/stock-transaction-repository"
     sumStockForBatchTriples: sumStockForBatchTriplesMock,
     createMany: createManyMock,
     createTransferPair: createTransferPairMock,
+    findWarehouseFifoCandidates: findWarehouseFifoCandidatesMock,
+    findFallbackWarehouseId: findFallbackWarehouseIdMock,
   },
 }));
 
@@ -61,7 +67,7 @@ vi.mock("@/lib/transaction", () => ({
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { AppError } from "@/lib/app-error";
-import { recordMovement, recordMovements, transferStock } from "@/engines/inventory/inventory-engine";
+import { recordMovement, recordMovements, resolveWarehouseFifoAllocation, transferStock } from "@/engines/inventory/inventory-engine";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_COMPANY_ID = "99999999-9999-4999-8999-999999999999";
@@ -145,6 +151,8 @@ beforeEach(() => {
   sumStockForBatchTriplesMock.mockReset().mockResolvedValue(new Map());
   createManyMock.mockReset().mockResolvedValue([{ id: "st-1" }]);
   createTransferPairMock.mockReset().mockResolvedValue({ outTransaction: { id: "out-1" }, inTransaction: { id: "in-1" } });
+  findWarehouseFifoCandidatesMock.mockReset().mockResolvedValue([]);
+  findFallbackWarehouseIdMock.mockReset().mockResolvedValue(null);
   runInTransactionMock.mockReset().mockImplementation(async (fn: (tx: unknown) => unknown) => fn(FAKE_TX));
 });
 
@@ -786,5 +794,81 @@ describe("transferStock", () => {
 describe("AppError propagation", () => {
   it("rejection errors are instances of AppError, safe to surface to the client", async () => {
     await expect(recordMovements(COMPANY_ID, [purchaseLine({ direction: "OUT" })])).rejects.toBeInstanceOf(AppError);
+  });
+});
+
+describe("resolveWarehouseFifoAllocation", () => {
+  it("draws entirely from the single oldest candidate when it covers the whole requirement", async () => {
+    findWarehouseFifoCandidatesMock.mockResolvedValue([
+      { warehouseId: WAREHOUSE_A, availableQuantity: 50, firstInDate: new Date("2026-01-01") },
+      { warehouseId: WAREHOUSE_B, availableQuantity: 20, firstInDate: new Date("2026-06-01") },
+    ]);
+
+    const result = await resolveWarehouseFifoAllocation(FAKE_TX as never, COMPANY_ID, PRODUCT_A, "Widget", 10);
+
+    expect(result).toEqual([{ warehouseId: WAREHOUSE_A, quantity: 10 }]);
+    expect(findFallbackWarehouseIdMock).not.toHaveBeenCalled();
+  });
+
+  it("spills into the next-oldest candidate once the oldest is exhausted", async () => {
+    findWarehouseFifoCandidatesMock.mockResolvedValue([
+      { warehouseId: WAREHOUSE_A, availableQuantity: 4, firstInDate: new Date("2026-01-01") },
+      { warehouseId: WAREHOUSE_B, availableQuantity: 100, firstInDate: new Date("2026-06-01") },
+    ]);
+
+    const result = await resolveWarehouseFifoAllocation(FAKE_TX as never, COMPANY_ID, PRODUCT_A, "Widget", 10);
+
+    expect(result).toEqual([
+      { warehouseId: WAREHOUSE_A, quantity: 4 },
+      { warehouseId: WAREHOUSE_B, quantity: 6 },
+    ]);
+  });
+
+  it("rejects with a clear message when stock across every warehouse is insufficient and negative stock isn't allowed", async () => {
+    findWarehouseFifoCandidatesMock.mockResolvedValue([
+      { warehouseId: WAREHOUSE_A, availableQuantity: 3, firstInDate: new Date("2026-01-01") },
+    ]);
+    findAllowNegativeStockMock.mockResolvedValue(false);
+
+    await expect(
+      resolveWarehouseFifoAllocation(FAKE_TX as never, COMPANY_ID, PRODUCT_A, "Widget", 10)
+    ).rejects.toThrow('Insufficient stock for "Widget" across all warehouses (need 10, have 3)');
+  });
+
+  it("dumps the shortfall into the fallback warehouse when negative stock is allowed", async () => {
+    findWarehouseFifoCandidatesMock.mockResolvedValue([
+      { warehouseId: WAREHOUSE_A, availableQuantity: 3, firstInDate: new Date("2026-01-01") },
+    ]);
+    findAllowNegativeStockMock.mockResolvedValue(true);
+    findFallbackWarehouseIdMock.mockResolvedValue(WAREHOUSE_B);
+
+    const result = await resolveWarehouseFifoAllocation(FAKE_TX as never, COMPANY_ID, PRODUCT_A, "Widget", 10);
+
+    expect(result).toEqual([
+      { warehouseId: WAREHOUSE_A, quantity: 3 },
+      { warehouseId: WAREHOUSE_B, quantity: 7 },
+    ]);
+  });
+
+  it("adds the shortfall onto an existing allocation line when the fallback warehouse was already drawn from", async () => {
+    findWarehouseFifoCandidatesMock.mockResolvedValue([
+      { warehouseId: WAREHOUSE_A, availableQuantity: 3, firstInDate: new Date("2026-01-01") },
+    ]);
+    findAllowNegativeStockMock.mockResolvedValue(true);
+    findFallbackWarehouseIdMock.mockResolvedValue(WAREHOUSE_A);
+
+    const result = await resolveWarehouseFifoAllocation(FAKE_TX as never, COMPANY_ID, PRODUCT_A, "Widget", 10);
+
+    expect(result).toEqual([{ warehouseId: WAREHOUSE_A, quantity: 10 }]);
+  });
+
+  it("rejects with a setup message when negative stock is allowed but no fallback warehouse exists at all (product never stocked anywhere)", async () => {
+    findWarehouseFifoCandidatesMock.mockResolvedValue([]);
+    findAllowNegativeStockMock.mockResolvedValue(true);
+    findFallbackWarehouseIdMock.mockResolvedValue(null);
+
+    await expect(
+      resolveWarehouseFifoAllocation(FAKE_TX as never, COMPANY_ID, PRODUCT_A, "Widget", 5)
+    ).rejects.toThrow("No warehouse is available to record stock");
   });
 });

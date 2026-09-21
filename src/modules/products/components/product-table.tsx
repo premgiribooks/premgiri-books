@@ -85,7 +85,7 @@ export function ProductTable({ products, canEdit = false, canManage = false }: P
             <TableCell>
               <span className="font-medium text-foreground">{product.name}</span>
             </TableCell>
-            <TableCell className="font-financial">{product.productCode}</TableCell>
+            <TableCell className="font-financial">{product.productCode ?? <span className="text-muted-foreground">—</span>}</TableCell>
             <TableCell>
               <ProductTypeBadge productType={product.productType} />
             </TableCell>

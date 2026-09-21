@@ -23,6 +23,7 @@ import {
 } from "@/modules/sales-invoices/actions/sales-invoice-actions";
 import { SalesInvoiceLineEditor } from "@/modules/sales-invoices/components/sales-invoice-line-editor";
 import { SalesInvoicePaymentEditor } from "@/modules/sales-invoices/components/sales-invoice-payment-editor";
+import { useShortcutEffect } from "@/lib/shortcut-events";
 import {
   createSalesInvoiceSchema,
   type CreateSalesInvoiceInput,
@@ -102,7 +103,6 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
       lines: salesInvoice
         ? salesInvoice.items.map((item) => ({
             productId: item.productId,
-            warehouseId: item.warehouseId,
             quantity: item.quantity,
             rate: item.rate,
             discountPercent: item.discountPercent || undefined,
@@ -117,14 +117,13 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
         : deliveryChallanPrefill
           ? deliveryChallanPrefill.lines.map((line) => ({
               productId: line.productId,
-              warehouseId: line.warehouseId,
               quantity: line.quantity,
               rate: 0,
               discountPercent: undefined,
               discountAmount: undefined,
               isTaxOverridden: false,
             }))
-          : [{ productId: "", warehouseId: "", quantity: 1, rate: 0, isTaxOverridden: false }],
+          : [{ productId: "", quantity: 1, rate: 0, isTaxOverridden: false }],
       payments: salesInvoice
         ? salesInvoice.payments.map((payment) => ({
             ledgerId: payment.ledgerId,
@@ -152,7 +151,7 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
   React.useEffect(() => {
     const validLines = (lines ?? []).filter(
       (line): line is NonNullable<typeof line> =>
-        Boolean(line?.productId) && Boolean(line?.warehouseId) && (line?.quantity ?? 0) > 0 && (line?.rate ?? -1) >= 0
+        Boolean(line?.productId) && (line?.quantity ?? 0) > 0 && (line?.rate ?? -1) >= 0
     );
 
     const handle = setTimeout(() => {
@@ -197,6 +196,15 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
       setIsSubmitting(false);
     }
   }
+
+  // "Save/Post" keyboard shortcut (src/config/shortcuts.ts) — programmatically
+  // triggers the exact same validate-then-submit path as clicking the Save
+  // button. Guarded against re-entry while a submit is already in flight.
+  useShortcutEffect("save", () => {
+    if (!isSubmitting) {
+      void form.handleSubmit(handleSubmit)();
+    }
+  });
 
   return (
     <Form {...form}>
@@ -408,7 +416,6 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
         <FormSection title="Lines" columns={1}>
           <SalesInvoiceLineEditor
             products={options.products}
-            warehouses={options.warehouses}
             computations={preview.lines}
             customerId={customerMode === "PERMANENT" ? customerId || undefined : undefined}
             invoiceDate={invoiceDate || todayDateInputValue()}

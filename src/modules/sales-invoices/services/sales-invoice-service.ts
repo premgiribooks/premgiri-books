@@ -13,6 +13,7 @@ import { documentNumberEngine } from "@/engines/document-number/document-number-
 import { gstEngine } from "@/engines/gst/gst-engine";
 import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engines/gst/types";
 import { inventoryEngine } from "@/engines/inventory/inventory-engine";
+import { takeFromAllocationQueue, type WarehouseAllocationLine } from "@/engines/inventory/warehouse-allocation";
 import { pricingEngine } from "@/engines/pricing/pricing-engine";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import { voucherQueries } from "@/engines/voucher/voucher-queries";
@@ -67,7 +68,6 @@ import type {
   SalesInvoiceProductOption,
   SalesInvoicePreview,
   SalesInvoiceTotals,
-  SalesInvoiceWarehouseOption,
 } from "@/types/sales-invoice";
 
 // 38-sales-invoice.md's Posting section lists "Generate invoiceNumber" as
@@ -205,7 +205,10 @@ function buildLine(
 
   const persist: SalesInvoiceLinePersistData = {
     productId: product.id,
-    warehouseId: input.warehouseId,
+    // Resolved and filled in by postSalesInvoice, just before this line's
+    // stock actually moves (see resolveLineWarehouseAllocations below) —
+    // always empty here, at draft-build time, since nothing has moved yet.
+    warehouseAllocations: [],
     quantity: input.quantity,
     rate: input.rate,
     discountPercent,
@@ -324,6 +327,50 @@ function buildSalesInvoice(
   };
 }
 
+/**
+ * Step 6's own resolution sub-step (postSalesInvoice) — fills in each
+ * line's `persist.warehouseAllocations` (mutated in place) from the
+ * Inventory Engine's FIFO-by-warehouse-age allocator. Resolves ONE combined
+ * allocation per DISTINCT product (summing every line that orders it), not
+ * once per line — two lines of the same product must not each
+ * independently "see" and double-claim the same not-yet-consumed stock,
+ * since neither line's own draw is actually written until the
+ * `recordMovements` call that follows. The combined per-product allocation
+ * is then sliced back across that product's own lines, in line order, via
+ * `takeFromAllocationQueue`.
+ */
+async function resolveWarehouseAllocationsForLines(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  lines: readonly BuiltLine[],
+  productsById: ReadonlyMap<string, SalesInvoiceProductOption>
+): Promise<void> {
+  const indicesByProductId = new Map<string, number[]>();
+  for (const [index, line] of lines.entries()) {
+    const indices = indicesByProductId.get(line.persist.productId) ?? [];
+    indices.push(index);
+    indicesByProductId.set(line.persist.productId, indices);
+  }
+
+  for (const [productId, indices] of indicesByProductId) {
+    const totalQuantity = indices.reduce((sum, index) => sum + lines[index].persist.quantity, 0);
+    const productName = productsById.get(productId)?.name ?? productId;
+    let remainingQueue: WarehouseAllocationLine[] = await inventoryEngine.resolveWarehouseFifoAllocation(
+      tx,
+      companyId,
+      productId,
+      productName,
+      totalQuantity
+    );
+
+    for (const index of indices) {
+      const { taken, remainingQueue: nextQueue } = takeFromAllocationQueue(remainingQueue, lines[index].persist.quantity);
+      lines[index].persist.warehouseAllocations = taken;
+      remainingQueue = nextQueue;
+    }
+  }
+}
+
 async function loadProductsMap(
   client: PrismaClientOrTransaction,
   companyId: string,
@@ -332,16 +379,6 @@ async function loadProductsMap(
   const productIds = [...new Set(lineInputs.map((line) => line.productId))];
   const products = await salesInvoiceRepository.findProductsForLines(client, companyId, productIds);
   return new Map(products.map((product) => [product.id, product]));
-}
-
-async function loadWarehousesMap(
-  client: PrismaClientOrTransaction,
-  companyId: string,
-  lineInputs: readonly SalesInvoiceLineInput[]
-): Promise<Map<string, SalesInvoiceWarehouseOption>> {
-  const warehouseIds = [...new Set(lineInputs.map((line) => line.warehouseId))];
-  const warehouses = await salesInvoiceRepository.findWarehousesForLines(client, companyId, warehouseIds);
-  return new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]));
 }
 
 // Accepts the caller's client (plain `prisma` for the pre-transaction
@@ -795,11 +832,10 @@ export const salesInvoiceService = {
 
     const financialYear = await requireFinancialYear();
 
-    const [customers, products, warehouses, paymentLedgers, ledgerClassById, paymentModes, companyStateCode, settings, preview] =
+    const [customers, products, paymentLedgers, ledgerClassById, paymentModes, companyStateCode, settings, preview] =
       await Promise.all([
         customerService.listSelectableCustomers(),
         salesInvoiceRepository.findInvoiceableProducts(user.companyId),
-        salesInvoiceRepository.findSelectableWarehouses(user.companyId),
         ledgerService.listSelectableLedgers(),
         getLedgerPaymentClassMap(user.companyId),
         paymentModeService.listActivePaymentModes(),
@@ -827,7 +863,6 @@ export const salesInvoiceService = {
         pinCode: customer.pinCode,
       })),
       products,
-      warehouses,
       paymentLedgers: paymentLedgers.map((ledger) => ({
         id: ledger.id,
         name: ledger.name,
@@ -869,8 +904,6 @@ export const salesInvoiceService = {
           productId: item.productId,
           productName: item.product.name,
           productCode: item.product.productCode,
-          warehouseId: item.warehouseId,
-          warehouseName: item.warehouse.name,
           quantity: item.quantity,
           unitSymbol: product?.unitSymbol ?? "",
           unitDecimalPlaces: product?.unitDecimalPlaces ?? 4,
@@ -946,12 +979,6 @@ export const salesInvoiceService = {
 
     const supplyType = await resolveSupplyType(user.companyId, data.placeOfSupplyStateCode);
     const productsById = await loadProductsMap(prisma, user.companyId, data.lines);
-    const warehousesById = await loadWarehousesMap(prisma, user.companyId, data.lines);
-    for (const line of data.lines) {
-      if (!warehousesById.get(line.warehouseId)) {
-        throw new AppError("One or more warehouses were not found.");
-      }
-    }
     const built = buildSalesInvoice(data.lines, productsById, supplyType, true, user.id);
     const amountPaid = sumPayments(data.payments ?? []);
     assertPaymentsWithinTotal(data.customerMode, amountPaid, built.header.grandTotal);
@@ -996,12 +1023,6 @@ export const salesInvoiceService = {
 
     const supplyType = await resolveSupplyType(user.companyId, data.placeOfSupplyStateCode);
     const productsById = await loadProductsMap(prisma, user.companyId, data.lines);
-    const warehousesById = await loadWarehousesMap(prisma, user.companyId, data.lines);
-    for (const line of data.lines) {
-      if (!warehousesById.get(line.warehouseId)) {
-        throw new AppError("One or more warehouses were not found.");
-      }
-    }
     const built = buildSalesInvoice(data.lines, productsById, supplyType, true, user.id);
     const amountPaid = sumPayments(data.payments ?? []);
     assertPaymentsWithinTotal(data.customerMode, amountPaid, built.header.grandTotal);
@@ -1095,7 +1116,6 @@ export const salesInvoiceService = {
         const supplyType = await resolveSupplyType(user.companyId, current.placeOfSupplyStateCode);
         const lineInputs: SalesInvoiceLineInput[] = current.items.map((item) => ({
           productId: item.productId,
-          warehouseId: item.warehouseId,
           quantity: item.quantity,
           rate: item.rate,
           discountPercent: item.discountPercent || undefined,
@@ -1108,13 +1128,6 @@ export const salesInvoiceService = {
           overrideReason: item.overrideReason ?? undefined,
         }));
         const productsById = await loadProductsMap(tx, user.companyId, lineInputs);
-        const warehousesById = await loadWarehousesMap(tx, user.companyId, lineInputs);
-        for (const line of lineInputs) {
-          const warehouse = warehousesById.get(line.warehouseId);
-          if (!warehouse || !warehouse.isActive) {
-            throw new AppError("One or more warehouses are inactive and cannot be invoiced from.");
-          }
-        }
 
         // Step 3: recompute from CURRENT lines — never trust stale draft totals.
         const built = buildSalesInvoice(lineInputs, productsById, supplyType, true, user.id);
@@ -1192,17 +1205,25 @@ export const salesInvoiceService = {
         // Step 4: payments re-validated against the freshly recomputed total.
         assertPaymentsWithinTotal(resolvedCustomerMode, paidTotal, built.header.grandTotal);
 
-        // Step 6: stock-out, one OUT/SALES line per invoice line.
-        const stockLines = built.lines.map((line) => ({
-          productId: line.persist.productId,
-          warehouseId: line.persist.warehouseId,
-          transactionType: "SALES" as const,
-          direction: "OUT" as const,
-          quantity: line.persist.quantity,
-          transactionDate: toDateInputValue(current.invoiceDate),
-          referenceType: "SALES_INVOICE",
-          referenceId: current.id,
-        }));
+        // Step 6: resolve which warehouse(s) actually fulfil each line (the
+        // FIFO-by-warehouse-age auto-allocator — removed manual per-line
+        // warehouse selection per explicit user request, 2026-09-20), then
+        // one OUT/SALES stock line per (invoice line, resolved allocation)
+        // pair — usually one, more than one when a line's own quantity
+        // spans warehouses.
+        await resolveWarehouseAllocationsForLines(tx, user.companyId, built.lines, productsById);
+        const stockLines = built.lines.flatMap((line) =>
+          line.persist.warehouseAllocations.map((allocation) => ({
+            productId: line.persist.productId,
+            warehouseId: allocation.warehouseId,
+            transactionType: "SALES" as const,
+            direction: "OUT" as const,
+            quantity: allocation.quantity,
+            transactionDate: toDateInputValue(current.invoiceDate),
+            referenceType: "SALES_INVOICE",
+            referenceId: current.id,
+          }))
+        );
         await inventoryEngine.recordMovements(user.companyId, stockLines, tx);
 
         // Step 7: balanced voucher.
@@ -1303,16 +1324,24 @@ export const salesInvoiceService = {
 
       await voucherEngine.cancelVoucher(user.companyId, current.voucherId, tx);
 
-      const stockLines = current.items.map((item) => ({
-        productId: item.productId,
-        warehouseId: item.warehouseId,
-        transactionType: "SALES" as const,
-        direction: "IN" as const,
-        quantity: item.quantity,
-        transactionDate: toDateInputValue(current.invoiceDate),
-        referenceType: "SALES_INVOICE",
-        referenceId: current.id,
-      }));
+      // Reverses the EXACT SAME warehouses/quantities the original posting
+      // debited (each item's own persisted `warehouseAllocations` — see
+      // SalesInvoiceItemWarehouseAllocation's schema comment), never a
+      // fresh FIFO re-run — stock has moved since (this very sale, and
+      // potentially others), so a fresh run could pick different warehouses
+      // entirely.
+      const stockLines = current.items.flatMap((item) =>
+        item.warehouseAllocations.map((allocation) => ({
+          productId: item.productId,
+          warehouseId: allocation.warehouseId,
+          transactionType: "SALES" as const,
+          direction: "IN" as const,
+          quantity: allocation.quantity,
+          transactionDate: toDateInputValue(current.invoiceDate),
+          referenceType: "SALES_INVOICE",
+          referenceId: current.id,
+        }))
+      );
       await inventoryEngine.recordMovements(user.companyId, stockLines, tx);
 
       const count = await salesInvoiceRepository.updateStatus(tx, id, user.companyId, ["POSTED"], "CANCELLED");

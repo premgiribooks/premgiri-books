@@ -28,13 +28,29 @@ function mismatchMessage(name: string, ledgerClass: "CASH" | "BANK" | "ANY"): st
  * this spec, the first real consumer of `PaymentMode.ledgerClass`. Checked at
  * every write path (Create/Update/Post), never only client-side.
  *
- * Rules (spec 91's Business Rules):
- * - `ledgerClass === "CASH"` -> ledger must classify as `CASH`
- * - `ledgerClass === "BANK"` -> ledger must classify as `BANK`
- * - `ledgerClass === "ANY"` -> ledger must classify as `CASH` or `BANK`
+ * Rules (spec 91's Business Rules, amended per explicit user request —
+ * 2026-09-20):
+ * - A `NEITHER`-classified ledger (e.g. a Customer/Supplier ledger, or any
+ *   other ledger that is neither Cash-in-Hand nor bank-linked) accepts
+ *   *any* Payment Mode. Sales Invoice/Sales Return/Credit Note's payment
+ *   ledger pickers deliberately list every active company ledger, not just
+ *   Cash/Bank ones (see `SalesInvoicePaymentLedgerOption`) — rejecting a
+ *   `NEITHER` ledger outright made every one of those ledgers unusable with
+ *   any mode, which is the bug this amendment fixes.
+ * - Otherwise (the ledger is genuinely `CASH` or `BANK`):
+ *   - `ledgerClass === "CASH"` -> ledger must classify as `CASH`
+ *   - `ledgerClass === "BANK"` -> ledger must classify as `BANK`
+ *   - `ledgerClass === "ANY"` -> ledger must classify as `CASH` or `BANK`
+ *     (always true here, kept for clarity)
  * - An inactive or cross-company payment mode is rejected outright — a
  *   deactivated mode can never be selected for a new/edited payment line
  *   (existing posted lines are immutable and never re-validated here).
+ *
+ * Purchase Invoice and the manual-voucher screens (Payment/Receipt/Contra)
+ * pre-filter their own restricted-side ledger picker to Cash/Bank only
+ * (`assertLedgersAreCashOrBank`), so a `NEITHER` ledger can never reach this
+ * function from those flows — this amendment only changes behavior for the
+ * Sales-side documents that pass through an unrestricted ledger list.
  *
  * Takes the caller's own `client` rather than the global `prisma` singleton
  * so a posting-time call reads inside the same Serializable transaction
@@ -58,7 +74,8 @@ export async function assertPaymentModeMatchesLedger(
   }
 
   const ledgerClass = await getLedgerPaymentClass(client, ledgerId, companyId);
-  const isValid = paymentMode.ledgerClass === "ANY" ? ledgerClass !== "NEITHER" : paymentMode.ledgerClass === ledgerClass;
+  const isValid =
+    ledgerClass === "NEITHER" || paymentMode.ledgerClass === "ANY" || paymentMode.ledgerClass === ledgerClass;
 
   if (!isValid) {
     throw new AppError(mismatchMessage(paymentMode.name, paymentMode.ledgerClass));

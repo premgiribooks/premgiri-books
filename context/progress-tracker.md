@@ -5715,3 +5715,252 @@ Still open, deliberately not fixed here: whatever the *actual* Profit & Loss/Tri
 export failure was is still unknown — this fix only removes the mask hiding it. Once deployed,
 the next attempt should surface the real error (in the response body and/or the server log)
 instead of this generic crash, and that real error still needs diagnosing.
+
+---
+
+## 2026-09-20 — Six user-reported fixes/features: payment-mode validation, invoice settlement shortcuts, item-input width, optional product code, sidebar "open in new tab" + disabled context menu, and a customizable keyboard-shortcut system
+
+User reported six separate issues/requests in one message. Addressed all six; asked
+`AskUserQuestion` to scope two of them (tab-behavior change and shortcut scope) before
+touching a deliberately-designed prior feature (spec 94's tab strip) — user chose the
+narrower option for both (don't change existing auto-tab behavior; Global + Billing-screen
+shortcuts only, not every screen).
+
+1. **Payment mode vs. ledger validation bug (Sales Invoice)** — `assertPaymentModeMatchesLedger`
+   (`src/lib/payment-mode-validation.ts`) previously rejected *any* payment mode against a
+   `NEITHER`-classified ledger (a Customer/Supplier ledger — neither Cash-in-Hand nor
+   bank-linked). Sales Invoice/Sales Return/Credit Note's payment-ledger pickers deliberately
+   list every active company ledger (not just Cash/Bank), so picking a customer ledger with
+   e.g. "Cash" mode always failed. Fixed: a `NEITHER` ledger now accepts any Payment Mode;
+   genuine `CASH`/`BANK` ledgers still enforce the original strict class match. Purchase
+   Invoice and the manual-voucher screens pre-filter their own ledger picker to Cash/Bank
+   only, so this change is a no-op for them (a `NEITHER` ledger can never reach this function
+   from those flows). Updated `payment-mode-validation.test.ts` (replaced the old "rejects
+   NEITHER" case with three new "accepts NEITHER" cases across CASH/BANK/ANY modes).
+
+2. **Full-payment/receipt shortcut for posted invoices** — Sales Invoice detail page gained a
+   "Receipt" button, Purchase Invoice detail page gained a "Payment" button — both visible
+   only when POSTED and `amountDue > 0` (Sales additionally requires a real `customer.ledgerId`,
+   since WALK_IN/QUICK sales must already sum to the full grand total to post). They navigate
+   to Payment/Receipt Voucher's existing New screen with that invoice's own outstanding
+   balance pre-filled (`?debitLedgerId=&amount=` / `?creditLedgerId=&amount=`), reusing
+   87-liability-settlement.md's prefill pattern but scoped to one document's own due amount
+   rather than the ledger's whole running balance. Payment Voucher's New page already
+   supported this; Receipt Voucher's did not — added `resolveReceiptVoucherPrefill`
+   (`src/modules/manual-vouchers/utils/resolve-receipt-voucher-prefill.ts` + test, mirrors
+   `resolvePaymentVoucherPrefill`) and wired it through `receipt-vouchers/new/page.tsx` and
+   `ReceiptVoucherForm`'s new `prefill` prop.
+
+3. **Item input too narrow on Sales/Purchase Invoice lines** — the Product picker's `TableCell`
+   was `min-w-56` (224px), too narrow for `"{name} ({code})"` labels. Widened to `min-w-80`
+   (320px) in `sales-invoice-line-row.tsx` and `purchase-invoice-line-row.tsx` only (the two
+   screens named in the request) — other document types' line rows use the same `min-w-56`
+   convention but were left untouched, out of scope.
+
+4. **Product Code made optional** — `Product.productCode` was `String` (required, unique per
+   company). Made nullable (`String?`), mirroring `barcode`'s existing nullable-and-unique-
+   when-present pattern (Postgres already treats multiple NULLs in a unique index as
+   distinct). New migration `20260920000000_product_code_optional` (`ALTER COLUMN
+   "productCode" DROP NOT NULL`). `PRODUCT_CODE_SCHEMA` in `product-schema.ts` now mirrors
+   `BARCODE_SCHEMA` exactly (blank -> undefined, 2-50 chars when present). Ripple fixed
+   mechanically via `tsc`: every `*ProductOption`/`*ProductSnapshot`/aggregate-row interface's
+   `productCode: string` widened to `string | null` across ~19 files in `src/types/`; every
+   `"{name} ({code})"` display spot (line-editor `productLabel` helpers, PDF item rows,
+   document detail pages, report tables, the Product master's own form/table/detail pages,
+   bulk-import target) updated to omit the parens/show "—" when the code is absent instead of
+   printing "null" or empty parens. Bulk-import's `productCode` column changed from
+   `required: true` to `required: false`. Added/updated tests in `product-schema.test.ts`.
+   Full verification: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, same 2
+   pre-existing warnings), `npx vitest run` (219 files, 2917 tests), `next build` — all clean.
+
+5. **Sidebar "Open in new tab" + disabled native context menu** — user's own scoping choice:
+   do NOT change the existing spec-94 in-app tab-strip behavior (every navigation still opens/
+   reuses an in-app tab); ADD a right-click context menu on sidebar navigation items offering
+   "Open in new tab" — a literal new *browser* tab (`window.open`), replacing the native
+   browser context menu's own equivalent item now that the native menu is suppressed
+   app-wide. New `src/components/ui/context-menu.tsx` (Base UI `@base-ui/react/context-menu`,
+   mirrors `dropdown-menu.tsx`'s styling). `sidebar-item.tsx` wraps every real
+   (`href`-bearing) nav link in it — never the group-toggle button — so it's available on
+   exactly "pages listed in menu," per the request. New `DisableContextMenuGuard`
+   (`src/components/common/disable-context-menu-guard.tsx`), mounted once in the root layout:
+   suppresses the native `contextmenu` event everywhere, plus best-effort `keydown`
+   interception of F12/Ctrl+Shift+I/J/C/Ctrl+U. Documented in the file's own comment as a
+   deterrent only, not a security boundary (cannot block DevTools opened from the browser's
+   own menu/toolbar, an extension, or an Electron accelerator).
+
+6. **Customizable keyboard-shortcut system** — scoped to Global app shortcuts + Sales/
+   Purchase Invoice ("billing") shortcuts, per the user's own chosen scope. New
+   `src/config/shortcuts.ts` (single source of truth: id/label/description/category/
+   defaultKeys — read by both the gear-icon reference dropdown and the customization page).
+   Defaults deliberately avoid known browser/OS-reserved combos (Ctrl+T/N/W, Ctrl+Shift+
+   N/P/I/J/C, Ctrl+D/F/H/L/U, F12) so `preventDefault()` actually has something to prevent;
+   users can rebind anything that still collides with their own setup. Pure logic in
+   `src/lib/shortcut-keys.ts` (`comboFromKeyboardEvent`/`formatShortcutCombo`, unit-tested) —
+   `"mod"` collapses Ctrl/Cmd into one token so a stored combo works on both platforms.
+   Bindings persist per-browser via `src/hooks/use-shortcuts.ts` (localStorage, mirrors
+   `use-favorites.ts`'s external-store pattern exactly) — only overrides are stored, so a
+   future default change doesn't affect someone who never rebound that entry.
+   `ShortcutListener` (mounted once in `AppShell`/`PlatformShell`) is the single global
+   `keydown` listener: a "global" shortcut's action runs directly (Search now resolves through
+   the registry too — removed the old hardcoded Ctrl+K listener from `command-palette.tsx` in
+   favor of this one shared place); a "billing" shortcut has no fixed action (only meaningful
+   while a specific form is mounted) so it just dispatches a `window` CustomEvent
+   (`src/lib/shortcut-events.ts`'s `dispatchShortcut`/`useShortcutEffect`) — a harmless no-op
+   everywhere else. Wired: Save/Post (`mod+s`, submits the Sales/Purchase Invoice form
+   programmatically), Add Line (`mod+enter`, appends a blank line unless locked to a
+   Challan/GRN prefill), Focus Item Search (`alt+shift+i`, focuses the last line's own Product
+   combobox input via a shared `data-shortcut-item-search` DOM marker —
+   `src/lib/shortcut-dom-targets.ts`), Jump to Payment (`alt+shift+m`, scrolls to + focuses the
+   first payment line's ledger combobox via the same marker mechanism). Gear icon added to
+   `TopNavbar` beside `ThemeToggle`: a dropdown listing every shortcut grouped by category
+   with its current combo, plus "Customize Shortcuts..." linking to the new `/shortcuts` page.
+   `/shortcuts` (`ShortcutsSettingsTable`) lets a user re-record any combo (captured via a live
+   `keydown` recorder, blocked if it collides with another already-assigned combo) or reset
+   one/all to default — personal, browser-local preference data, no server action, no
+   permission gate (mirrors `/profile`'s own no-gate Account tab), added to `proxy.ts`'s
+   `PLATFORM_ALLOWED_PREFIXES` so a Super Admin can reach it too.
+
+Verified together: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings), `npx vitest run` (219 files, 2917 tests, all passing —
+includes new `payment-mode-validation.test.ts` cases, `resolve-receipt-voucher-prefill.test.ts`,
+`shortcut-keys.test.ts`, and updated `product-schema.test.ts` cases), and `next build` (all
+routes compile, including the new `/shortcuts` route).
+
+Not implemented (deliberately, per the user's own narrower scoping answers): the in-app
+tab-strip's "every navigation opens a new tab" behavior is unchanged; shortcuts are not wired
+into every screen in the app, only Global actions and the Sales/Purchase Invoice forms.
+
+---
+
+## 2026-09-20 — Fixed the tab-strip bug the previous entry's own scoping answer reintroduced, plus a tab-strip right-click menu (Close/Close Others/Close All/Close to the Right/Close to the Left)
+
+User reported the exact behavior the earlier `AskUserQuestion` had asked about and been told to
+leave alone was actually a bug: every ordinary navigation was still opening a brand-new tab in
+the in-app tab strip (spec 94's `PageTabsBar`), and they wanted it stopped — a new tab should
+only ever appear on demand, via the sidebar's own right-click "Open in new tab." They also asked
+for a right-click menu on the TABS themselves (Close/Close All/Close to the Right/Close to the
+Left), mirroring a real browser's own tab context menu.
+
+**Root cause of the "bug"**: the previous session's own `sidebar-item.tsx` "Open in new tab"
+implementation used a literal `window.open()` (a real, separate browser tab/window) specifically
+*because* the in-app tab strip's own `visitPage` reducer function unconditionally opened/grew a
+new in-app tab for literally every navigation — there was no in-app "navigate without opening a
+new tab" path to route an ordinary click through. That's the actual bug this entry fixes.
+
+- **`src/lib/page-tabs-reducer.ts`**: renamed `visitPage` -> `openTab` (unchanged logic — append-
+  or-activate, with `MAX_OPEN_TABS` eviction) and repurposed it as the explicit-open-only path.
+  Added `navigateInPlace(state, href, title)`: an ordinary navigation now RENAMES the currently
+  active tab's own slot in `order` to the new href (or just activates it in place if that href is
+  already one of the other open tabs) — it never grows the tab strip. Added four bulk-close pure
+  functions mirroring `closeTab`'s own shape: `closeOtherTabs`, `closeTabsToTheRight`,
+  `closeTabsToTheLeft`, `closeAllTabs` (all built on a shared internal `closeMany`), each
+  returning `{ state, closedHrefs, fallbackHref? }` — `fallbackHref` set only when the previously
+  active tab was among those closed, mirroring `closeTab`'s existing convention. Extended
+  `page-tabs-reducer.test.ts` with the renames plus new coverage for `navigateInPlace` (bootstrap,
+  rename-in-place, activate-already-open) and all four bulk-close functions.
+- **`src/hooks/use-page-tabs.tsx`**: `recordVisit` now defaults to `navigateInPlace` instead of
+  the old always-append `visitPage`/`openTab`. A new module-level `pendingOpenAsNewTab` flag
+  (set right before the one `router.push` that should actually open a new tab) tells the very
+  next `recordVisit` to go through `openTab` instead — mirrors the existing `pendingRouterSkip`
+  flag's own "tell the next recordVisit how to behave" pattern. New exported hook
+  `useOpenPageInNewTab()`: if the target href is already open elsewhere it just activates that
+  tab (tab identity is 1:1 with href in this design, so a true duplicate isn't representable);
+  otherwise it sets the flag and navigates. `usePageTabs()`'s returned context gained
+  `closeOthers`/`closeAll`/`closeToRight`/`closeToLeft`, all funneled through a new shared
+  `applyBulkClose` helper (mirrors `closeStoredTab`) that purges every closed href from the
+  content cache and re-syncs the router via the exact same cached/uncached `router.replace`-vs-
+  `router.push` logic `close()` already used.
+- **`sidebar-item.tsx`**: "Open in new tab" now calls `useOpenPageInNewTab()` instead of
+  `window.open()` — a real entry in this app's OWN tab strip, not a separate browser
+  window/tab. This is now the only way any new tab is ever created.
+- **`src/components/ui/context-menu.tsx`**: added `ContextMenuSeparator` (mirrors
+  `DropdownMenuSeparator`), needed by the tab strip's own menu below.
+- **`src/components/layout/page-tabs-bar.tsx`**: each tab is now wrapped in a `ContextMenu`
+  offering Close, Close Others (disabled with <2 tabs open), Close Tabs to the Left (disabled on
+  the first tab), Close Tabs to the Right (disabled on the last tab), and Close All.
+
+Verified: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, same 2 pre-existing
+unrelated warnings), `npx vitest run` (219 files, 2929 tests, all passing — includes the renamed/
+extended `page-tabs-reducer.test.ts`), and `next build` (clean).
+
+---
+
+## 2026-09-20 — Removed the manual Warehouse picker from Sales Invoice and Delivery Challan; stock is now auto-allocated by FIFO-by-warehouse-age; Sales Return gained an explicit warehouse picker of its own
+
+User reported that the Sales Invoice product dropdown was still visibly truncating item names
+(screenshot attached) and, separately, asked to remove the per-line Warehouse input entirely: when
+a product exists in more than one warehouse, the sale should automatically pull stock from
+whichever warehouse has held it longest, splitting across warehouses only when the oldest one
+alone can't cover the full quantity ("make sure we will use old products first"). Clarifying
+questions (`AskUserQuestion`) pinned down the exact semantics: **true FIFO by when stock arrived
+in each warehouse** (not per-batch/per-unit FIFO), the resulting split **shown as a breakdown
+after posting** (not before), and the change applies to **every sales-side document with a
+warehouse picker** — which turned out to be exactly two: Sales Invoice and Delivery Challan
+(Sales Order/Quotation never had one, confirmed by grep before touching anything). Mid-
+implementation, removing `SalesInvoiceItem`'s single `warehouseId` surfaced a knock-on problem:
+Sales Return had been reading `salesInvoiceItem.warehouseId` for its own stock-IN reversal — with
+that column gone, a return would have nothing to reverse into. Asked the user directly; they
+confirmed adding Sales Return its own explicit warehouse picker rather than trying to re-derive
+one.
+
+- **`src/components/ui/combobox.tsx`**: fixed the truncation bug at its root — the popup's
+  `w-(--anchor-width)` was hard-clamping every dropdown's width to its trigger's width. Changed to
+  `w-max min-w-(--anchor-width) max-w-[min(32rem,90vw)]`, fixing every Combobox in the app, not
+  just the product picker.
+- **`src/engines/inventory/warehouse-allocation.ts`** (new): pure FIFO allocator —
+  `allocateFifoQuantity(candidates, requiredQuantity)` ranks warehouses oldest-stock-first and
+  splits a required quantity across them; `takeFromAllocationQueue` slices a combined allocation
+  back across multiple invoice lines of the same product without double-claiming stock. 11 tests.
+- **`src/modules/stock-transactions/repositories/stock-transaction-repository.ts`**: added
+  `findWarehouseFifoCandidates` (per-warehouse net stock + first-received date, oldest first) and
+  `findFallbackWarehouseId` (product's own default warehouse, else the company's default, else
+  none).
+- **`src/engines/inventory/inventory-engine.ts`**: added `resolveWarehouseFifoAllocation` —
+  throws when stock is insufficient across all warehouses combined (unless the product allows
+  negative stock, in which case the shortfall lands in the fallback warehouse).
+- **Schema**: `SalesInvoiceItem.warehouseId` removed; new `SalesInvoiceItemWarehouseAllocation`
+  table (one row per warehouse a line actually drew from) is the persisted source of truth, so
+  cancelling an invoice reverses the EXACT warehouses/quantities originally debited instead of
+  re-running FIFO against today's (different) stock levels. `DeliveryChallanItem.warehouseId`
+  removed outright (that document never moves real stock). `SalesReturnItem` gained its own
+  required `warehouseId`. Hand-authored migration
+  `20260920010000_warehouse_auto_allocation` (this DB is on a live network host, same as the
+  `productCode` migration before it — **not yet applied**): backfills one
+  `SalesInvoiceItemWarehouseAllocation` row per existing invoice line (preserving historic
+  "fulfilled from" data before the old column is dropped), then backfills every existing
+  `SalesReturnItem.warehouseId` from that same allocation row before making it `NOT NULL`.
+- **Sales Invoice**: `sales-invoice-service.ts`'s `resolveWarehouseAllocationsForLines` groups
+  lines by product, resolves ONE combined FIFO allocation per product (summing quantities across
+  same-product lines), then slices it back per line — handles a product appearing on 2+ lines of
+  one invoice without over-claiming stock. Detail page shows the result as a "Fulfilled From"
+  column (`warehouse (qty)` per allocation) instead of a single warehouse name.
+  `aggregateItemWiseSales`'s `warehouseId` filter now matches via
+  `warehouseAllocations: { some: { warehouseId } }`.
+- **Delivery Challan**: warehouse picker and every warehouse-lookup repository/service method
+  (`findWarehousesForLines`, `findSelectableWarehouses`) removed outright — pure deletion, no
+  allocation logic needed since this document was already non-stock-moving.
+- **Sales Return**: `sales-return-form.tsx` line rows gained a warehouse `ProductOptionSelector`;
+  `sales-return-service.ts` validates the chosen warehouse is real/active per line
+  (`buildReturnLines`) and both `postSalesReturn`'s stock-IN and `cancelSalesReturn`'s reversal now
+  use the line's own `warehouseId` instead of the (now-removed) source invoice item's.
+
+Verified: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, same 2 pre-existing
+unrelated warnings), `npx vitest run` (220 files, 2946 tests, all passing), `npx prisma validate`
+(schema valid), and `next build` (clean).
+
+**Migration applied**: user ran `npx prisma migrate deploy` against the live database (the auto
+mode classifier blocked the assistant from running it directly, flagged as a "Production
+Deploy" — the user ran it themselves). `npx prisma migrate status` afterward confirmed "Database
+schema is up to date." Confirmed working end-to-end: user created a Sales Invoice with no error.
+
+**Unrelated bug found and fixed during this same manual test**: creating a Customer crashed with
+`Cannot read properties of undefined (reading 'toLowerCase')` in
+`normalizeKeyToken` (`src/lib/shortcut-keys.ts`), triggered by the global `ShortcutListener`'s
+`keydown` handler. Root cause: some browsers dispatch a synthetic `keydown` event with no `key`
+at all during autofill on a form field (the Customer form's own autofill-eligible inputs
+triggered it) — `normalizeKeyToken` assumed `event.key` was always a string, which
+`KeyboardEvent`'s TS type promises but a real synthetic event doesn't always honor. Fixed by
+having `comboFromKeyboardEvent` return `undefined` (its existing "nothing to compare yet"
+signal, already used for bare-modifier presses) when `event.key` is falsy, before calling
+`normalizeKeyToken` at all. Added two regression cases to `shortcut-keys.test.ts` (`key:
+undefined`, `key: ""`). Confirmed fixed by the user re-testing Customer creation.

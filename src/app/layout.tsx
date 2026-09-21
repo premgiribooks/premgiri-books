@@ -10,6 +10,7 @@ import { NavPermissionsProvider } from "@/components/providers/nav-permissions-p
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { UpdateNotification } from "@/components/common/update-notification";
+import { DisableContextMenuGuard } from "@/components/common/disable-context-menu-guard";
 import { getCurrentUserOrNull } from "@/lib/current-user";
 import { getCurrentCompany } from "@/lib/current-company";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
@@ -58,6 +59,7 @@ export default async function RootLayout({
                     <TooltipProvider>{children}</TooltipProvider>
                     <Toaster />
                     <UpdateNotification />
+                    <DisableContextMenuGuard />
                   </BranchProvider>
                 </FinancialYearProvider>
               </CompanyProvider>

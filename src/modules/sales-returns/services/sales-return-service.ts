@@ -53,6 +53,8 @@ const LINE_NOT_FOUND_MESSAGE =
   "One or more lines reference an item that does not belong to the selected sales invoice.";
 const RETURN_EXCEEDS_REMAINING_MESSAGE =
   "One or more lines exceed the remaining returnable quantity for that invoice line.";
+const WAREHOUSE_NOT_FOUND_MESSAGE = "One or more warehouses were not found.";
+const WAREHOUSE_INACTIVE_MESSAGE = "One or more warehouses are inactive and cannot receive a return.";
 const CANNOT_CHANGE_MESSAGE =
   "This sales return can no longer be changed — it may have been posted or cancelled. Please refresh.";
 const CANNOT_POST_MESSAGE =
@@ -173,7 +175,11 @@ function assertPositiveGrandTotal(totals: SalesReturnTotals): void {
  * level supply type. Uses the invoice line's OVERRIDDEN tax values when it
  * was tax-overridden (spec 38's audit trail) instead of the computed ones.
  */
-function buildReturnLine(invoiceItem: SalesInvoiceItemForReturn, quantity: number): SalesReturnLinePersistData {
+function buildReturnLine(
+  invoiceItem: SalesInvoiceItemForReturn,
+  quantity: number,
+  warehouseId: string
+): SalesReturnLinePersistData {
   const taxableAmountPaise = prorateAmountPaise(invoiceItem.taxableAmount, invoiceItem.quantity, quantity);
   const sourceTax = invoiceItem.isTaxOverridden
     ? {
@@ -192,6 +198,7 @@ function buildReturnLine(invoiceItem: SalesInvoiceItemForReturn, quantity: numbe
 
   return {
     salesInvoiceItemId: invoiceItem.id,
+    warehouseId,
     quantity,
     taxableAmount: taxableAmountPaise / 100,
     cgst: cgstPaise / 100,
@@ -203,7 +210,9 @@ function buildReturnLine(invoiceItem: SalesInvoiceItemForReturn, quantity: numbe
 }
 
 /** Validates every line against the source invoice (item ownership +
- * unit-precision + the returnable-quantity cap) and builds its persisted
+ * unit-precision + the returnable-quantity cap), against its own explicit
+ * warehouse picker (exists, active — mirrors purchase-invoice-service.ts's
+ * identical incoming-goods warehouse check), and builds its persisted
  * fields — shared by create/update/post, since DRAFT returns never
  * contribute to the returnable sum (see the repository's
  * sumPostedReturnedQuantities doc comment), so this computation is identical
@@ -216,6 +225,10 @@ async function buildReturnLines(
   const itemsById = new Map(invoice.items.map((item) => [item.id, item]));
   const invoiceItemIds = lineInputs.map((line) => line.salesInvoiceItemId);
   const returnedById = await salesReturnRepository.sumPostedReturnedQuantities(client, invoiceItemIds);
+
+  const warehouseIds = [...new Set(lineInputs.map((line) => line.warehouseId))];
+  const warehouses = await salesReturnRepository.findWarehousesForLines(client, invoice.companyId, warehouseIds);
+  const warehousesById = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]));
 
   return lineInputs.map((input) => {
     const item = itemsById.get(input.salesInvoiceItemId);
@@ -230,7 +243,15 @@ async function buildReturnLines(
       throw new AppError(RETURN_EXCEEDS_REMAINING_MESSAGE);
     }
 
-    return buildReturnLine(item, input.quantity);
+    const warehouse = warehousesById.get(input.warehouseId);
+    if (!warehouse) {
+      throw new AppError(WAREHOUSE_NOT_FOUND_MESSAGE);
+    }
+    if (!warehouse.isActive) {
+      throw new AppError(WAREHOUSE_INACTIVE_MESSAGE);
+    }
+
+    return buildReturnLine(item, input.quantity, input.warehouseId);
   });
 }
 
@@ -385,16 +406,18 @@ export const salesReturnService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "sales", "view");
 
-    const [refundLedgers, ledgerClassById, paymentModes, settings] = await Promise.all([
+    const [refundLedgers, ledgerClassById, paymentModes, settings, warehouses] = await Promise.all([
       salesReturnRepository.findSelectableRefundLedgers(user.companyId),
       getLedgerPaymentClassMap(user.companyId),
       paymentModeService.listActivePaymentModes(),
       companySettingsService.getSettings(user.companyId),
+      salesReturnRepository.findSelectableWarehouses(user.companyId),
     ]);
 
     return {
       refundLedgers: refundLedgers.map((ledger) => ({ ...ledger, ledgerClass: ledgerClassById.get(ledger.id) ?? "NEITHER" })),
       paymentModes: paymentModes.map((mode) => ({ id: mode.id, name: mode.name, ledgerClass: mode.ledgerClass })),
+      warehouses,
       isLedgerMappingComplete: isSalesLedgerMappingComplete(settings),
     };
   },
@@ -442,8 +465,6 @@ export const salesReturnService = {
           productId: item.productId,
           productName: item.productName,
           productCode: item.productCode,
-          warehouseId: item.warehouseId,
-          warehouseName: item.warehouseName,
           unitSymbol: item.unitSymbol,
           unitDecimalPlaces: item.unitDecimalPlaces,
           originalQuantity: item.quantity,
@@ -570,6 +591,7 @@ export const salesReturnService = {
       // Step 2 + 3: re-check line/header consistency and recompute fresh.
       const lineInputs: SalesReturnLineInput[] = current.items.map((item) => ({
         salesInvoiceItemId: item.salesInvoiceItem.id,
+        warehouseId: item.warehouseId,
         quantity: item.quantity,
       }));
       const lines = await buildReturnLines(tx, invoice, lineInputs);
@@ -583,7 +605,9 @@ export const salesReturnService = {
         documentType: "SALES_RETURN",
       });
 
-      // Step 5: stock-in, one IN/SALES_RETURN line per returned item.
+      // Step 5: stock-in, one IN/SALES_RETURN line per returned item — into
+      // THIS return's own explicit warehouse (added per explicit user
+      // request, 2026-09-20), not wherever the original sale drew from.
       const itemsById = new Map(invoice.items.map((item) => [item.id, item]));
       const stockLines = lines.map((line) => {
         const invoiceItem = itemsById.get(line.salesInvoiceItemId);
@@ -592,7 +616,7 @@ export const salesReturnService = {
         }
         return {
           productId: invoiceItem.productId,
-          warehouseId: invoiceItem.warehouseId,
+          warehouseId: line.warehouseId,
           transactionType: "SALES_RETURN" as const,
           direction: "IN" as const,
           quantity: line.quantity,
@@ -684,7 +708,7 @@ export const salesReturnService = {
 
       const stockLines = current.items.map((item) => ({
         productId: item.salesInvoiceItem.productId,
-        warehouseId: item.salesInvoiceItem.warehouseId,
+        warehouseId: item.warehouseId,
         transactionType: "SALES_RETURN" as const,
         direction: "OUT" as const,
         quantity: item.quantity,

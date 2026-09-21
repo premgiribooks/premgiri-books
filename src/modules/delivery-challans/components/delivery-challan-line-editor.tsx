@@ -17,24 +17,18 @@ import { DeliveryChallanLineRow } from "@/modules/delivery-challans/components/d
 import type { CreateDeliveryChallanInput } from "@/modules/delivery-challans/validation/delivery-challan-schema";
 import type {
   DeliveryChallanProductOption,
-  DeliveryChallanWarehouseOption,
   OpenSalesOrderLineOption,
 } from "@/types/delivery-challan";
 
-const BLANK_LINE = { productId: "" as unknown as string, warehouseId: "" as unknown as string, quantity: 1 };
+const BLANK_LINE = { productId: "" as unknown as string, quantity: 1 };
 
 function optionLabel(product: DeliveryChallanProductOption): string {
-  const base = `${product.name} (${product.productCode})`;
+  const base = product.productCode ? `${product.name} (${product.productCode})` : product.name;
   return product.isActive ? base : `${base} (Inactive)`;
-}
-
-function warehouseLabel(warehouse: DeliveryChallanWarehouseOption): string {
-  return `${warehouse.name} (${warehouse.code})`;
 }
 
 interface DeliveryChallanLineEditorProps {
   products: DeliveryChallanProductOption[];
-  warehouses: DeliveryChallanWarehouseOption[];
   /** When set, every row is locked to one of the linked Sales Order's
    * remaining lines — product fixed, no Add Line button (a challan linked
    * to an order can only deliver against that order's own lines, per
@@ -44,19 +38,17 @@ interface DeliveryChallanLineEditorProps {
 
 /** The Delivery Challan Form's line-item editor — no pricing/tax columns,
  * unlike sales-order-line-editor.tsx/quotation-line-editor.tsx (this
- * document records quantity and warehouse only). */
-export function DeliveryChallanLineEditor({ products, warehouses, linkedLines }: DeliveryChallanLineEditorProps) {
+ * document records quantity only — no warehouse picker either, removed per
+ * explicit user request, 2026-09-20: this document never moves real stock,
+ * and which warehouse(s) actually fulfil the eventual sale is resolved
+ * automatically at Sales Invoice posting time). */
+export function DeliveryChallanLineEditor({ products, linkedLines }: DeliveryChallanLineEditorProps) {
   const { control } = useFormContext<CreateDeliveryChallanInput>();
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
 
   const productOptions: ProductOptionItem[] = React.useMemo(
     () => products.map((product) => ({ id: product.id, label: optionLabel(product), isActive: product.isActive })),
     [products]
-  );
-
-  const warehouseOptions: ProductOptionItem[] = React.useMemo(
-    () => warehouses.map((warehouse) => ({ id: warehouse.id, label: warehouseLabel(warehouse), isActive: warehouse.isActive })),
-    [warehouses]
   );
 
   const linkedLineByIndex = linkedLines;
@@ -69,7 +61,6 @@ export function DeliveryChallanLineEditor({ products, warehouses, linkedLines }:
           <TableHeader>
             <TableRow>
               <TableHead>Product</TableHead>
-              <TableHead>Warehouse</TableHead>
               <TableHead>Quantity</TableHead>
               <TableHead className="text-right">Remove</TableHead>
             </TableRow>
@@ -80,7 +71,6 @@ export function DeliveryChallanLineEditor({ products, warehouses, linkedLines }:
                 key={field.id}
                 index={index}
                 productOptions={productOptions}
-                warehouseOptions={warehouseOptions}
                 linkedLine={linkedLineByIndex?.[index]}
                 onRemove={() => remove(index)}
                 canRemove={fields.length > 1}

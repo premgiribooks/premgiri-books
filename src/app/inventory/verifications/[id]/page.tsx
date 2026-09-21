@@ -102,7 +102,8 @@ export default async function PhysicalVerificationDetailPage({ params }: Physica
               {physicalVerification.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.productName} ({item.productCode})
+                    {item.productName}
+                    {item.productCode ? ` (${item.productCode})` : ""}
                   </TableCell>
                   <TableCell className="text-right font-financial">
                     {formatQuantity(item.systemQuantity, item.unitDecimalPlaces)} {item.unitSymbol}

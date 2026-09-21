@@ -41,16 +41,16 @@ describe("createProductSchema", () => {
     expect(result.sellingPrice).toBe(199.99);
   });
 
-  it("accepts the minimal field set — only name, code, type, unit, isBatchTracked, and isSerialTracked are required", () => {
+  it("accepts the minimal field set — only name, type, unit, isBatchTracked, and isSerialTracked are required", () => {
     const result = createProductSchema.parse({
       name: "Consulting",
-      productCode: "SRV-01",
       productType: "SERVICE",
       unitId: UNIT_ID,
       isBatchTracked: false,
       isSerialTracked: false,
     });
 
+    expect(result.productCode).toBeUndefined();
     expect(result.barcode).toBeUndefined();
     expect(result.categoryId).toBeUndefined();
     expect(result.brandId).toBeUndefined();
@@ -71,15 +71,21 @@ describe("createProductSchema", () => {
     );
   });
 
-  it("rejects out-of-bounds name and product code lengths", () => {
+  it("rejects out-of-bounds name lengths", () => {
     expect(createProductSchema.safeParse({ ...VALID_INPUT, name: "P" }).success).toBe(false);
     expect(createProductSchema.safeParse({ ...VALID_INPUT, name: "x".repeat(201) }).success).toBe(
       false
     );
+  });
+
+  it("normalizes a blank product code to undefined and bounds its length when present", () => {
+    expect(createProductSchema.parse({ ...VALID_INPUT, productCode: "   " }).productCode).toBeUndefined();
+    expect(createProductSchema.safeParse({ ...VALID_INPUT, productCode: undefined }).success).toBe(true);
     expect(createProductSchema.safeParse({ ...VALID_INPUT, productCode: "P" }).success).toBe(false);
     expect(
       createProductSchema.safeParse({ ...VALID_INPUT, productCode: "x".repeat(51) }).success
     ).toBe(false);
+    expect(createProductSchema.safeParse({ ...VALID_INPUT, productCode: "NB-1" }).success).toBe(true);
   });
 
   it("normalizes a blank barcode to undefined and bounds its length", () => {

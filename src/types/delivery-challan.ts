@@ -20,21 +20,12 @@ export type DeliveryChallan = PrismaDeliveryChallan;
 export interface DeliveryChallanProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
-  isActive: boolean;
-}
-
-/** The slice of Warehouse a delivery challan line's read-model needs. */
-export interface DeliveryChallanWarehouseSnapshot {
-  id: string;
-  name: string;
-  code: string;
+  productCode: string | null;
   isActive: boolean;
 }
 
 export interface DeliveryChallanItemDetail extends DeliveryChallanItem {
   product: DeliveryChallanProductSnapshot;
-  warehouse: DeliveryChallanWarehouseSnapshot;
 }
 
 /** The slice of Customer a delivery challan's read-model needs — mirrors
@@ -80,18 +71,10 @@ export interface DeliveryChallanListFilters {
 export interface DeliveryChallanProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;
-}
-
-/** The warehouse picker's options. */
-export interface DeliveryChallanWarehouseOption {
-  id: string;
-  name: string;
-  code: string;
-  isActive: boolean;
 }
 
 /** Everything the Delivery Challan Form needs to render its pickers and the
@@ -100,7 +83,6 @@ export interface DeliveryChallanWarehouseOption {
 export interface DeliveryChallanFormOptions {
   customers: DeliveryChallanCustomerOption[];
   products: DeliveryChallanProductOption[];
-  warehouses: DeliveryChallanWarehouseOption[];
   nextChallanNumber: string;
 }
 
@@ -115,7 +97,7 @@ export interface OpenSalesOrderLineOption {
   salesOrderItemId: string;
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   unitSymbol: string;
   unitDecimalPlaces: number;
   orderedQuantity: number;

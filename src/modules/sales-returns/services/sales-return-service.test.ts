@@ -15,6 +15,8 @@ const {
   findRefundLedgerForReturnMock,
   findCustomerLedgerIdMock,
   findSelectableRefundLedgersMock,
+  findSelectableWarehousesMock,
+  findWarehousesForLinesMock,
   findPostedInvoicesForPickerMock,
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
@@ -39,6 +41,8 @@ const {
   findRefundLedgerForReturnMock: vi.fn(),
   findCustomerLedgerIdMock: vi.fn(),
   findSelectableRefundLedgersMock: vi.fn(),
+  findSelectableWarehousesMock: vi.fn(),
+  findWarehousesForLinesMock: vi.fn(),
   findPostedInvoicesForPickerMock: vi.fn(),
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
@@ -66,6 +70,8 @@ vi.mock("@/modules/sales-returns/repositories/sales-return-repository", () => ({
     findRefundLedgerForReturn: findRefundLedgerForReturnMock,
     findCustomerLedgerId: findCustomerLedgerIdMock,
     findSelectableRefundLedgers: findSelectableRefundLedgersMock,
+    findSelectableWarehouses: findSelectableWarehousesMock,
+    findWarehousesForLines: findWarehousesForLinesMock,
     findPostedInvoicesForPicker: findPostedInvoicesForPickerMock,
   },
 }));
@@ -161,8 +167,6 @@ function invoiceForReturn(overrides: Record<string, unknown> = {}) {
         productId: PRODUCT_ID,
         productName: "Product A",
         productCode: "A",
-        warehouseId: WAREHOUSE_ID,
-        warehouseName: "Main Warehouse",
         unitSymbol: "Nos",
         unitDecimalPlaces: 0,
         quantity: 10,
@@ -230,9 +234,9 @@ function salesReturnRow(overrides: Record<string, unknown> = {}) {
           productId: PRODUCT_ID,
           productName: "Product A",
           productCode: "A",
-          warehouseId: WAREHOUSE_ID,
-          warehouseName: "Main Warehouse",
         },
+        warehouseId: WAREHOUSE_ID,
+        warehouse: { id: WAREHOUSE_ID, name: "Main Warehouse", code: "MAIN", isActive: true },
         quantity: 2,
         taxableAmount: 200,
         cgst: 18,
@@ -250,7 +254,7 @@ function validInput(overrides: Record<string, unknown> = {}) {
   return {
     salesInvoiceId: INVOICE_ID,
     returnDate: "2026-09-10",
-    lines: [{ salesInvoiceItemId: ITEM_ID, quantity: 2 }],
+    lines: [{ salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 2 }],
     ...overrides,
   };
 }
@@ -267,6 +271,8 @@ beforeEach(() => {
   findRefundLedgerForReturnMock.mockReset();
   findCustomerLedgerIdMock.mockReset();
   findSelectableRefundLedgersMock.mockReset();
+  findSelectableWarehousesMock.mockReset();
+  findWarehousesForLinesMock.mockReset();
   findPostedInvoicesForPickerMock.mockReset();
   getCurrentCompanyUserMock.mockReset();
   getCurrentFinancialYearMock.mockReset();
@@ -287,6 +293,7 @@ beforeEach(() => {
   sumPostedReturnedQuantitiesMock.mockResolvedValue(new Map());
   findCustomerLedgerIdMock.mockResolvedValue(CUSTOMER_LEDGER_ID);
   findRefundLedgerForReturnMock.mockResolvedValue({ id: REFUND_LEDGER_ID, companyId: COMPANY_ID, isActive: true });
+  findWarehousesForLinesMock.mockResolvedValue([{ id: WAREHOUSE_ID, name: "Main Warehouse", code: "MAIN", isActive: true }]);
   getSettingsMock.mockResolvedValue(COMPLETE_SETTINGS);
   generateNumberMock.mockResolvedValue({ documentSequenceId: "seq-1", number: 1, formatted: "SR-0001" });
   createMock.mockResolvedValue(salesReturnRow());
@@ -330,7 +337,9 @@ describe("createDraft", () => {
 
   it("rejects a line quantity exceeding the remaining returnable quantity", async () => {
     sumPostedReturnedQuantitiesMock.mockResolvedValueOnce(new Map([[ITEM_ID, 9]]));
-    await expect(salesReturnService.createDraft(validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, quantity: 2 }] }))).rejects.toThrow(
+    await expect(
+      salesReturnService.createDraft(validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 2 }] }))
+    ).rejects.toThrow(
       "exceed the remaining returnable quantity"
     );
   });
@@ -338,14 +347,18 @@ describe("createDraft", () => {
   it("caps correctly across two sequential partial returns (returnable shrinks after a POSTED sibling)", async () => {
     sumPostedReturnedQuantitiesMock.mockResolvedValueOnce(new Map([[ITEM_ID, 6]]));
     // 10 - 6 = 4 remaining; requesting 4 succeeds.
-    await salesReturnService.createDraft(validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, quantity: 4 }] }));
+    await salesReturnService.createDraft(
+      validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 4 }] })
+    );
     expect(createMock).toHaveBeenCalled();
   });
 
   it("rejects a line referencing an item that doesn't belong to the invoice", async () => {
     const unrelatedItemId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
     await expect(
-      salesReturnService.createDraft(validInput({ lines: [{ salesInvoiceItemId: unrelatedItemId, quantity: 1 }] }))
+      salesReturnService.createDraft(
+        validInput({ lines: [{ salesInvoiceItemId: unrelatedItemId, warehouseId: WAREHOUSE_ID, quantity: 1 }] })
+      )
     ).rejects.toThrow("does not belong to the selected sales invoice");
   });
 

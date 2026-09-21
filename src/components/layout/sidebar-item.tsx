@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { ExternalLink, Star } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { useOpenPageInNewTab } from "@/hooks/use-page-tabs";
 
 interface SidebarItemProps {
   icon: LucideIcon;
@@ -37,6 +39,7 @@ export function SidebarItem({
   favorite,
   onToggleFavorite,
 }: SidebarItemProps) {
+  const openInNewTab = useOpenPageInNewTab();
   const itemClassName = cn(
     "group/sidebar-item flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
     active
@@ -74,7 +77,7 @@ export function SidebarItem({
 
   const accessibleLabel = collapsed ? label : undefined;
 
-  const button = href ? (
+  const linkOrButton = href ? (
     <Link
       href={href}
       className={itemClassName}
@@ -90,14 +93,39 @@ export function SidebarItem({
     </button>
   );
 
-  if (!collapsed) {
-    return button;
-  }
-
-  return (
+  const trigger = collapsed ? (
     <Tooltip>
-      <TooltipTrigger render={button} />
+      <TooltipTrigger render={linkOrButton} />
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
+  ) : (
+    linkOrButton
+  );
+
+  if (!href) {
+    return trigger;
+  }
+
+  // Right-click "Open in new tab" — the ONLY way a new tab is created in
+  // this app's own in-app tab strip (spec 94's PageTabsBar) any more. An
+  // ordinary click/navigation now renames the active tab in place instead of
+  // piling up a new one every time (2026-09-20 user-reported bug — see
+  // page-tabs-reducer.ts's `navigateInPlace`/`openTab` doc comments). Only
+  // wired onto real menu-listed pages (every SidebarItem with an href), so
+  // it's available for exactly "pages listed in menu," per the user's own
+  // request — never on the group-toggle button (href undefined) or on
+  // arbitrary in-page links elsewhere. Doubles as the replacement for the
+  // native context menu's own "Open link in new tab" item, which
+  // disable-context-menu-guard.tsx suppresses app-wide.
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{trigger}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => openInNewTab(href)}>
+          <ExternalLink size={14} />
+          Open in new tab
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

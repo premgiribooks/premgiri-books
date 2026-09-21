@@ -47,7 +47,8 @@ export function GoodsReceiptNoteLineRow({
       <TableCell className="min-w-56">
         {linkedLine ? (
           <div className="text-sm text-foreground">
-            {linkedLine.productName} ({linkedLine.productCode})
+            {linkedLine.productName}
+            {linkedLine.productCode ? ` (${linkedLine.productCode})` : ""}
             <p className="text-xs text-muted-foreground">
               Remaining: {linkedLine.remainingQuantity} {linkedLine.unitSymbol}
             </p>

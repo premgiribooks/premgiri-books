@@ -48,7 +48,11 @@ const NARRATION_SCHEMA = z
 
 export const deliveryChallanLineSchema = z.object({
   productId: z.uuid("Select a valid product"),
-  warehouseId: z.uuid("Select a valid warehouse"),
+  // No warehouseId (removed per explicit user request, 2026-09-20) — this
+  // document never moves real stock, and the field was purely informational
+  // ("which warehouse this will eventually be invoiced from"). Which
+  // warehouse(s) actually fulfil the sale is resolved automatically at
+  // Sales Invoice posting time instead.
   quantity: QUANTITY_SCHEMA,
   // Conditionally required/forbidden at the object level below — a line
   // cannot reference an order item the header itself doesn't link to

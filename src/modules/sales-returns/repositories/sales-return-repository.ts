@@ -39,10 +39,12 @@ const ITEM_INCLUDE = {
           id: true,
           productId: true,
           product: { select: { name: true, productCode: true } },
-          warehouseId: true,
-          warehouse: { select: { name: true } },
         },
       },
+      // This RETURN line's own explicit warehouse picker (added per explicit
+      // user request, 2026-09-20) — independent of wherever the original
+      // sale drew its stock from.
+      warehouse: { select: { id: true, name: true, code: true, isActive: true } },
     },
   },
 } as const;
@@ -114,9 +116,8 @@ function toSalesReturnDetail(raw: SalesReturnDetailRaw): SalesReturnDetail {
           productId: item.salesInvoiceItem.productId,
           productName: item.salesInvoiceItem.product.name,
           productCode: item.salesInvoiceItem.product.productCode,
-          warehouseId: item.salesInvoiceItem.warehouseId,
-          warehouseName: item.salesInvoiceItem.warehouse.name,
         },
+        warehouse: item.warehouse,
       };
     });
 
@@ -165,6 +166,7 @@ function buildWhere(
 
 export interface SalesReturnLinePersistData {
   salesInvoiceItemId: string;
+  warehouseId: string;
   quantity: number;
   taxableAmount: number;
   cgst: number;
@@ -193,9 +195,7 @@ export interface SalesInvoiceItemForReturn {
   id: string;
   productId: string;
   productName: string;
-  productCode: string;
-  warehouseId: string;
-  warehouseName: string;
+  productCode: string | null;
   unitSymbol: string;
   unitDecimalPlaces: number;
   quantity: number;
@@ -232,7 +232,6 @@ const INVOICE_FOR_RETURN_INCLUDE = {
   items: {
     include: {
       product: { select: { name: true, productCode: true, unit: { select: { symbol: true, decimalPlaces: true } } } },
-      warehouse: { select: { name: true } },
     },
   },
 } as const;
@@ -261,8 +260,6 @@ function toSalesInvoiceForReturn(raw: InvoiceForReturnRaw): SalesInvoiceForRetur
       productId: item.productId,
       productName: item.product.name,
       productCode: item.product.productCode,
-      warehouseId: item.warehouseId,
-      warehouseName: item.warehouse.name,
       unitSymbol: item.product.unit.symbol,
       unitDecimalPlaces: item.product.unit.decimalPlaces,
       quantity: item.quantity.toNumber(),
@@ -480,6 +477,35 @@ export const salesReturnRepository = {
       return null;
     }
     return customer.ledgerId;
+  },
+
+  /** The return line's own explicit warehouse picker's options (added per
+   * explicit user request, 2026-09-20) — mirrors purchase-invoice-
+   * repository.ts's findSelectableWarehouses precedent for an incoming-
+   * goods warehouse field. */
+  async findSelectableWarehouses(
+    companyId: string
+  ): Promise<{ id: string; name: string; code: string; isActive: boolean }[]> {
+    return prisma.warehouse.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, name: true, code: true, isActive: true },
+      orderBy: { name: "asc" },
+    });
+  },
+
+  /** Batched lookup for every distinct warehouseId referenced by a
+   * create/update/post payload — validates existence/active-ness the same
+   * way findSelectableWarehouses's own callers already expect, mirrors
+   * sales-invoice-repository.ts's since-removed identical helper. */
+  async findWarehousesForLines(
+    client: PrismaClientOrTransaction,
+    companyId: string,
+    warehouseIds: readonly string[]
+  ): Promise<{ id: string; name: string; code: string; isActive: boolean }[]> {
+    return client.warehouse.findMany({
+      where: { id: { in: [...warehouseIds] }, companyId },
+      select: { id: true, name: true, code: true, isActive: true },
+    });
   },
 
   /** Any active company Ledger — the refund ledger picker's options, no new

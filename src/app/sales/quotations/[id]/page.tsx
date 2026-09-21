@@ -122,7 +122,8 @@ export default async function QuotationDetailPage({ params }: QuotationDetailPag
               {quotation.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.product.name} ({item.product.productCode})
+                    {item.product.name}
+                    {item.product.productCode ? ` (${item.product.productCode})` : ""}
                     {!item.product.isActive ? (
                       <span className="ml-1 text-xs text-muted-foreground">(Inactive)</span>
                     ) : null}

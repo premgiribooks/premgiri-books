@@ -39,7 +39,7 @@ export default async function StockLedgerPage({ searchParams }: StockLedgerPageP
 
   const filterBar = (
     <InventoryReportFilterBar
-      products={products.map((product) => ({ id: product.id, name: `${product.name} (${product.productCode})` }))}
+      products={products.map((product) => ({ id: product.id, name: product.productCode ? `${product.name} (${product.productCode})` : product.name }))}
       productRequired
       warehouses={warehouses}
       showDateRange

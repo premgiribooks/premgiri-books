@@ -94,18 +94,16 @@ export function DeliveryChallanForm({ options, deliveryChallan, salesOrderPrefil
       lines: deliveryChallan
         ? deliveryChallan.items.map((item) => ({
             productId: item.productId,
-            warehouseId: item.warehouseId,
             quantity: item.quantity,
             salesOrderItemId: item.salesOrderItemId ?? undefined,
           }))
         : salesOrderPrefill
           ? salesOrderPrefill.lines.map((line) => ({
               productId: line.productId,
-              warehouseId: "",
               quantity: line.remainingQuantity,
               salesOrderItemId: line.salesOrderItemId,
             }))
-          : [{ productId: "", warehouseId: "", quantity: 1, salesOrderItemId: undefined }],
+          : [{ productId: "", quantity: 1, salesOrderItemId: undefined }],
     },
   });
 
@@ -209,7 +207,6 @@ export function DeliveryChallanForm({ options, deliveryChallan, salesOrderPrefil
         <FormSection title="Lines" columns={1}>
           <DeliveryChallanLineEditor
             products={options.products}
-            warehouses={options.warehouses}
             linkedLines={linkedLines}
           />
         </FormSection>

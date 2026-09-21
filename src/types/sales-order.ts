@@ -45,7 +45,7 @@ export interface SalesOrder
 export interface SalesOrderProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
 }
 
@@ -97,7 +97,7 @@ export interface SalesOrderListFilters {
 export interface SalesOrderProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;

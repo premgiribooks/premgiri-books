@@ -23,10 +23,17 @@ import {
 } from "@/modules/manual-vouchers/validation/receipt-voucher-schema";
 import type { ManualVoucherLedgerOption } from "@/types/manual-voucher";
 import type { PaymentModeOption } from "@/types/payment-mode";
+import type { ReceiptVoucherPrefill } from "@/modules/manual-vouchers/utils/resolve-receipt-voucher-prefill";
 
 interface ReceiptVoucherFormProps {
   ledgerOptions: ManualVoucherLedgerOption[];
   paymentModes: PaymentModeOption[];
+  /** Seeds the first Credit line's ("Received From") defaultValues when the
+   * New page resolved a valid `creditLedgerId`/`amount` query-param pair —
+   * e.g. a Sales Invoice's "Receipt" action prefilling that invoice's own
+   * outstanding customer balance. Mirrors PaymentVoucherForm's own
+   * `prefill` prop. */
+  prefill?: ReceiptVoucherPrefill;
 }
 
 function toNumberOrZero(value: number): number {
@@ -64,7 +71,7 @@ function closestMatchingPaymentModeId(
  * own convenience; the server independently computes and validates the
  * actual balanced entry set.
  */
-export function ReceiptVoucherForm({ ledgerOptions, paymentModes }: ReceiptVoucherFormProps) {
+export function ReceiptVoucherForm({ ledgerOptions, paymentModes, prefill }: ReceiptVoucherFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -85,8 +92,8 @@ export function ReceiptVoucherForm({ ledgerOptions, paymentModes }: ReceiptVouch
       voucherDate: new Date().toISOString().slice(0, 10),
       narration: "",
       debitLedgerId: "",
-      paymentModeId: "",
-      creditLines: [{ ledgerId: "", amount: 0 }],
+      paymentModeId: prefill?.paymentModeId ?? "",
+      creditLines: [{ ledgerId: prefill?.ledgerId ?? "", amount: prefill?.amount ?? 0 }],
     },
   });
   const { control, setValue } = form;

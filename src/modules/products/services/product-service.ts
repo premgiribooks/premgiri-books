@@ -42,7 +42,7 @@ function translatePersistError(error: unknown): never {
 function toPersistData(data: CreateProductInput): ProductPersistData {
   return {
     name: data.name,
-    productCode: data.productCode,
+    productCode: data.productCode ?? null,
     barcode: data.barcode ?? null,
     productType: data.productType,
     categoryId: data.categoryId ?? null,

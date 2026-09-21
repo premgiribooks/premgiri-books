@@ -5,8 +5,17 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { ReceiptVoucherForm } from "@/modules/manual-vouchers/components/receipt-voucher-form";
 import { paymentVoucherService } from "@/modules/manual-vouchers/services/payment-voucher-service";
+import { resolveReceiptVoucherPrefill } from "@/modules/manual-vouchers/utils/resolve-receipt-voucher-prefill";
 
-export default async function NewReceiptVoucherPage() {
+interface NewReceiptVoucherPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function NewReceiptVoucherPage({ searchParams }: NewReceiptVoucherPageProps) {
   const user = await getCurrentCompanyUser();
   const canCreate = await hasPermission(user, "accounting", "create");
   if (!canCreate) {
@@ -19,6 +28,15 @@ export default async function NewReceiptVoucherPage() {
     isCurrentUserCompanyAdmin(),
   ]);
 
+  const resolvedParams = await searchParams;
+  const prefill = resolveReceiptVoucherPrefill(
+    ledgerOptions,
+    firstValue(resolvedParams.creditLedgerId),
+    firstValue(resolvedParams.amount),
+    paymentModes,
+    firstValue(resolvedParams.paymentModeId)
+  );
+
   return (
     <AppShell isAdmin={isAdmin}>
       <div className="flex flex-col gap-6 p-6">
@@ -29,7 +47,7 @@ export default async function NewReceiptVoucherPage() {
           </p>
         </div>
 
-        <ReceiptVoucherForm ledgerOptions={ledgerOptions} paymentModes={paymentModes} />
+        <ReceiptVoucherForm ledgerOptions={ledgerOptions} paymentModes={paymentModes} prefill={prefill} />
       </div>
     </AppShell>
   );

@@ -6,14 +6,24 @@ const NAME_SCHEMA = z
   .min(2, "Name must be at least 2 characters")
   .max(200, "Name must be at most 200 characters");
 
-// Required user-entered SKU, unique per company. No auto-numbering — the
-// Document Number Engine (#32) doesn't exist yet, and a one-off generator
-// here would be superseded by it (25-product-management.md).
+// Optional user-entered SKU, unique per company when present — some
+// products the user carries have no SKU of their own (made optional per
+// explicit user request, 2026-09-20; mirrors BARCODE_SCHEMA's own blank-to-
+// undefined normalization so clearing the field persists NULL, exempt from
+// the per-company uniqueness rule just like barcode). No auto-numbering —
+// the Document Number Engine (#32) doesn't exist yet, and a one-off
+// generator here would be superseded by it (25-product-management.md).
 const PRODUCT_CODE_SCHEMA = z
   .string()
   .trim()
-  .min(2, "Product code must be at least 2 characters")
-  .max(50, "Product code must be at most 50 characters");
+  .transform((value) => (value === "" ? undefined : value))
+  .optional()
+  .refine((value) => value === undefined || value.length >= 2, {
+    message: "Product code must be at least 2 characters",
+  })
+  .refine((value) => value === undefined || value.length <= 50, {
+    message: "Product code must be at most 50 characters",
+  });
 
 // Optional EAN/UPC or self-printed barcode; blank normalizes to undefined so
 // clearing the field persists NULL — and NULLs are exempt from the

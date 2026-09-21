@@ -31,7 +31,7 @@ export function LowStockTable({ report }: LowStockTableProps) {
           <TableRow key={`${row.productId}-${row.warehouseId ?? "none"}-${index}`}>
             <TableCell>
               <div className="font-medium text-foreground">{row.productName}</div>
-              <div className="text-xs text-muted-foreground">{row.productCode}</div>
+              <div className="text-xs text-muted-foreground">{row.productCode ?? "—"}</div>
             </TableCell>
             <TableCell>{row.warehouseName ?? "All Warehouses"}</TableCell>
             <TableCell className="text-right font-financial">{row.currentStock.toFixed(2)}</TableCell>

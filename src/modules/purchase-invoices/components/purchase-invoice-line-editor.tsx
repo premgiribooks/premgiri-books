@@ -14,6 +14,8 @@ import type {
   PurchaseInvoiceProductOption,
   PurchaseInvoiceWarehouseOption,
 } from "@/types/purchase-invoice";
+import { useShortcutEffect } from "@/lib/shortcut-events";
+import { ITEM_SEARCH_SHORTCUT_ATTRIBUTE, focusLastMarkedComboboxInput } from "@/lib/shortcut-dom-targets";
 
 const BLANK_LINE = {
   productId: "" as unknown as string,
@@ -26,7 +28,7 @@ const BLANK_LINE = {
 };
 
 function productLabel(product: PurchaseInvoiceProductOption): string {
-  const base = `${product.name} (${product.productCode})`;
+  const base = product.productCode ? `${product.name} (${product.productCode})` : product.name;
   return product.isActive ? base : `${base} (Inactive)`;
 }
 
@@ -59,6 +61,21 @@ export function PurchaseInvoiceLineEditor({
   const { control } = useFormContext<CreatePurchaseInvoiceInput>();
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const lines = useWatch({ control, name: "lines" });
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // "Add Line" / "Focus Item Search" keyboard shortcuts (src/config/
+  // shortcuts.ts) — mirrors sales-invoice-line-editor.tsx's identical
+  // wiring; a no-op while locked to a Goods Receipt Note prefill.
+  useShortcutEffect("add-line", () => {
+    if (!locked) {
+      append(BLANK_LINE);
+    }
+  });
+  useShortcutEffect("focus-item-search", () => {
+    if (containerRef.current) {
+      focusLastMarkedComboboxInput(containerRef.current, ITEM_SEARCH_SHORTCUT_ATTRIBUTE);
+    }
+  });
 
   const productOptions: ProductOptionItem[] = React.useMemo(
     () => products.map((product) => ({ id: product.id, label: productLabel(product), isActive: product.isActive })),
@@ -76,7 +93,7 @@ export function PurchaseInvoiceLineEditor({
   );
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" ref={containerRef}>
       <div className="overflow-x-auto rounded-2xl border border-border">
         <Table>
           <TableHeader>

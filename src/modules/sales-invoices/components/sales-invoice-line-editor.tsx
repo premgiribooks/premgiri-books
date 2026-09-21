@@ -9,11 +9,12 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import type { ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import { SalesInvoiceLineRow } from "@/modules/sales-invoices/components/sales-invoice-line-row";
 import type { CreateSalesInvoiceInput } from "@/modules/sales-invoices/validation/sales-invoice-schema";
-import type { SalesInvoiceLineComputation, SalesInvoiceProductOption, SalesInvoiceWarehouseOption } from "@/types/sales-invoice";
+import type { SalesInvoiceLineComputation, SalesInvoiceProductOption } from "@/types/sales-invoice";
+import { useShortcutEffect } from "@/lib/shortcut-events";
+import { ITEM_SEARCH_SHORTCUT_ATTRIBUTE, focusLastMarkedComboboxInput } from "@/lib/shortcut-dom-targets";
 
 const BLANK_LINE = {
   productId: "" as unknown as string,
-  warehouseId: "" as unknown as string,
   quantity: 1,
   rate: 0,
   discountPercent: undefined,
@@ -22,17 +23,12 @@ const BLANK_LINE = {
 };
 
 function productLabel(product: SalesInvoiceProductOption): string {
-  const base = `${product.name} (${product.productCode})`;
+  const base = product.productCode ? `${product.name} (${product.productCode})` : product.name;
   return product.isActive ? base : `${base} (Inactive)`;
-}
-
-function warehouseLabel(warehouse: SalesInvoiceWarehouseOption): string {
-  return `${warehouse.name} (${warehouse.code})`;
 }
 
 interface SalesInvoiceLineEditorProps {
   products: SalesInvoiceProductOption[];
-  warehouses: SalesInvoiceWarehouseOption[];
   computations: SalesInvoiceLineComputation[];
   customerId: string | undefined;
   invoiceDate: string;
@@ -49,7 +45,6 @@ interface SalesInvoiceLineEditorProps {
  * (warehouse + tax override) diverges further still. */
 export function SalesInvoiceLineEditor({
   products,
-  warehouses,
   computations,
   customerId,
   invoiceDate,
@@ -59,14 +54,25 @@ export function SalesInvoiceLineEditor({
   const { control } = useFormContext<CreateSalesInvoiceInput>();
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const lines = useWatch({ control, name: "lines" });
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // "Add Line" / "Focus Item Search" keyboard shortcuts (src/config/
+  // shortcuts.ts) — no-ops while locked to a Delivery Challan prefill,
+  // exactly like the existing "Add Line" button's own disabled state.
+  useShortcutEffect("add-line", () => {
+    if (!locked) {
+      append(BLANK_LINE);
+    }
+  });
+  useShortcutEffect("focus-item-search", () => {
+    if (containerRef.current) {
+      focusLastMarkedComboboxInput(containerRef.current, ITEM_SEARCH_SHORTCUT_ATTRIBUTE);
+    }
+  });
 
   const productOptions: ProductOptionItem[] = React.useMemo(
     () => products.map((product) => ({ id: product.id, label: productLabel(product), isActive: product.isActive })),
     [products]
-  );
-  const warehouseOptions: ProductOptionItem[] = React.useMemo(
-    () => warehouses.map((warehouse) => ({ id: warehouse.id, label: warehouseLabel(warehouse), isActive: warehouse.isActive })),
-    [warehouses]
   );
 
   const computationByLineNumber = React.useMemo(
@@ -75,13 +81,12 @@ export function SalesInvoiceLineEditor({
   );
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" ref={containerRef}>
       <div className="overflow-x-auto rounded-2xl border border-border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Product</TableHead>
-              <TableHead>Warehouse</TableHead>
               <TableHead>Qty</TableHead>
               <TableHead>Rate</TableHead>
               <TableHead>Disc %</TableHead>
@@ -99,7 +104,6 @@ export function SalesInvoiceLineEditor({
                 key={field.id}
                 index={index}
                 productOptions={productOptions}
-                warehouseOptions={warehouseOptions}
                 computation={computationByLineNumber.get(index + 1)}
                 customerId={customerId}
                 invoiceDate={invoiceDate}

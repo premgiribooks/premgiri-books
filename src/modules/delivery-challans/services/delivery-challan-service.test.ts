@@ -13,9 +13,7 @@ const {
   updateStatusMock,
   findCustomerForChallanMock,
   findProductsForLinesMock,
-  findWarehousesForLinesMock,
   findDispatchableProductsMock,
-  findSelectableWarehousesMock,
   getCurrentCompanyUserMock,
   getCurrentFinancialYearMock,
   assertPermissionMock,
@@ -35,9 +33,7 @@ const {
   updateStatusMock: vi.fn(),
   findCustomerForChallanMock: vi.fn(),
   findProductsForLinesMock: vi.fn(),
-  findWarehousesForLinesMock: vi.fn(),
   findDispatchableProductsMock: vi.fn(),
-  findSelectableWarehousesMock: vi.fn(),
   getCurrentCompanyUserMock: vi.fn(),
   getCurrentFinancialYearMock: vi.fn(),
   assertPermissionMock: vi.fn(),
@@ -60,9 +56,7 @@ vi.mock("@/modules/delivery-challans/repositories/delivery-challan-repository", 
     updateStatus: updateStatusMock,
     findCustomerForChallan: findCustomerForChallanMock,
     findProductsForLines: findProductsForLinesMock,
-    findWarehousesForLines: findWarehousesForLinesMock,
     findDispatchableProducts: findDispatchableProductsMock,
-    findSelectableWarehouses: findSelectableWarehousesMock,
   },
 }));
 
@@ -107,7 +101,6 @@ const FY_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "33333333-3333-4333-8333-333333333333";
 const CUSTOMER_ID = "44444444-4444-4444-8444-444444444444";
 const PRODUCT_ID = "55555555-5555-4555-8555-555555555555";
-const WAREHOUSE_ID = "66666666-6666-4666-8666-666666666666";
 const SALES_ORDER_ID = "77777777-7777-4777-8777-777777777777";
 const ITEM_ID = "88888888-8888-4888-8888-888888888888";
 
@@ -143,10 +136,8 @@ const PRODUCT = {
   unitDecimalPlaces: 0,
 };
 
-const WAREHOUSE = { id: WAREHOUSE_ID, name: "Main Warehouse", code: "WH1", isActive: true };
-
 function validLines() {
-  return [{ productId: PRODUCT_ID, warehouseId: WAREHOUSE_ID, quantity: 5 }];
+  return [{ productId: PRODUCT_ID, quantity: 5 }];
 }
 
 function validInput(overrides: Record<string, unknown> = {}) {
@@ -201,9 +192,7 @@ beforeEach(() => {
   updateStatusMock.mockReset();
   findCustomerForChallanMock.mockReset();
   findProductsForLinesMock.mockReset();
-  findWarehousesForLinesMock.mockReset();
   findDispatchableProductsMock.mockReset();
-  findSelectableWarehousesMock.mockReset();
   getCurrentCompanyUserMock.mockReset();
   getCurrentFinancialYearMock.mockReset();
   assertPermissionMock.mockReset();
@@ -219,7 +208,6 @@ beforeEach(() => {
   assertPermissionMock.mockResolvedValue(undefined);
   findCustomerForChallanMock.mockResolvedValue(ACTIVE_CUSTOMER);
   findProductsForLinesMock.mockResolvedValue([PRODUCT]);
-  findWarehousesForLinesMock.mockResolvedValue([WAREHOUSE]);
   generateNumberMock.mockResolvedValue({ documentSequenceId: "seq-1", number: 1, formatted: "DC-0001" });
   createMock.mockResolvedValue(challanRow());
 });
@@ -242,7 +230,6 @@ describe("createDeliveryChallan — manual (no linked sales order)", () => {
       [
         expect.objectContaining({
           productId: PRODUCT_ID,
-          warehouseId: WAREHOUSE_ID,
           quantity: 5,
           salesOrderItemId: null,
         }),
@@ -280,7 +267,7 @@ describe("createDeliveryChallan — linked to a sales order", () => {
   function linkedInput(quantity: number, salesOrderItemId = ITEM_ID) {
     return validInput({
       salesOrderId: SALES_ORDER_ID,
-      lines: [{ productId: PRODUCT_ID, warehouseId: WAREHOUSE_ID, quantity, salesOrderItemId }],
+      lines: [{ productId: PRODUCT_ID, quantity, salesOrderItemId }],
     });
   }
 
@@ -343,11 +330,9 @@ describe("dispatchDeliveryChallan", () => {
         {
           id: "item-1",
           productId: PRODUCT_ID,
-          warehouseId: WAREHOUSE_ID,
           quantity: 5,
           salesOrderItemId: null,
           product: { id: PRODUCT_ID, name: "Product A" },
-          warehouse: { id: WAREHOUSE_ID, name: "Main Warehouse" },
         },
       ],
       ...overrides,
@@ -374,11 +359,9 @@ describe("dispatchDeliveryChallan", () => {
           {
             id: "item-1",
             productId: PRODUCT_ID,
-            warehouseId: WAREHOUSE_ID,
             quantity: 5,
             salesOrderItemId: ITEM_ID,
             product: { id: PRODUCT_ID, name: "Product A" },
-            warehouse: { id: WAREHOUSE_ID, name: "Main Warehouse" },
           },
         ],
       })
@@ -404,11 +387,9 @@ describe("dispatchDeliveryChallan", () => {
           {
             id: "item-1",
             productId: PRODUCT_ID,
-            warehouseId: WAREHOUSE_ID,
             quantity: 5,
             salesOrderItemId: ITEM_ID,
             product: { id: PRODUCT_ID, name: "Product A" },
-            warehouse: { id: WAREHOUSE_ID, name: "Main Warehouse" },
           },
         ],
       })
@@ -433,14 +414,6 @@ describe("dispatchDeliveryChallan", () => {
     findProductsForLinesMock.mockResolvedValueOnce([{ ...PRODUCT, isActive: false }]);
     await expect(deliveryChallanService.dispatchDeliveryChallan("dc-1")).rejects.toThrow(
       "is inactive and cannot be dispatched"
-    );
-  });
-
-  it("rejects dispatching a line whose warehouse has since gone inactive", async () => {
-    findByIdMock.mockResolvedValueOnce(draftWithLine());
-    findWarehousesForLinesMock.mockResolvedValueOnce([{ ...WAREHOUSE, isActive: false }]);
-    await expect(deliveryChallanService.dispatchDeliveryChallan("dc-1")).rejects.toThrow(
-      "is inactive and cannot be dispatched from"
     );
   });
 

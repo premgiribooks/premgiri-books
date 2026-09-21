@@ -338,7 +338,8 @@ export function PurchaseReturnForm({ invoice, options, purchaseReturn }: Purchas
                         />
                       </TableCell>
                       <TableCell>
-                        {line.productName} ({line.productCode})
+                        {line.productName}
+                        {line.productCode ? ` (${line.productCode})` : ""}
                       </TableCell>
                       <TableCell>{line.warehouseName}</TableCell>
                       <TableCell className="text-right font-financial">

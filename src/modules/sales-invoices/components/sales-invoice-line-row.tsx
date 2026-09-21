@@ -12,6 +12,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { numericFieldWidth } from "@/lib/utils";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import { resolveLinePriceAction } from "@/modules/sales-invoices/actions/sales-invoice-actions";
+import { ITEM_SEARCH_SHORTCUT_ATTRIBUTE } from "@/lib/shortcut-dom-targets";
 import { SalesInvoiceTaxOverridePopover } from "@/modules/sales-invoices/components/sales-invoice-tax-override-popover";
 import type { CreateSalesInvoiceInput } from "@/modules/sales-invoices/validation/sales-invoice-schema";
 import type { SalesInvoiceLineComputation } from "@/types/sales-invoice";
@@ -23,7 +24,6 @@ function toNumberOrZero(value: number): number {
 interface SalesInvoiceLineRowProps {
   index: number;
   productOptions: ProductOptionItem[];
-  warehouseOptions: ProductOptionItem[];
   computation?: SalesInvoiceLineComputation;
   customerId: string | undefined;
   invoiceDate: string;
@@ -37,13 +37,15 @@ interface SalesInvoiceLineRowProps {
   canRemove: boolean;
 }
 
-/** Mirrors sales-order-line-row.tsx, extended with a warehouse picker (this
- * document records stock movement, unlike Sales Order/Quotation) and the
- * per-line tax-override popover (this document's own addition). */
+/** Mirrors sales-order-line-row.tsx, extended with the per-line
+ * tax-override popover (this document's own addition). No warehouse picker
+ * — which warehouse(s) fulfil this line is resolved automatically at
+ * posting time (removed the manual per-line picker per explicit user
+ * request, 2026-09-20; see sales-invoice-service.ts's
+ * resolveWarehouseAllocationsForLines). */
 export function SalesInvoiceLineRow({
   index,
   productOptions,
-  warehouseOptions,
   computation,
   customerId,
   invoiceDate,
@@ -75,7 +77,7 @@ export function SalesInvoiceLineRow({
 
   return (
     <TableRow>
-      <TableCell className="min-w-56">
+      <TableCell className="min-w-80" {...{ [ITEM_SEARCH_SHORTCUT_ATTRIBUTE]: "" }}>
         {locked ? (
           <FormField
             control={control}
@@ -107,28 +109,6 @@ export function SalesInvoiceLineRow({
             )}
           />
         )}
-      </TableCell>
-
-      <TableCell className="min-w-48">
-        <FormField
-          control={control}
-          name={`lines.${index}.warehouseId`}
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <ProductOptionSelector
-                  options={warehouseOptions}
-                  value={field.value || undefined}
-                  onChange={(value) => field.onChange(value ?? "")}
-                  allowNone={false}
-                  placeholder="Select a warehouse"
-                  disabled={locked}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
       </TableCell>
 
       <TableCell>

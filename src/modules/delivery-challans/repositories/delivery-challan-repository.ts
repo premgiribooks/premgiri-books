@@ -9,7 +9,6 @@ import type {
   DeliveryChallanListFilters,
   DeliveryChallanListRow,
   DeliveryChallanProductOption,
-  DeliveryChallanWarehouseOption,
 } from "@/types/delivery-challan";
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
@@ -26,7 +25,6 @@ const ITEM_INCLUDE = {
   items: {
     include: {
       product: { select: { id: true, name: true, productCode: true, isActive: true } },
-      warehouse: { select: { id: true, name: true, code: true, isActive: true } },
     },
   },
 } as const;
@@ -103,7 +101,6 @@ function buildWhere(
 
 export interface DeliveryChallanLinePersistData {
   productId: string;
-  warehouseId: string;
   quantity: number;
   salesOrderItemId: string | null;
 }
@@ -276,21 +273,6 @@ export const deliveryChallanRepository = {
     }));
   },
 
-  /** Batched lookup for every distinct warehouseId referenced by a
-   * create/update payload — same inactive-allowed-through-at-create,
-   * re-checked-at-dispatch convention as findProductsForLines. */
-  async findWarehousesForLines(
-    client: PrismaClientOrTransaction,
-    companyId: string,
-    warehouseIds: readonly string[]
-  ): Promise<DeliveryChallanWarehouseOption[]> {
-    const rows = await client.warehouse.findMany({
-      where: { id: { in: [...warehouseIds] }, companyId },
-      select: { id: true, name: true, code: true, isActive: true },
-    });
-    return rows;
-  },
-
   /** The product picker's options for the manual (no linked order) create
    * form — mirrors sales-order-repository.ts's findOrderableProducts. */
   async findDispatchableProducts(companyId: string): Promise<DeliveryChallanProductOption[]> {
@@ -313,14 +295,5 @@ export const deliveryChallanRepository = {
       unitSymbol: row.unit.symbol,
       unitDecimalPlaces: row.unit.decimalPlaces,
     }));
-  },
-
-  async findSelectableWarehouses(companyId: string): Promise<DeliveryChallanWarehouseOption[]> {
-    const rows = await prisma.warehouse.findMany({
-      where: { companyId, isActive: true },
-      select: { id: true, name: true, code: true, isActive: true },
-      orderBy: { name: "asc" },
-    });
-    return rows;
   },
 };

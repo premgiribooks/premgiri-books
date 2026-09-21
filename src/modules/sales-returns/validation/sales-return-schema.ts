@@ -48,6 +48,10 @@ const QUANTITY_SCHEMA = z
 
 export const salesReturnLineSchema = z.object({
   salesInvoiceItemId: z.uuid("Select a valid invoice line"),
+  // Explicit picker (added per explicit user request, 2026-09-20) — see
+  // SalesReturnItem's own schema comment for why this is no longer
+  // inherited from the original sale.
+  warehouseId: z.uuid("Select a valid warehouse"),
   quantity: QUANTITY_SCHEMA,
 });
 

@@ -13,7 +13,7 @@ function discountLabel(item: QuotationItemDetail): string {
 function itemRow(item: QuotationItemDetail): string {
   return `
     <tr>
-      <td>${escapeHtml(item.product.name)} (${escapeHtml(item.product.productCode)})</td>
+      <td>${escapeHtml(item.product.name)}${item.product.productCode ? ` (${escapeHtml(item.product.productCode)})` : ""}</td>
       <td class="text-right">${item.quantity}</td>
       <td class="text-right">${item.rate.toFixed(2)}</td>
       <td class="text-right">${discountLabel(item)}</td>

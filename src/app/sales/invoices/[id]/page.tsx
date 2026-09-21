@@ -55,14 +55,27 @@ export default async function SalesInvoiceDetailPage({
     notFound();
   }
 
-  const [isAdmin, canPost, canCancel, canCreateReturn] = await Promise.all([
+  const [isAdmin, canPost, canCancel, canCreateReturn, canRecordReceipt] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
     hasPermission(user, "sales", "approve"),
     hasPermission(user, "sales", "create"),
+    hasPermission(user, "accounting", "create"),
   ]);
 
   const isEditable = salesInvoice.status === "DRAFT";
+  // Full-or-partial "clear the remaining balance" shortcut — jumps to
+  // Receipt Voucher's existing New screen with this invoice's own
+  // outstanding customer balance pre-filled, mirroring
+  // 87-liability-settlement.md's "Settle" pattern but scoped to this one
+  // document's own due amount rather than the customer ledger's entire
+  // running balance. Only meaningful for a POSTED invoice against a real
+  // (PERMANENT) customer with money still due — a WALK_IN/QUICK sale must
+  // already sum its payments to the full grand total to post at all, so
+  // amountDue is always 0 there.
+  const amountDue = Math.round((salesInvoice.grandTotal - salesInvoice.amountPaid) * 100) / 100;
+  const canShowReceiptAction =
+    canRecordReceipt && salesInvoice.status === "POSTED" && Boolean(salesInvoice.customer?.ledgerId) && amountDue > 0;
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -116,6 +129,19 @@ export default async function SalesInvoiceDetailPage({
                 }
               />
             ) : null}
+            {canShowReceiptAction ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <Link
+                    href={`/accounting/receipt-vouchers/new?creditLedgerId=${salesInvoice.customer?.ledgerId}&amount=${amountDue}`}
+                  >
+                    Receipt
+                  </Link>
+                }
+              />
+            ) : null}
             <SalesInvoiceStatusActions
               salesInvoice={salesInvoice}
               canPost={canPost}
@@ -157,7 +183,7 @@ export default async function SalesInvoiceDetailPage({
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
-                <TableHead>Warehouse</TableHead>
+                <TableHead>Fulfilled From</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
                 <TableHead className="text-right">Rate</TableHead>
                 <TableHead className="text-right">Taxable</TableHead>
@@ -168,9 +194,16 @@ export default async function SalesInvoiceDetailPage({
               {salesInvoice.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.product.name} ({item.product.productCode})
+                    {item.product.name}
+                    {item.product.productCode ? ` (${item.product.productCode})` : ""}
                   </TableCell>
-                  <TableCell>{item.warehouse.name}</TableCell>
+                  <TableCell>
+                    {item.warehouseAllocations.length > 0
+                      ? item.warehouseAllocations
+                          .map((allocation) => `${allocation.warehouseName} (${allocation.quantity})`)
+                          .join(", ")
+                      : "—"}
+                  </TableCell>
                   <TableCell className="text-right font-financial">
                     {item.quantity}
                   </TableCell>

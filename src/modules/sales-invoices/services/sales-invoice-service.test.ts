@@ -13,9 +13,7 @@ const {
   updateStatusMock,
   findCustomerForInvoiceMock,
   findProductsForLinesMock,
-  findWarehousesForLinesMock,
   findInvoiceableProductsMock,
-  findSelectableWarehousesMock,
   findCompanyStateCodeMock,
   aggregateItemWiseSalesMock,
   aggregatePartyWiseSalesMock,
@@ -36,6 +34,7 @@ const {
   postVoucherMock,
   cancelVoucherMock,
   recordMovementsMock,
+  resolveWarehouseFifoAllocationMock,
   resolvePriceMock,
   getLedgerBalanceMock,
   assertPaymentModeMatchesLedgerMock,
@@ -49,9 +48,7 @@ const {
   updateStatusMock: vi.fn(),
   findCustomerForInvoiceMock: vi.fn(),
   findProductsForLinesMock: vi.fn(),
-  findWarehousesForLinesMock: vi.fn(),
   findInvoiceableProductsMock: vi.fn(),
-  findSelectableWarehousesMock: vi.fn(),
   findCompanyStateCodeMock: vi.fn(),
   aggregateItemWiseSalesMock: vi.fn(),
   aggregatePartyWiseSalesMock: vi.fn(),
@@ -72,6 +69,7 @@ const {
   postVoucherMock: vi.fn(),
   cancelVoucherMock: vi.fn(),
   recordMovementsMock: vi.fn(),
+  resolveWarehouseFifoAllocationMock: vi.fn(),
   resolvePriceMock: vi.fn(),
   getLedgerBalanceMock: vi.fn(),
   assertPaymentModeMatchesLedgerMock: vi.fn(),
@@ -88,9 +86,7 @@ vi.mock("@/modules/sales-invoices/repositories/sales-invoice-repository", () => 
     updateStatus: updateStatusMock,
     findCustomerForInvoice: findCustomerForInvoiceMock,
     findProductsForLines: findProductsForLinesMock,
-    findWarehousesForLines: findWarehousesForLinesMock,
     findInvoiceableProducts: findInvoiceableProductsMock,
-    findSelectableWarehouses: findSelectableWarehousesMock,
     findCompanyStateCode: findCompanyStateCodeMock,
     aggregateItemWiseSales: aggregateItemWiseSalesMock,
     aggregatePartyWiseSales: aggregatePartyWiseSalesMock,
@@ -117,7 +113,7 @@ vi.mock("@/engines/voucher/voucher-queries", () => ({
   voucherQueries: { getLedgerBalance: getLedgerBalanceMock },
 }));
 vi.mock("@/engines/inventory/inventory-engine", () => ({
-  inventoryEngine: { recordMovements: recordMovementsMock },
+  inventoryEngine: { recordMovements: recordMovementsMock, resolveWarehouseFifoAllocation: resolveWarehouseFifoAllocationMock },
 }));
 
 vi.mock("@/modules/customers/services/customer-service", () => ({
@@ -204,8 +200,6 @@ const PRODUCT = {
   purchasePrice: 50,
 };
 
-const WAREHOUSE = { id: WAREHOUSE_ID, name: "Main Warehouse", code: "WH1", isActive: true };
-
 const COMPLETE_SETTINGS = {
   salesLedgerId: "s1111111-1111-4111-8111-111111111111",
   outputCgstLedgerId: "c1111111-1111-4111-8111-111111111111",
@@ -216,7 +210,7 @@ const COMPLETE_SETTINGS = {
 };
 
 function validLines() {
-  return [{ productId: PRODUCT_ID, warehouseId: WAREHOUSE_ID, quantity: 2, rate: 100 }];
+  return [{ productId: PRODUCT_ID, quantity: 2, rate: 100 }];
 }
 
 function validInput(overrides: Record<string, unknown> = {}) {
@@ -254,7 +248,6 @@ function invoiceRow(overrides: Record<string, unknown> = {}) {
       {
         id: "item-1",
         productId: PRODUCT_ID,
-        warehouseId: WAREHOUSE_ID,
         quantity: 2,
         rate: 100,
         discountPercent: 0,
@@ -266,7 +259,7 @@ function invoiceRow(overrides: Record<string, unknown> = {}) {
         overriddenCess: null,
         overrideReason: null,
         product: { id: PRODUCT_ID, name: "Product A" },
-        warehouse: { id: WAREHOUSE_ID, name: "Main Warehouse" },
+        warehouseAllocations: [{ warehouseId: WAREHOUSE_ID, warehouseName: "Main Warehouse", quantity: 2 }],
       },
     ],
     payments: [],
@@ -283,9 +276,7 @@ beforeEach(() => {
   updateStatusMock.mockReset();
   findCustomerForInvoiceMock.mockReset();
   findProductsForLinesMock.mockReset();
-  findWarehousesForLinesMock.mockReset();
   findInvoiceableProductsMock.mockReset();
-  findSelectableWarehousesMock.mockReset();
   findCompanyStateCodeMock.mockReset();
   aggregateItemWiseSalesMock.mockReset();
   aggregatePartyWiseSalesMock.mockReset();
@@ -306,6 +297,7 @@ beforeEach(() => {
   postVoucherMock.mockReset();
   cancelVoucherMock.mockReset();
   recordMovementsMock.mockReset();
+  resolveWarehouseFifoAllocationMock.mockReset();
   resolvePriceMock.mockReset();
   getLedgerBalanceMock.mockReset();
   assertPaymentModeMatchesLedgerMock.mockReset();
@@ -317,7 +309,11 @@ beforeEach(() => {
   findCustomerForInvoiceMock.mockResolvedValue(ACTIVE_CUSTOMER);
   findCompanyStateCodeMock.mockResolvedValue("27");
   findProductsForLinesMock.mockResolvedValue([PRODUCT]);
-  findWarehousesForLinesMock.mockResolvedValue([WAREHOUSE]);
+  // Mirrors PRODUCT's own single line quantity (2) — resolveWarehouseFifoAllocationMock
+  // just needs to return SOME allocation for the stock-out step to build
+  // its stockLines from; tests that care about a specific split override
+  // this per-call.
+  resolveWarehouseFifoAllocationMock.mockResolvedValue([{ warehouseId: WAREHOUSE_ID, quantity: 2 }]);
   generateNumberMock.mockResolvedValue({ documentSequenceId: "seq-1", number: 1, formatted: "INV-0001" });
   createMock.mockResolvedValue(invoiceRow());
   getSettingsMock.mockResolvedValue(COMPLETE_SETTINGS);
@@ -812,10 +808,8 @@ describe("getDeliveryChallanPrefill", () => {
       items: [
         {
           productId: PRODUCT_ID,
-          warehouseId: WAREHOUSE_ID,
           quantity: 2,
           product: { name: "Product A", productCode: "A" },
-          warehouse: { name: "Main Warehouse" },
         },
       ],
     });

@@ -13,7 +13,7 @@ import { filterNavigation } from "@/lib/navigation-filter";
 import { useNavPermissions } from "@/components/providers/nav-permissions-provider";
 import { useFavorites } from "@/hooks/use-favorites";
 import { recordRecentPage, useRecentPages } from "@/hooks/use-recent-pages";
-import { setCommandPaletteOpen, toggleCommandPalette, useCommandPaletteOpen } from "@/hooks/use-command-palette";
+import { setCommandPaletteOpen, useCommandPaletteOpen } from "@/hooks/use-command-palette";
 import type { GlobalSearchGroup, GlobalSearchGroupKey } from "@/types/global-search";
 
 const EMPTY_DATA_RESULTS: GlobalSearchGroup[] = [];
@@ -78,16 +78,11 @@ export function CommandPalette() {
   );
   const leafByHref = React.useMemo(() => new Map(visibleLeaves.map((item) => [item.href, item])), [visibleLeaves]);
 
-  React.useEffect(() => {
-    function handleGlobalKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        toggleCommandPalette();
-      }
-    }
-    window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, []);
+  // The Ctrl/Cmd+K keydown listener used to live here — moved to
+  // ShortcutListener (src/components/layout/shortcut-listener.tsx), which
+  // resolves it against the "search" entry in src/config/shortcuts.ts
+  // instead of a hardcoded combo, so it's rebindable from the `/shortcuts`
+  // customization page like every other shortcut.
 
   // Reset transient state when the palette opens — adjusted during render
   // (React's "adjusting state when a prop changes" pattern) rather than in

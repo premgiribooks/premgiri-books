@@ -58,7 +58,6 @@ function buildInvoiceFixture(overrides: Partial<SalesInvoiceDetail> = {}): Sales
         salesInvoiceId: "inv-1",
         lineNumber: 1,
         productId: "prod-1",
-        warehouseId: "wh-1",
         quantity: 2,
         rate: 500,
         discountPercent: 0,
@@ -86,7 +85,7 @@ function buildInvoiceFixture(overrides: Partial<SalesInvoiceDetail> = {}): Sales
           hsnCode: "8471",
           unitSymbol: "Nos",
         },
-        warehouse: { id: "wh-1", name: "Main Warehouse", code: "MAIN", isActive: true },
+        warehouseAllocations: [{ warehouseId: "wh-1", warehouseName: "Main Warehouse", quantity: 2 }],
       },
     ],
     payments: [

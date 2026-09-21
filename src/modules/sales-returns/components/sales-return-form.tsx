@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/common/searchable-select";
+import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { numericFieldWidth } from "@/lib/utils";
 import { createSalesReturnDraftAction, updateSalesReturnDraftAction } from "@/modules/sales-returns/actions/sales-return-actions";
@@ -71,6 +72,13 @@ type HeaderFormValues = z.infer<typeof headerFormSchema>;
 interface LineState {
   checked: boolean;
   quantity: number;
+  /** Where THIS return's goods are physically received back — an explicit
+   * per-line picker (added per explicit user request, 2026-09-20),
+   * independent of wherever the original sale drew its stock from (which
+   * may since span more than one warehouse — see
+   * SalesInvoiceItemWarehouseAllocation). Empty until the user picks one
+   * (or SearchableSelect auto-picks a lone warehouse). */
+  warehouseId: string;
 }
 
 function toDateInputValue(date: Date): string {
@@ -100,10 +108,10 @@ export function SalesReturnForm({ invoice, options, salesReturn }: SalesReturnFo
   const isEdit = salesReturn !== undefined;
 
   const existingByItemId = React.useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { quantity: number; warehouseId: string }>();
     if (salesReturn) {
       for (const item of salesReturn.items) {
-        map.set(item.salesInvoiceItem.id, item.quantity);
+        map.set(item.salesInvoiceItem.id, { quantity: item.quantity, warehouseId: item.warehouseId });
       }
     }
     return map;
@@ -112,14 +120,20 @@ export function SalesReturnForm({ invoice, options, salesReturn }: SalesReturnFo
   const [lineStates, setLineStates] = React.useState<Record<string, LineState>>(() => {
     const initial: Record<string, LineState> = {};
     for (const line of invoice.lines) {
-      const existingQuantity = existingByItemId.get(line.salesInvoiceItemId);
+      const existing = existingByItemId.get(line.salesInvoiceItemId);
       initial[line.salesInvoiceItemId] = {
-        checked: existingQuantity !== undefined,
-        quantity: existingQuantity ?? line.returnableQuantity,
+        checked: existing !== undefined,
+        quantity: existing?.quantity ?? line.returnableQuantity,
+        warehouseId: existing?.warehouseId ?? "",
       };
     }
     return initial;
   });
+
+  const warehouseOptions: ProductOptionItem[] = React.useMemo(
+    () => options.warehouses.map((warehouse) => ({ id: warehouse.id, label: `${warehouse.name} (${warehouse.code})`, isActive: warehouse.isActive })),
+    [options.warehouses]
+  );
 
   const form = useForm<HeaderFormValues>({
     resolver: zodResolver(headerFormSchema),
@@ -150,17 +164,22 @@ export function SalesReturnForm({ invoice, options, salesReturn }: SalesReturnFo
   }
 
   async function handleSubmit(headerValues: HeaderFormValues) {
-    const lines = invoice.lines
-      .filter((line) => lineStates[line.salesInvoiceItemId]?.checked)
-      .map((line) => ({
-        salesInvoiceItemId: line.salesInvoiceItemId,
-        quantity: lineStates[line.salesInvoiceItemId].quantity,
-      }));
+    const checkedLines = invoice.lines.filter((line) => lineStates[line.salesInvoiceItemId]?.checked);
 
-    if (lines.length === 0) {
+    if (checkedLines.length === 0) {
       toast.error("Select at least one line to return.");
       return;
     }
+    if (checkedLines.some((line) => !lineStates[line.salesInvoiceItemId].warehouseId)) {
+      toast.error("Select a warehouse for every line being returned.");
+      return;
+    }
+
+    const lines = checkedLines.map((line) => ({
+      salesInvoiceItemId: line.salesInvoiceItemId,
+      warehouseId: lineStates[line.salesInvoiceItemId].warehouseId,
+      quantity: lineStates[line.salesInvoiceItemId].quantity,
+    }));
 
     const payload = {
       salesInvoiceId: invoice.salesInvoiceId,
@@ -340,9 +359,19 @@ export function SalesReturnForm({ invoice, options, salesReturn }: SalesReturnFo
                         />
                       </TableCell>
                       <TableCell>
-                        {line.productName} ({line.productCode})
+                        {line.productName}
+                        {line.productCode ? ` (${line.productCode})` : ""}
                       </TableCell>
-                      <TableCell>{line.warehouseName}</TableCell>
+                      <TableCell className="min-w-48">
+                        <ProductOptionSelector
+                          options={warehouseOptions}
+                          value={state?.warehouseId || undefined}
+                          onChange={(value) => updateLine(line.salesInvoiceItemId, { warehouseId: value ?? "" })}
+                          allowNone={false}
+                          placeholder="Select a warehouse"
+                          disabled={!isReturnable || !(state?.checked ?? false)}
+                        />
+                      </TableCell>
                       <TableCell className="text-right font-financial">
                         {line.originalQuantity} {line.unitSymbol}
                       </TableCell>

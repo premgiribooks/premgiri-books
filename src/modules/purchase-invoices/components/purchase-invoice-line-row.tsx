@@ -11,6 +11,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { numericFieldWidth } from "@/lib/utils";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import { PurchaseInvoiceTaxOverridePopover } from "@/modules/purchase-invoices/components/purchase-invoice-tax-override-popover";
+import { ITEM_SEARCH_SHORTCUT_ATTRIBUTE } from "@/lib/shortcut-dom-targets";
 import type { CreatePurchaseInvoiceInput } from "@/modules/purchase-invoices/validation/purchase-invoice-schema";
 import type { PurchaseInvoiceLineComputation, PurchaseInvoiceProductOption } from "@/types/purchase-invoice";
 
@@ -66,7 +67,7 @@ export function PurchaseInvoiceLineRow({
 
   return (
     <TableRow>
-      <TableCell className="min-w-56">
+      <TableCell className="min-w-80" {...{ [ITEM_SEARCH_SHORTCUT_ATTRIBUTE]: "" }}>
         {locked ? (
           <FormField
             control={control}

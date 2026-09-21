@@ -30,14 +30,23 @@ export default async function PurchaseInvoiceDetailPage({ params }: PurchaseInvo
     notFound();
   }
 
-  const [isAdmin, canPost, canCancel] = await Promise.all([
+  const [isAdmin, canPost, canCancel, canRecordPayment] = await Promise.all([
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "create"),
     hasPermission(user, "purchase", "approve"),
+    hasPermission(user, "accounting", "create"),
   ]);
 
   const isEditable = purchaseInvoice.status === "DRAFT";
   const totalTax = purchaseInvoice.totalCgst + purchaseInvoice.totalSgst + purchaseInvoice.totalIgst + purchaseInvoice.totalCess;
+  // Full-or-partial "clear the remaining balance" shortcut — jumps to
+  // Payment Voucher's existing New screen with this invoice's own
+  // outstanding supplier balance pre-filled, reusing
+  // 87-liability-settlement.md's own prefill query params
+  // (`debitLedgerId`/`amount`) but scoped to this one document's own due
+  // amount rather than the supplier ledger's entire running balance.
+  const amountDue = Math.round((purchaseInvoice.grandTotal - purchaseInvoice.amountPaid) * 100) / 100;
+  const canShowPaymentAction = canRecordPayment && purchaseInvoice.status === "POSTED" && amountDue > 0;
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -62,6 +71,17 @@ export default async function PurchaseInvoiceDetailPage({ params }: PurchaseInvo
                   <Link href={`/purchase/invoices/${purchaseInvoice.id}/edit`}>
                     <Pencil size={16} />
                     Edit
+                  </Link>
+                }
+              />
+            ) : null}
+            {canShowPaymentAction ? (
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={
+                  <Link href={`/accounting/payment-vouchers/new?debitLedgerId=${purchaseInvoice.supplier.ledgerId}&amount=${amountDue}`}>
+                    Payment
                   </Link>
                 }
               />
@@ -129,7 +149,8 @@ export default async function PurchaseInvoiceDetailPage({ params }: PurchaseInvo
               {purchaseInvoice.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.product.name} ({item.product.productCode})
+                    {item.product.name}
+                    {item.product.productCode ? ` (${item.product.productCode})` : ""}
                   </TableCell>
                   <TableCell>{item.warehouse.name}</TableCell>
                   <TableCell className="text-right font-financial">{item.quantity}</TableCell>

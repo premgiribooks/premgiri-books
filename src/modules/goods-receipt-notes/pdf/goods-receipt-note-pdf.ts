@@ -6,7 +6,7 @@ import type { GoodsReceiptNoteDetail, GoodsReceiptNoteItemDetail } from "@/types
 function itemRow(item: GoodsReceiptNoteItemDetail): string {
   return `
     <tr>
-      <td>${escapeHtml(item.product.name)} (${escapeHtml(item.product.productCode)})</td>
+      <td>${escapeHtml(item.product.name)}${item.product.productCode ? ` (${escapeHtml(item.product.productCode)})` : ""}</td>
       <td>${escapeHtml(item.warehouse.name)} (${escapeHtml(item.warehouse.code)})</td>
       <td class="text-right">${item.quantity}</td>
       <td class="text-right">${item.rejectedQuantity}</td>

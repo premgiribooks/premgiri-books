@@ -28,7 +28,7 @@ export interface PurchaseReturnInvoiceItemSnapshot {
   id: string;
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   warehouseId: string;
   warehouseName: string;
 }
@@ -83,7 +83,7 @@ export interface ReturnablePurchaseInvoiceLine {
   purchaseInvoiceItemId: string;
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   warehouseId: string;
   warehouseName: string;
   unitSymbol: string;

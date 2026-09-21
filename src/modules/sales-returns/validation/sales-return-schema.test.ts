@@ -7,12 +7,13 @@ const ITEM_ID = "22222222-2222-4222-8222-222222222222";
 const ITEM_ID_2 = "33333333-3333-4333-8333-333333333333";
 const LEDGER_ID = "44444444-4444-4444-8444-444444444444";
 const PAYMENT_MODE_ID = "55555555-5555-4555-8555-555555555555";
+const WAREHOUSE_ID = "66666666-6666-4666-8666-666666666666";
 
 function validInput(overrides: Record<string, unknown> = {}) {
   return {
     salesInvoiceId: SALES_INVOICE_ID,
     returnDate: "2026-09-10",
-    lines: [{ salesInvoiceItemId: ITEM_ID, quantity: 1 }],
+    lines: [{ salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 1 }],
     ...overrides,
   };
 }
@@ -44,7 +45,9 @@ describe("createSalesReturnSchema", () => {
   });
 
   it("rejects a non-positive quantity", () => {
-    const result = createSalesReturnSchema.safeParse(validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, quantity: 0 }] }));
+    const result = createSalesReturnSchema.safeParse(
+      validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 0 }] })
+    );
     expect(result.success).toBe(false);
   });
 
@@ -69,8 +72,8 @@ describe("createSalesReturnSchema", () => {
     const result = createSalesReturnSchema.safeParse(
       validInput({
         lines: [
-          { salesInvoiceItemId: ITEM_ID, quantity: 1 },
-          { salesInvoiceItemId: ITEM_ID, quantity: 2 },
+          { salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 1 },
+          { salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 2 },
         ],
       })
     );
@@ -81,12 +84,25 @@ describe("createSalesReturnSchema", () => {
     const result = createSalesReturnSchema.safeParse(
       validInput({
         lines: [
-          { salesInvoiceItemId: ITEM_ID, quantity: 1 },
-          { salesInvoiceItemId: ITEM_ID_2, quantity: 2 },
+          { salesInvoiceItemId: ITEM_ID, warehouseId: WAREHOUSE_ID, quantity: 1 },
+          { salesInvoiceItemId: ITEM_ID_2, warehouseId: WAREHOUSE_ID, quantity: 2 },
         ],
       })
     );
     expect(result.success).toBe(true);
+  });
+
+  it("rejects a line with a missing or invalid warehouseId", () => {
+    expect(
+      createSalesReturnSchema.safeParse(
+        validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, quantity: 1 }] })
+      ).success
+    ).toBe(false);
+    expect(
+      createSalesReturnSchema.safeParse(
+        validInput({ lines: [{ salesInvoiceItemId: ITEM_ID, warehouseId: "not-a-uuid", quantity: 1 }] })
+      ).success
+    ).toBe(false);
   });
 
   it("rejects an invalid returnDate", () => {

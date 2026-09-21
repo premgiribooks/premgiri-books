@@ -260,7 +260,7 @@ function itemRow(item: SalesInvoiceItemDetail, srNo: number): string {
   return `
     <tr>
       <td class="text-center">${srNo}</td>
-      <td>${escapeHtml(item.product.name)} (${escapeHtml(item.product.productCode)})</td>
+      <td>${escapeHtml(item.product.name)}${item.product.productCode ? ` (${escapeHtml(item.product.productCode)})` : ""}</td>
       <td class="text-center">${item.product.hsnCode ? escapeHtml(item.product.hsnCode) : "-"}</td>
       <td class="text-center">${escapeHtml(item.product.unitSymbol)}</td>
       <td class="text-right">${item.quantity}</td>

@@ -55,7 +55,7 @@ function toNumberOrUndefined(value: number): number | undefined {
 }
 
 function productLabel(item: PriceListItemWithProduct): string {
-  const base = `${item.product.name} (${item.product.productCode})`;
+  const base = item.product.productCode ? `${item.product.name} (${item.product.productCode})` : item.product.name;
   return item.product.isActive ? base : `${base} (Inactive)`;
 }
 

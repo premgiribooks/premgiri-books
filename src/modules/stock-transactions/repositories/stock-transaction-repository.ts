@@ -68,7 +68,7 @@ export interface ProductForValuation {
 export interface OpeningStockProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;
@@ -87,7 +87,7 @@ export interface OpeningStockListRow {
   id: string;
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   warehouseId: string;
   warehouseName: string;
   quantity: number;
@@ -249,6 +249,84 @@ export const stockTransactionRepository = {
       select: { allowNegativeStock: true },
     });
     return settings?.allowNegativeStock ?? false;
+  },
+
+  /**
+   * The FIFO-by-warehouse-age auto-allocator's own read (src/engines/
+   * inventory/warehouse-allocation.ts) — one row per ACTIVE warehouse that
+   * has ever carried this product, each with its own current net quantity
+   * (Sigma IN - Sigma OUT) and its own earliest-ever IN transaction date for
+   * this product, sorted oldest-first. A warehouse with a zero/negative net
+   * quantity is still included (it did carry this product once) but the
+   * allocator itself skips it when actually drawing stock — this read isn't
+   * the place to filter that out, since "oldest warehouse that ever held it"
+   * and "warehouse with stock right now" are different questions this one
+   * query answers together. Two `groupBy` calls (Postgres has no single
+   * aggregate for "net signed sum" + "MIN date filtered to one direction" in
+   * one pass) merged client-side by warehouseId — the same shape
+   * aggregateCurrentStock/sumStockForPairs already use for the signed-sum
+   * half. Always run on the caller's transaction so it observes the same
+   * Serializable snapshot as the insert that follows it.
+   */
+  async findWarehouseFifoCandidates(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    productId: string
+  ): Promise<{ warehouseId: string; availableQuantity: number; firstInDate: Date }[]> {
+    const [stockRows, firstInRows] = await Promise.all([
+      tx.stockTransaction.groupBy({
+        by: ["warehouseId", "direction"],
+        where: { companyId, productId, warehouse: { isActive: true } },
+        _sum: { quantity: true },
+      }),
+      tx.stockTransaction.groupBy({
+        by: ["warehouseId"],
+        where: { companyId, productId, direction: "IN", warehouse: { isActive: true } },
+        _min: { transactionDate: true },
+      }),
+    ]);
+
+    const quantityByWarehouse = new Map<string, number>();
+    for (const row of stockRows) {
+      const signedQuantity = row.direction === "IN" ? toDecimalSum(row._sum.quantity) : -toDecimalSum(row._sum.quantity);
+      quantityByWarehouse.set(row.warehouseId, (quantityByWarehouse.get(row.warehouseId) ?? 0) + signedQuantity);
+    }
+
+    const candidates = firstInRows
+      .filter((row): row is typeof row & { _min: { transactionDate: Date } } => row._min.transactionDate !== null)
+      .map((row) => ({
+        warehouseId: row.warehouseId,
+        availableQuantity: quantityByWarehouse.get(row.warehouseId) ?? 0,
+        firstInDate: row._min.transactionDate,
+      }));
+
+    candidates.sort((a, b) => a.firstInDate.getTime() - b.firstInDate.getTime());
+    return candidates;
+  },
+
+  /**
+   * The auto-allocator's own last-resort target when a product has NEVER
+   * been stocked in any warehouse yet (so `findWarehouseFifoCandidates`
+   * returns nothing to rank) but the company still allows negative stock —
+   * the product's own `defaultWarehouseId` if it's set and still active,
+   * otherwise the company's single `isDefault` warehouse if it's active,
+   * otherwise `null` (the caller then has no warehouse at all to write to
+   * and must fail with a clear setup message rather than guessing one).
+   */
+  async findFallbackWarehouseId(companyId: string, productId: string): Promise<string | null> {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { defaultWarehouseId: true, defaultWarehouse: { select: { isActive: true } } },
+    });
+    if (product?.defaultWarehouseId && product.defaultWarehouse?.isActive) {
+      return product.defaultWarehouseId;
+    }
+
+    const companyDefault = await prisma.warehouse.findFirst({
+      where: { companyId, isDefault: true, isActive: true },
+      select: { id: true },
+    });
+    return companyDefault?.id ?? null;
   },
 
   /**

@@ -116,9 +116,10 @@ export default async function SalesReturnDetailPage({ params }: SalesReturnDetai
               {salesReturn.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.salesInvoiceItem.productName} ({item.salesInvoiceItem.productCode})
+                    {item.salesInvoiceItem.productName}
+                    {item.salesInvoiceItem.productCode ? ` (${item.salesInvoiceItem.productCode})` : ""}
                   </TableCell>
-                  <TableCell>{item.salesInvoiceItem.warehouseName}</TableCell>
+                  <TableCell>{item.warehouse.name}</TableCell>
                   <TableCell className="text-right font-financial">{item.quantity}</TableCell>
                   <TableCell className="text-right font-financial">{item.taxableAmount.toFixed(2)}</TableCell>
                   <TableCell className="text-right font-financial">{item.totalAmount.toFixed(2)}</TableCell>

@@ -22,18 +22,33 @@ export interface SalesReturn
     Record<SalesReturnDecimalField, number> {}
 
 /** The slice of the source SalesInvoiceItem a return line's read-model needs
- * for display — product/warehouse names, never a re-enterable price. */
+ * for display — product name, never a re-enterable price. No warehouse here
+ * any more: the original sale can now span more than one warehouse (see
+ * SalesInvoiceItemWarehouseAllocation), so there's no single "the" warehouse
+ * left to show — `warehouse` below is this RETURN line's own explicit
+ * picker instead (added per explicit user request, 2026-09-20). */
 export interface SalesReturnInvoiceItemSnapshot {
   id: string;
   productId: string;
   productName: string;
-  productCode: string;
-  warehouseId: string;
-  warehouseName: string;
+  productCode: string | null;
+}
+
+/** The slice of Warehouse a return line's read-model needs — where THIS
+ * return's goods are physically received back, a decision the person
+ * processing the return makes (mirrors Purchase Invoice's own incoming-
+ * goods warehouse field), independent of wherever the original sale drew
+ * its stock from. */
+export interface SalesReturnWarehouseSnapshot {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
 }
 
 export interface SalesReturnItemDetail extends SalesReturnItem {
   salesInvoiceItem: SalesReturnInvoiceItemSnapshot;
+  warehouse: SalesReturnWarehouseSnapshot;
 }
 
 export interface SalesReturnInvoiceSnapshot {
@@ -83,9 +98,7 @@ export interface ReturnableInvoiceLine {
   salesInvoiceItemId: string;
   productId: string;
   productName: string;
-  productCode: string;
-  warehouseId: string;
-  warehouseName: string;
+  productCode: string | null;
   unitSymbol: string;
   unitDecimalPlaces: number;
   originalQuantity: number;
@@ -129,9 +142,17 @@ export interface SalesReturnRefundLedgerOption {
  * number" preview: unlike Sales Invoice, `returnNumber` is only assigned at
  * posting (39-sales-return.md's Decisions), so a draft-time preview would be
  * misleading with multiple concurrent drafts in flight. */
+export interface SalesReturnWarehouseOption {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+}
+
 export interface SalesReturnFormOptions {
   refundLedgers: SalesReturnRefundLedgerOption[];
   paymentModes: PaymentModeOption[];
+  warehouses: SalesReturnWarehouseOption[];
   isLedgerMappingComplete: boolean;
 }
 

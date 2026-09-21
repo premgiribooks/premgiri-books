@@ -86,7 +86,14 @@ function ComboboxContent({
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"
           className={cn(
-            "relative isolate z-50 flex max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            // `w-max` up to a capped `max-w` (rather than a hard `w-(--anchor-width)`)
+            // so a long option label (e.g. "PRODUCT NAME (SKU-CODE)") isn't clipped
+            // to whatever width the trigger/anchor happens to be — the `min-w`
+            // still floors it at the anchor's own width so a short list never
+            // looks narrower than its trigger. `ComboboxItem`'s own
+            // `whitespace-nowrap` (below) already assumed a container that can
+            // actually grow to fit it.
+            "relative isolate z-50 flex max-h-(--available-height) w-max min-w-(--anchor-width) max-w-[min(32rem,90vw)] origin-(--transform-origin) flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
             className
           )}
           {...props}

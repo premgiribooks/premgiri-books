@@ -13,7 +13,7 @@ import type {
 
 export interface ProductPersistData {
   name: string;
-  productCode: string;
+  productCode: string | null;
   barcode: string | null;
   productType: ProductType;
   categoryId: string | null;

@@ -89,7 +89,8 @@ export default async function StockAdjustmentDetailPage({ params }: StockAdjustm
               {stockAdjustment.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.productName} ({item.productCode})
+                    {item.productName}
+                    {item.productCode ? ` (${item.productCode})` : ""}
                   </TableCell>
                   <TableCell>{item.warehouseName}</TableCell>
                   <TableCell>{DIRECTION_LABELS[item.direction]}</TableCell>

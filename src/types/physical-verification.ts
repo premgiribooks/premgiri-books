@@ -22,7 +22,7 @@ export type PhysicalVerification = PrismaPhysicalVerification;
  * references Product itself (no source document to snapshot through). */
 export interface PhysicalVerificationItemDetail extends PhysicalVerificationItem {
   productName: string;
-  productCode: string;
+  productCode: string | null;
   unitSymbol: string;
   unitDecimalPlaces: number;
 }
@@ -50,7 +50,7 @@ export interface PhysicalVerificationListFilters {
 export interface PhysicalVerificationProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;

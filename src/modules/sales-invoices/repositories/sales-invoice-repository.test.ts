@@ -169,7 +169,7 @@ describe("salesInvoiceRepository.aggregateItemWiseSales", () => {
       expect.objectContaining({
         where: expect.objectContaining({
           productId: PRODUCT_A,
-          warehouseId: "wh-1",
+          warehouseAllocations: { some: { warehouseId: "wh-1" } },
           salesInvoice: expect.objectContaining({ customerId: CUSTOMER_A }),
         }),
       })

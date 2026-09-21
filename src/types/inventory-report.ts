@@ -24,7 +24,7 @@ import type { StockDirection, StockTransactionType } from "@prisma/client";
 export interface InventoryReportProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   unitName: string;
   isActive: boolean;
   /** `Product.minStockLevel`, already Decimal->number converted; null when unset. */
@@ -39,7 +39,7 @@ export interface InventoryReportWarehouseOption {
 export interface CurrentStockReportRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   unitName: string;
   /** Null only for a synthetic zero-stock row added with no warehouse filter applied (never moved, so no warehouse to attribute it to). */
   warehouseId: string | null;
@@ -76,7 +76,7 @@ export interface StockLedgerReport {
 export interface StockValuationReportRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   quantity: number;
   /** `product.purchasePrice`, or 0 when unset (see `isUnvalued`) — copied verbatim from `getStockValuation`. */
   unitCost: number;
@@ -94,7 +94,7 @@ export interface StockValuationReport {
 export interface LowStockReportRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   /** Null only for a synthetic zero-stock row (see CurrentStockReportRow's identical note). */
   warehouseId: string | null;
   warehouseName: string | null;

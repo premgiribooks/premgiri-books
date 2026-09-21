@@ -92,7 +92,10 @@ const OVERRIDE_REASON_SCHEMA = z
 export const salesInvoiceLineSchema = z
   .object({
     productId: z.uuid("Select a valid product"),
-    warehouseId: z.uuid("Select a valid warehouse"),
+    // No warehouseId (removed per explicit user request, 2026-09-20) — which
+    // warehouse(s) fulfil this line is resolved automatically at posting
+    // time by the Inventory Engine's own FIFO-by-warehouse-age allocator
+    // (src/engines/inventory/warehouse-allocation.ts), never chosen here.
     quantity: QUANTITY_SCHEMA,
     rate: RATE_SCHEMA,
     discountPercent: DISCOUNT_PERCENT_SCHEMA,

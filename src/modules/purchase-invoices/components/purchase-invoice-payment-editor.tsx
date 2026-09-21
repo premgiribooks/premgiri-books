@@ -15,6 +15,8 @@ import { ProductOptionSelector, type ProductOptionItem } from "@/modules/product
 import type { CreatePurchaseInvoiceInput } from "@/modules/purchase-invoices/validation/purchase-invoice-schema";
 import type { PurchaseInvoicePaymentLedgerOption } from "@/types/purchase-invoice";
 import type { PaymentModeOption } from "@/types/payment-mode";
+import { useShortcutEffect } from "@/lib/shortcut-events";
+import { PAYMENT_LEDGER_SHORTCUT_ATTRIBUTE, focusFirstMarkedComboboxInput } from "@/lib/shortcut-dom-targets";
 
 function toNumberOrZero(value: number): number {
   return Number.isNaN(value) ? 0 : value;
@@ -59,6 +61,15 @@ export function PurchaseInvoicePaymentEditor({ paymentLedgers, paymentModes, gra
   const { control, setValue } = useFormContext<CreatePurchaseInvoiceInput>();
   const { fields, append, remove } = useFieldArray({ control, name: "payments" });
   const payments = useWatch({ control, name: "payments" });
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // "Jump to Payment" keyboard shortcut (src/config/shortcuts.ts) — mirrors
+  // sales-invoice-payment-editor.tsx's identical wiring.
+  useShortcutEffect("focus-payment", () => {
+    if (containerRef.current) {
+      focusFirstMarkedComboboxInput(containerRef.current, PAYMENT_LEDGER_SHORTCUT_ATTRIBUTE);
+    }
+  });
 
   const ledgerOptions: ProductOptionItem[] = React.useMemo(
     () => paymentLedgers.map((ledger) => ({ id: ledger.id, label: `${ledger.name} (${ledger.groupName})`, isActive: true })),
@@ -85,7 +96,7 @@ export function PurchaseInvoicePaymentEditor({ paymentLedgers, paymentModes, gra
   const amountDue = grandTotal - paidTotal;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" ref={containerRef}>
       <div className="overflow-x-auto rounded-2xl border border-border">
         <Table>
           <TableHeader>
@@ -100,7 +111,7 @@ export function PurchaseInvoicePaymentEditor({ paymentLedgers, paymentModes, gra
           <TableBody>
             {fields.map((field, index) => (
               <TableRow key={field.id}>
-                <TableCell className="min-w-56">
+                <TableCell className="min-w-56" {...{ [PAYMENT_LEDGER_SHORTCUT_ATTRIBUTE]: "" }}>
                   <FormField
                     control={control}
                     name={`payments.${index}.ledgerId`}

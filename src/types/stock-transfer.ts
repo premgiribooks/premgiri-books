@@ -19,7 +19,7 @@ export type StockTransfer = PrismaStockTransfer;
  * snapshot through). */
 export interface StockTransferItemDetail extends StockTransferItem {
   productName: string;
-  productCode: string;
+  productCode: string | null;
   unitSymbol: string;
   unitDecimalPlaces: number;
 }
@@ -50,7 +50,7 @@ export interface StockTransferListFilters {
 export interface StockTransferProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;

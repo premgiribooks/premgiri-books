@@ -28,7 +28,7 @@ export interface PriceListItem
 export interface PriceListItemProduct {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
 }
 

@@ -63,7 +63,12 @@ const ITEM_INCLUDE = {
           hsnCode: { select: { code: true } },
         },
       },
-      warehouse: { select: { id: true, name: true, code: true, isActive: true } },
+      // The FIFO auto-allocator's own persisted breakdown (see
+      // SalesInvoiceItemWarehouseAllocation's own schema comment) — empty on
+      // a DRAFT line, one-or-more rows once posted.
+      warehouseAllocations: {
+        select: { warehouseId: true, quantity: true, warehouse: { select: { name: true } } },
+      },
     },
   },
 } as const;
@@ -200,7 +205,11 @@ function toSalesInvoiceDetail(raw: SalesInvoiceDetailRaw): SalesInvoiceDetail {
           unitSymbol: item.product.unit.symbol,
           hsnCode: item.product.hsnCode?.code ?? null,
         },
-        warehouse: item.warehouse,
+        warehouseAllocations: item.warehouseAllocations.map((allocation) => ({
+          warehouseId: allocation.warehouseId,
+          warehouseName: allocation.warehouse.name,
+          quantity: allocation.quantity.toNumber(),
+        })),
       };
     });
 
@@ -251,9 +260,19 @@ function buildWhere(
   return where;
 }
 
+/** One resolved warehouse allocation to persist alongside its own line —
+ * see SalesInvoiceItemWarehouseAllocation's schema comment. Empty at DRAFT
+ * time (nothing has moved yet); populated by postSalesInvoice from the
+ * Inventory Engine's own FIFO resolution just before this same line's stock
+ * actually moves. */
+export interface SalesInvoiceLineWarehouseAllocationPersistData {
+  warehouseId: string;
+  quantity: number;
+}
+
 export interface SalesInvoiceLinePersistData {
   productId: string;
-  warehouseId: string;
+  warehouseAllocations: SalesInvoiceLineWarehouseAllocationPersistData[];
   quantity: number;
   rate: number;
   discountPercent: number;
@@ -306,6 +325,17 @@ export interface SalesInvoicePaymentPersistData {
   reference: string | null;
 }
 
+/** Shapes one persisted line for `items: { create: [...] }` — pulled out
+ * because `warehouseAllocations` is itself a nested relation (needs its own
+ * `{ create: [...] }`), not a plain scalar that a flat `...line` spread can
+ * carry, unlike every other field on `SalesInvoiceLinePersistData`. Shared
+ * by `create`/`replaceItemsAndUpdate`/`replaceItemsAndPost` so this shape
+ * exists in exactly one place. */
+function toItemCreateData(line: SalesInvoiceLinePersistData, index: number) {
+  const { warehouseAllocations, ...rest } = line;
+  return { ...rest, lineNumber: index + 1, warehouseAllocations: { create: warehouseAllocations } };
+}
+
 export const salesInvoiceRepository = {
   async findMany(
     companyId: string,
@@ -346,7 +376,7 @@ export const salesInvoiceRepository = {
         createdByUserId,
         ...header,
         items: {
-          create: lines.map((line, index) => ({ ...line, lineNumber: index + 1 })),
+          create: lines.map(toItemCreateData),
         },
         payments: { create: payments },
       },
@@ -384,7 +414,7 @@ export const salesInvoiceRepository = {
       where: { id },
       data: {
         ...header,
-        items: { create: lines.map((line, index) => ({ ...line, lineNumber: index + 1 })) },
+        items: { create: lines.map(toItemCreateData) },
         payments: { create: payments },
       },
       include: { ...CUSTOMER_INCLUDE, ...SALES_ORDER_INCLUDE, ...DELIVERY_CHALLAN_INCLUDE, ...ITEM_INCLUDE, ...PAYMENT_INCLUDE },
@@ -422,7 +452,7 @@ export const salesInvoiceRepository = {
         ...header,
         voucherId,
         status: "POSTED",
-        items: { create: lines.map((line, index) => ({ ...line, lineNumber: index + 1 })) },
+        items: { create: lines.map(toItemCreateData) },
         payments: { create: payments },
       },
       include: { ...CUSTOMER_INCLUDE, ...SALES_ORDER_INCLUDE, ...DELIVERY_CHALLAN_INCLUDE, ...ITEM_INCLUDE, ...PAYMENT_INCLUDE },
@@ -538,25 +568,6 @@ export const salesInvoiceRepository = {
     }));
   },
 
-  async findSelectableWarehouses(companyId: string): Promise<{ id: string; name: string; code: string; isActive: boolean }[]> {
-    return prisma.warehouse.findMany({
-      where: { companyId, isActive: true },
-      select: { id: true, name: true, code: true, isActive: true },
-      orderBy: { name: "asc" },
-    });
-  },
-
-  async findWarehousesForLines(
-    client: PrismaClientOrTransaction,
-    companyId: string,
-    warehouseIds: readonly string[]
-  ): Promise<{ id: string; name: string; code: string; isActive: boolean }[]> {
-    return client.warehouse.findMany({
-      where: { id: { in: [...warehouseIds] }, companyId },
-      select: { id: true, name: true, code: true, isActive: true },
-    });
-  },
-
   async findCompanyStateCode(companyId: string): Promise<string | null> {
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { stateCode: true } });
     return company?.stateCode ?? null;
@@ -589,7 +600,10 @@ export const salesInvoiceRepository = {
         ...(filters.customerId ? { customerId: filters.customerId } : {}),
       },
       ...(filters.productId ? { productId: filters.productId } : {}),
-      ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+      // A line has no single warehouseId any more (it can be fulfilled from
+      // more than one) — matches a line if ANY of its resolved allocations
+      // is at the requested warehouse.
+      ...(filters.warehouseId ? { warehouseAllocations: { some: { warehouseId: filters.warehouseId } } } : {}),
     };
 
     const grouped = await prisma.salesInvoiceItem.groupBy({

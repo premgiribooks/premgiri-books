@@ -29,7 +29,7 @@ export function CurrentStockTable({ report }: CurrentStockTableProps) {
           <TableRow key={`${row.productId}-${row.warehouseId ?? "none"}-${index}`}>
             <TableCell>
               <div className="font-medium text-foreground">{row.productName}</div>
-              <div className="text-xs text-muted-foreground">{row.productCode}</div>
+              <div className="text-xs text-muted-foreground">{row.productCode ?? "—"}</div>
             </TableCell>
             <TableCell>{row.warehouseName ?? "All Warehouses"}</TableCell>
             <TableCell className="text-right font-financial">{row.quantity.toFixed(2)}</TableCell>

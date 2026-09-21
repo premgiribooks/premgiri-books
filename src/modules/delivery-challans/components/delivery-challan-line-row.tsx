@@ -20,7 +20,6 @@ function toNumberOrZero(value: number): number {
 interface DeliveryChallanLineRowProps {
   index: number;
   productOptions: ProductOptionItem[];
-  warehouseOptions: ProductOptionItem[];
   /** Set when this row is locked to a linked Sales Order's line — the
    * product is fixed (shown as a label, no picker) and quantity is capped at
    * the order line's remaining quantity. */
@@ -29,13 +28,13 @@ interface DeliveryChallanLineRowProps {
   canRemove: boolean;
 }
 
-/** One line of the Delivery Challan Form's editor — no pricing/tax columns
- * (37-delivery-challans.md's Data Model: "quantity and source warehouse
- * only"), unlike sales-order-line-row.tsx/quotation-line-row.tsx. */
+/** One line of the Delivery Challan Form's editor — no pricing/tax columns,
+ * unlike sales-order-line-row.tsx/quotation-line-row.tsx, and no warehouse
+ * picker either (removed per explicit user request, 2026-09-20 — this
+ * document never moves real stock). */
 export function DeliveryChallanLineRow({
   index,
   productOptions,
-  warehouseOptions,
   linkedLine,
   onRemove,
   canRemove,
@@ -47,7 +46,8 @@ export function DeliveryChallanLineRow({
       <TableCell className="min-w-56">
         {linkedLine ? (
           <div className="text-sm text-foreground">
-            {linkedLine.productName} ({linkedLine.productCode})
+            {linkedLine.productName}
+            {linkedLine.productCode ? ` (${linkedLine.productCode})` : ""}
             <p className="text-xs text-muted-foreground">
               Remaining: {linkedLine.remainingQuantity} {linkedLine.unitSymbol}
             </p>
@@ -72,27 +72,6 @@ export function DeliveryChallanLineRow({
             )}
           />
         )}
-      </TableCell>
-
-      <TableCell className="min-w-48">
-        <FormField
-          control={control}
-          name={`lines.${index}.warehouseId`}
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <ProductOptionSelector
-                  options={warehouseOptions}
-                  value={field.value || undefined}
-                  onChange={(value) => field.onChange(value ?? "")}
-                  allowNone={false}
-                  placeholder="Select a warehouse"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
       </TableCell>
 
       <TableCell>

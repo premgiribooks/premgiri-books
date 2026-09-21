@@ -20,7 +20,7 @@ export type StockAdjustment = PrismaStockAdjustment;
  * document to snapshot through). */
 export interface StockAdjustmentItemDetail extends StockAdjustmentItem {
   productName: string;
-  productCode: string;
+  productCode: string | null;
   warehouseName: string;
   unitSymbol: string;
   unitDecimalPlaces: number;
@@ -46,7 +46,7 @@ export interface StockAdjustmentListFilters {
 export interface StockAdjustmentProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;

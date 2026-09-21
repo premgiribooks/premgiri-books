@@ -22,7 +22,7 @@ function blankLine() {
 }
 
 function productLabel(product: StockAdjustmentProductOption): string {
-  const base = `${product.name} (${product.productCode})`;
+  const base = product.productCode ? `${product.name} (${product.productCode})` : product.name;
   return product.isActive ? base : `${base} (Inactive)`;
 }
 

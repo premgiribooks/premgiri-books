@@ -9,7 +9,10 @@ const PUBLIC_ROUTES = new Set(["/login"]);
 // Routes a PLATFORM user (Super Admin) is allowed to reach in addition to
 // the /administration tree itself — everything else (ERP routes, Company/
 // Financial-Year/Branch selection) is exclusively for COMPANY users.
-const PLATFORM_ALLOWED_PREFIXES = ["/administration", "/profile"];
+// "/shortcuts" is a personal, browser-local keyboard-shortcut preference
+// page (src/app/shortcuts/page.tsx) with no company data behind it at all —
+// same posture as "/profile", which it mirrors.
+const PLATFORM_ALLOWED_PREFIXES = ["/administration", "/profile", "/shortcuts"];
 const ADMINISTRATION_PREFIX = "/administration";
 
 // Exact-match or prefix-plus-slash only — a bare pathname.startsWith(prefix)

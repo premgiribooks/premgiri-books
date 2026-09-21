@@ -110,7 +110,6 @@ export default async function DeliveryChallanDetailPage({ params }: DeliveryChal
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
-                <TableHead>Warehouse</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
               </TableRow>
             </TableHeader>
@@ -118,14 +117,9 @@ export default async function DeliveryChallanDetailPage({ params }: DeliveryChal
               {deliveryChallan.items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    {item.product.name} ({item.product.productCode})
+                    {item.product.name}
+                    {item.product.productCode ? ` (${item.product.productCode})` : ""}
                     {!item.product.isActive ? (
-                      <span className="ml-1 text-xs text-muted-foreground">(Inactive)</span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    {item.warehouse.name} ({item.warehouse.code})
-                    {!item.warehouse.isActive ? (
                       <span className="ml-1 text-xs text-muted-foreground">(Inactive)</span>
                     ) : null}
                   </TableCell>

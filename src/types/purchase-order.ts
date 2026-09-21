@@ -44,7 +44,7 @@ export interface PurchaseOrder
 export interface PurchaseOrderProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
 }
 
@@ -97,7 +97,7 @@ export interface PurchaseOrderListFilters {
 export interface PurchaseOrderProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;

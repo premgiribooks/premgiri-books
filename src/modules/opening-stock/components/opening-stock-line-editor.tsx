@@ -27,7 +27,7 @@ function blankLine() {
 }
 
 function productLabel(product: OpeningStockProductOption): string {
-  const base = `${product.name} (${product.productCode})`;
+  const base = product.productCode ? `${product.name} (${product.productCode})` : product.name;
   return product.isActive ? base : `${base} (Inactive)`;
 }
 

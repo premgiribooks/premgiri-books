@@ -30,7 +30,6 @@ import type {
   DeliveryChallanListFilters,
   DeliveryChallanListRow,
   DeliveryChallanProductOption,
-  DeliveryChallanWarehouseOption,
   OpenSalesOrderLineOption,
   SalesOrderPrefill,
 } from "@/types/delivery-challan";
@@ -40,14 +39,15 @@ import type { SalesOrderDetail } from "@/types/sales-order";
 // service method. Deliberately NOT implemented as a separate persist path:
 // unlike Quotation -> Sales Order (spec 36's createFromQuotation, which
 // copies/re-resolves everything needed to persist immediately, no further
-// user input required), a Delivery Challan line needs a per-line WAREHOUSE
-// no prior document can supply — so "convert from a Sales Order" is
-// inherently a form-fill step here, not a one-click persist-then-edit.
-// `getSalesOrderPrefill` below is the read-only lookup the "New Delivery
-// Challan" page uses (via ?salesOrderId=) to pre-fill that form; the actual
-// write always goes through the single `createDeliveryChallan` below, whose
-// schema already supports an optional `salesOrderId` + per-line
-// `salesOrderItemId`. Recorded in progress-tracker.md.
+// user input required), a Delivery Challan may only dispatch PART of a
+// Sales Order line's remaining quantity, a decision the user makes per line
+// — so "convert from a Sales Order" is inherently a form-fill step here, not
+// a one-click persist-then-edit. `getSalesOrderPrefill` below is the
+// read-only lookup the "New Delivery Challan" page uses (via ?salesOrderId=)
+// to pre-fill that form; the actual write always goes through the single
+// `createDeliveryChallan` below, whose schema already supports an optional
+// `salesOrderId` + per-line `salesOrderItemId`. Recorded in
+// progress-tracker.md.
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
@@ -65,7 +65,6 @@ const LINE_ITEM_NOT_FOUND_MESSAGE = "One or more lines reference an item that do
 const LINE_PRODUCT_MISMATCH_MESSAGE = "One or more lines' product does not match the linked sales order item.";
 const LINE_EXCEEDS_REMAINING_MESSAGE = "One or more lines exceed the remaining quantity on the linked sales order.";
 const PRODUCT_NOT_FOUND_MESSAGE = "One or more products were not found.";
-const WAREHOUSE_NOT_FOUND_MESSAGE = "One or more warehouses were not found.";
 const DISPATCH_CONFLICT_MESSAGE =
   "This delivery challan's linked sales order changed due to another request. Please try again.";
 
@@ -106,16 +105,6 @@ async function loadProductsMap(
   const productIds = [...new Set(lineInputs.map((line) => line.productId))];
   const products = await deliveryChallanRepository.findProductsForLines(client, companyId, productIds);
   return new Map(products.map((product) => [product.id, product]));
-}
-
-async function loadWarehousesMap(
-  client: PrismaClientOrTransaction,
-  companyId: string,
-  lineInputs: readonly DeliveryChallanLineInput[]
-): Promise<Map<string, DeliveryChallanWarehouseOption>> {
-  const warehouseIds = [...new Set(lineInputs.map((line) => line.warehouseId))];
-  const warehouses = await deliveryChallanRepository.findWarehousesForLines(client, companyId, warehouseIds);
-  return new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]));
 }
 
 async function verifyCustomer(companyId: string, customerId: string): Promise<void> {
@@ -159,7 +148,6 @@ async function resolveLinkedSalesOrder(
 function buildLines(
   lineInputs: readonly DeliveryChallanLineInput[],
   productsById: ReadonlyMap<string, DeliveryChallanProductOption>,
-  warehousesById: ReadonlyMap<string, DeliveryChallanWarehouseOption>,
   salesOrder: SalesOrderDetail | null
 ): DeliveryChallanLinePersistData[] {
   const salesOrderItemsById = salesOrder ? new Map(salesOrder.items.map((item) => [item.id, item])) : null;
@@ -168,10 +156,6 @@ function buildLines(
     const product = productsById.get(input.productId);
     if (!product) {
       throw new AppError(PRODUCT_NOT_FOUND_MESSAGE);
-    }
-    const warehouse = warehousesById.get(input.warehouseId);
-    if (!warehouse) {
-      throw new AppError(WAREHOUSE_NOT_FOUND_MESSAGE);
     }
     assertQuantityPrecision(input.quantity, product.unitDecimalPlaces);
 
@@ -191,7 +175,6 @@ function buildLines(
 
     return {
       productId: input.productId,
-      warehouseId: input.warehouseId,
       quantity: input.quantity,
       salesOrderItemId: input.salesOrderItemId ?? null,
     };
@@ -311,10 +294,9 @@ export const deliveryChallanService = {
 
     const financialYear = await requireFinancialYear();
 
-    const [customers, products, warehouses, preview] = await Promise.all([
+    const [customers, products, preview] = await Promise.all([
       customerService.listSelectableCustomers(),
       deliveryChallanRepository.findDispatchableProducts(user.companyId),
-      deliveryChallanRepository.findSelectableWarehouses(user.companyId),
       documentNumberEngine.previewNextNumber({
         companyId: user.companyId,
         financialYearId: financialYear.id,
@@ -329,7 +311,6 @@ export const deliveryChallanService = {
         isActive: customer.isActive,
       })),
       products,
-      warehouses,
       nextChallanNumber: preview.formatted,
     };
   },
@@ -388,8 +369,7 @@ export const deliveryChallanService = {
     const salesOrder = await resolveLinkedSalesOrder(data.salesOrderId, data.customerId);
 
     const productsById = await loadProductsMap(prisma, user.companyId, data.lines);
-    const warehousesById = await loadWarehousesMap(prisma, user.companyId, data.lines);
-    const lines = buildLines(data.lines, productsById, warehousesById, salesOrder);
+    const lines = buildLines(data.lines, productsById, salesOrder);
 
     return persistNewDeliveryChallan(user.companyId, financialYear.id, toHeaderPersistData(data), lines, user.id);
   },
@@ -415,8 +395,7 @@ export const deliveryChallanService = {
     const salesOrder = await resolveLinkedSalesOrder(data.salesOrderId, data.customerId);
 
     const productsById = await loadProductsMap(prisma, user.companyId, data.lines);
-    const warehousesById = await loadWarehousesMap(prisma, user.companyId, data.lines);
-    const lines = buildLines(data.lines, productsById, warehousesById, salesOrder);
+    const lines = buildLines(data.lines, productsById, salesOrder);
 
     const updated = await runInTransaction((tx) =>
       deliveryChallanRepository.replaceItemsAndUpdate(
@@ -437,10 +416,10 @@ export const deliveryChallanService = {
   /**
    * `DRAFT -> DISPATCHED`, in one Serializable + bounded-retry transaction
    * (37-delivery-challans.md's Business Rules): re-validates every line's
-   * product/warehouse are active, applies delivery to the linked Sales
-   * Order (if any) atomically with this challan's own status flip, and
-   * never touches the Inventory Engine (see that spec's Goal — Sales
-   * Invoice, feature-spec 38, is the sole stock-out point in this phase).
+   * product is active, applies delivery to the linked Sales Order (if any)
+   * atomically with this challan's own status flip, and never touches the
+   * Inventory Engine (see that spec's Goal — Sales Invoice, feature-spec 38,
+   * is the sole stock-out point in this phase).
    */
   async dispatchDeliveryChallan(id: string): Promise<DeliveryChallanDetail> {
     const user = await getCurrentCompanyUser();
@@ -456,22 +435,13 @@ export const deliveryChallanService = {
       }
 
       const productIds = [...new Set(existing.items.map((item) => item.productId))];
-      const warehouseIds = [...new Set(existing.items.map((item) => item.warehouseId))];
-      const [products, warehouses] = await Promise.all([
-        deliveryChallanRepository.findProductsForLines(tx, user.companyId, productIds),
-        deliveryChallanRepository.findWarehousesForLines(tx, user.companyId, warehouseIds),
-      ]);
+      const products = await deliveryChallanRepository.findProductsForLines(tx, user.companyId, productIds);
       const productsById = new Map(products.map((product) => [product.id, product]));
-      const warehousesById = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]));
 
       for (const item of existing.items) {
         const product = productsById.get(item.productId);
         if (!product || !product.isActive) {
           throw new AppError(`${item.product.name} is inactive and cannot be dispatched.`);
-        }
-        const warehouse = warehousesById.get(item.warehouseId);
-        if (!warehouse || !warehouse.isActive) {
-          throw new AppError(`${item.warehouse.name} is inactive and cannot be dispatched from.`);
         }
       }
 

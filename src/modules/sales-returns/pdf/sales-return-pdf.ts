@@ -17,7 +17,7 @@ function itemRow(item: SalesReturnItemDetail): string {
   const tax = item.cgst + item.sgst + item.igst + item.cess;
   return `
     <tr>
-      <td>${escapeHtml(item.salesInvoiceItem.productName)} (${escapeHtml(item.salesInvoiceItem.productCode)})</td>
+      <td>${escapeHtml(item.salesInvoiceItem.productName)}${item.salesInvoiceItem.productCode ? ` (${escapeHtml(item.salesInvoiceItem.productCode)})` : ""}</td>
       <td class="text-right">${item.quantity}</td>
       <td class="text-right">${item.taxableAmount.toFixed(2)}</td>
       <td class="text-right">${tax.toFixed(2)}</td>

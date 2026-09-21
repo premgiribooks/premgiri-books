@@ -88,7 +88,7 @@ export default async function ItemWisePurchasePage({ searchParams }: ItemWisePur
 
         <PurchaseReportFilterBar
           suppliers={suppliers}
-          products={products.map((product) => ({ id: product.id, name: `${product.name} (${product.productCode})` }))}
+          products={products.map((product) => ({ id: product.id, name: product.productCode ? `${product.name} (${product.productCode})` : product.name }))}
           warehouses={warehouses}
         />
 

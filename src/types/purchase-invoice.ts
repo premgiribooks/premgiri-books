@@ -61,7 +61,7 @@ export interface PurchaseInvoicePayment extends Omit<PrismaPurchaseInvoicePaymen
 export interface PurchaseInvoiceProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
 }
 
@@ -136,7 +136,7 @@ export interface PurchaseInvoiceListFilters {
 export interface PurchaseInvoiceProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;
@@ -227,7 +227,7 @@ export interface PurchaseInvoicePreview {
 export interface GoodsReceiptNoteInvoiceLineOption {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   warehouseId: string;
   warehouseName: string;
   quantity: number;
@@ -268,7 +268,7 @@ export interface ItemWisePurchaseFilters {
 export interface ItemWisePurchaseAggregateRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   quantity: number;
   taxableAmount: number;
   cgst: number;

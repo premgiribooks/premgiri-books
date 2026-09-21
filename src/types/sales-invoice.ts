@@ -66,23 +66,27 @@ export interface SalesInvoicePayment extends Omit<PrismaSalesInvoicePayment, "am
 export interface SalesInvoiceProductSnapshot {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   hsnCode: string | null;
   unitSymbol: string;
 }
 
-/** The slice of Warehouse a sales invoice line's read-model needs. */
-export interface SalesInvoiceWarehouseSnapshot {
-  id: string;
-  name: string;
-  code: string;
-  isActive: boolean;
+/** One warehouse this line actually drew stock from, resolved automatically
+ * at posting time by the Inventory Engine's FIFO-by-warehouse-age allocator
+ * (src/engines/inventory/warehouse-allocation.ts) — usually one row, more
+ * than one when the product's stock spans warehouses and the oldest alone
+ * couldn't cover the full quantity. Empty on a DRAFT line (nothing has
+ * actually moved yet). */
+export interface SalesInvoiceItemWarehouseAllocation {
+  warehouseId: string;
+  warehouseName: string;
+  quantity: number;
 }
 
 export interface SalesInvoiceItemDetail extends SalesInvoiceItem {
   product: SalesInvoiceProductSnapshot;
-  warehouse: SalesInvoiceWarehouseSnapshot;
+  warehouseAllocations: SalesInvoiceItemWarehouseAllocation[];
 }
 
 export interface SalesInvoicePaymentDetail extends SalesInvoicePayment {
@@ -152,7 +156,7 @@ export interface SalesInvoiceListFilters {
 export interface SalesInvoiceProductOption {
   id: string;
   name: string;
-  productCode: string;
+  productCode: string | null;
   isActive: boolean;
   unitSymbol: string;
   unitDecimalPlaces: number;
@@ -162,13 +166,6 @@ export interface SalesInvoiceProductOption {
   cessPercent: number;
   sellingPrice: number | null;
   purchasePrice: number | null;
-}
-
-export interface SalesInvoiceWarehouseOption {
-  id: string;
-  name: string;
-  code: string;
-  isActive: boolean;
 }
 
 /** The payment line's ledger picker options — any active company Ledger,
@@ -192,7 +189,6 @@ export interface SalesInvoicePaymentLedgerOption {
 export interface SalesInvoiceFormOptions {
   customers: SalesInvoiceCustomerOption[];
   products: SalesInvoiceProductOption[];
-  warehouses: SalesInvoiceWarehouseOption[];
   paymentLedgers: SalesInvoicePaymentLedgerOption[];
   paymentModes: PaymentModeOption[];
   companyStateCode: string | null;
@@ -251,9 +247,7 @@ export interface ResolvedSalesInvoiceLinePrice {
 export interface DeliveryChallanInvoiceLineOption {
   productId: string;
   productName: string;
-  productCode: string;
-  warehouseId: string;
-  warehouseName: string;
+  productCode: string | null;
   quantity: number;
   unitSymbol: string;
   unitDecimalPlaces: number;
@@ -293,7 +287,7 @@ export interface ItemWiseSalesFilters {
 export interface ItemWiseSalesAggregateRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   quantity: number;
   taxableAmount: number;
   cgst: number;

@@ -177,7 +177,7 @@ export function buildStockLedgerReport(
 /** Business Rules #3 — attaches `productCode` (not part of `getStockValuation`'s own row shape) for display; every other field, including `totalValue`, is copied verbatim. */
 export function buildStockValuationReport(
   valuation: StockValuationResult,
-  productCodeById: ReadonlyMap<string, string>
+  productCodeById: ReadonlyMap<string, string | null>
 ): StockValuationReport {
   const rows = valuation.rows.map((row) => ({
     productId: row.productId,

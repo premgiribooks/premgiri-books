@@ -48,7 +48,7 @@ export function ProductOverviewPanel({ product }: ProductOverviewPanelProps) {
         <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border p-4 sm:grid-cols-3">
           <DetailField label="Name">{product.name}</DetailField>
           <DetailField label="Product Code" numeric>
-            {product.productCode}
+            {product.productCode ?? <span className="text-muted-foreground">—</span>}
           </DetailField>
           <DetailField label="Barcode" numeric>
             {product.barcode ?? <span className="text-muted-foreground">—</span>}

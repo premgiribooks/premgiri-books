@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Search, Bell, Menu, User, UserCog, LogOut } from "lucide-react";
+import { BookOpen, Search, Bell, Menu, Settings, User, UserCog, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,18 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/common/theme-toggle";
 import { useAuth } from "@/components/providers/auth-provider";
 import { logoutAction } from "@/lib/auth-actions";
 import { openCommandPalette } from "@/hooks/use-command-palette";
+import { SHORTCUT_CATEGORY_LABELS, SHORTCUT_DEFINITIONS, type ShortcutCategory } from "@/config/shortcuts";
+import { useResolvedShortcuts } from "@/hooks/use-shortcuts";
+import { formatShortcutCombo } from "@/lib/shortcut-keys";
+
+const SHORTCUT_CATEGORIES: ShortcutCategory[] = ["global", "billing"];
 
 async function handleLogout() {
   try {
@@ -34,6 +40,7 @@ interface TopNavbarProps {
 
 export function TopNavbar({ onOpenMobileNav }: TopNavbarProps) {
   const { user } = useAuth();
+  const resolvedShortcuts = useResolvedShortcuts();
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-navbar px-4 text-navbar-foreground">
@@ -81,6 +88,30 @@ export function TopNavbar({ onOpenMobileNav }: TopNavbarProps) {
 
       <div className="flex shrink-0 items-center gap-1">
         <ThemeToggle />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts">
+                <Settings size={18} />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-72">
+            {SHORTCUT_CATEGORIES.map((category) => (
+              <DropdownMenuGroup key={category}>
+                <DropdownMenuLabel>{SHORTCUT_CATEGORY_LABELS[category]}</DropdownMenuLabel>
+                {SHORTCUT_DEFINITIONS.filter((shortcut) => shortcut.category === category).map((shortcut) => (
+                  <DropdownMenuItem key={shortcut.id} closeOnClick={false} className="cursor-default">
+                    {shortcut.label}
+                    <DropdownMenuShortcut>{formatShortcutCombo(resolvedShortcuts.get(shortcut.id) ?? shortcut.defaultKeys)}</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem render={<Link href="/shortcuts">Customize Shortcuts&hellip;</Link>} />
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button variant="ghost" size="icon" aria-label="Notifications" disabled>
           <Bell size={18} />
         </Button>

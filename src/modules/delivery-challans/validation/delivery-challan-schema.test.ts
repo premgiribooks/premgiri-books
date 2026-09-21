@@ -9,10 +9,9 @@ import {
 const CUSTOMER_ID = "1a2b3c4d-5e6f-4789-8abc-def012345678";
 const SALES_ORDER_ID = "2b3c4d5e-6f70-4890-9abc-ef0123456789";
 const PRODUCT_ID = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
-const WAREHOUSE_ID = "3c4d5e6f-7081-4901-8bcd-f01234567890";
 const ITEM_ID = "4d5e6f70-8192-4012-9cde-012345678901";
 
-const VALID_LINE = { productId: PRODUCT_ID, warehouseId: WAREHOUSE_ID, quantity: 5 };
+const VALID_LINE = { productId: PRODUCT_ID, quantity: 5 };
 
 const VALID_INPUT = {
   customerId: CUSTOMER_ID,
@@ -35,9 +34,8 @@ describe("deliveryChallanLineSchema", () => {
     expect(result.salesOrderItemId).toBeUndefined();
   });
 
-  it("rejects a non-uuid productId/warehouseId and a non-positive quantity", () => {
+  it("rejects a non-uuid productId and a non-positive quantity", () => {
     expect(deliveryChallanLineSchema.safeParse({ ...VALID_LINE, productId: "not-a-uuid" }).success).toBe(false);
-    expect(deliveryChallanLineSchema.safeParse({ ...VALID_LINE, warehouseId: "not-a-uuid" }).success).toBe(false);
     expect(deliveryChallanLineSchema.safeParse({ ...VALID_LINE, quantity: 0 }).success).toBe(false);
   });
 

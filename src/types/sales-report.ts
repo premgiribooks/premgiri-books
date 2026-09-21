@@ -30,7 +30,7 @@ export interface SalesRegisterReport {
 export interface ItemWiseSalesRow {
   productId: string;
   productName: string;
-  productCode: string;
+  productCode: string | null;
   quantity: number;
   taxableAmount: number;
   totalTax: number;

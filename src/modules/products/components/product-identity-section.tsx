@@ -45,13 +45,13 @@ export function ProductIdentitySection({ control }: ProductIdentitySectionProps)
           name="productCode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Product Code *</FormLabel>
+              <FormLabel>Product Code</FormLabel>
               <FormControl>
-                <Input {...field} placeholder="e.g. NB-A4-200" />
+                <Input {...field} value={field.value ?? ""} placeholder="e.g. NB-A4-200" />
               </FormControl>
               <p className="text-xs text-muted-foreground">
-                Your SKU — unique per company. Numbering stays manual until the Document Number
-                Engine.
+                Optional — your SKU, unique per company when present. Numbering stays manual
+                until the Document Number Engine.
               </p>
               <FormMessage />
             </FormItem>

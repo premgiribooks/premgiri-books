@@ -29,11 +29,9 @@ function buildFixture(overrides: Partial<DeliveryChallanDetail> = {}): DeliveryC
         deliveryChallanId: "dc-1",
         lineNumber: 1,
         productId: "prod-1",
-        warehouseId: "wh-1",
         quantity: 5,
         salesOrderItemId: null,
         product: { id: "prod-1", name: "Widget", productCode: "WID-001", isActive: true },
-        warehouse: { id: "wh-1", name: "Main Warehouse", code: "MAIN", isActive: true },
       },
     ],
     ...overrides,
@@ -48,7 +46,6 @@ describe("buildDeliveryChallanHtml", () => {
     expect(html).toContain("Acme Traders");
     expect(html).toContain("Widget");
     expect(html).toContain("WID-001");
-    expect(html).toContain("Main Warehouse");
   });
 
   it("escapes user-entered text before embedding it in the HTML", () => {
