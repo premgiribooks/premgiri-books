@@ -16,12 +16,14 @@ interface SalesInvoiceDetailContentProps {
  * The items table + "Paid / Grand Total" line — split out of the detail
  * page (a Server Component) because the hidden "temporary margin override"
  * feature (Ctrl+Shift+M) needs client-side state to swap these figures for
- * their override-computed equivalents. Safe to fully replace what's shown
- * here (unlike the Create/Edit form's non-destructive preview overlay):
- * this page is read-only and never writes back to the invoice — see
- * sales-invoice-service.ts's previewSalesInvoiceWithMarginOverride.
+ * their override-computed equivalents — this page is read-only and never
+ * writes back to the invoice, so a full replace here is always safe
+ * regardless of what the Create/Edit form does with its own Rate field —
+ * see sales-invoice-service.ts's previewSalesInvoiceWithMarginOverride.
  * `amountPaid`/payments are real actual money received, so those are never
- * swapped, only the priced figures a margin recomputes.
+ * swapped, only the priced figures a margin recomputes. No inline
+ * "custom margin" text here per explicit user request — the navbar's CM
+ * badge (margin-override-badge.tsx) is the only on-screen indicator.
  */
 export function SalesInvoiceDetailContent({ salesInvoice }: SalesInvoiceDetailContentProps) {
   const override = useMarginOverride();
@@ -61,9 +63,7 @@ export function SalesInvoiceDetailContent({ salesInvoice }: SalesInvoiceDetailCo
           <p className="text-sm text-foreground">{salesInvoice.placeOfSupplyStateCode}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">
-            Paid / Grand Total{isOverridden ? <span className="text-ai-foreground"> (custom margin)</span> : null}
-          </p>
+          <p className="text-xs text-muted-foreground">Paid / Grand Total</p>
           <p className="font-financial text-sm text-foreground">
             {salesInvoice.amountPaid.toFixed(2)} / {display.grandTotal.toFixed(2)}
           </p>
@@ -73,12 +73,6 @@ export function SalesInvoiceDetailContent({ salesInvoice }: SalesInvoiceDetailCo
       {salesInvoice.narration ? <p className="text-sm text-muted-foreground">{salesInvoice.narration}</p> : null}
 
       <div className="overflow-x-auto rounded-2xl border border-border">
-        {isOverridden ? (
-          <p className="border-b border-border bg-ai/10 px-4 py-1.5 text-xs text-ai-foreground">
-            Showing a temporary custom margin ({override?.marginPercent}%) — the saved record keeps the correct
-            margin.
-          </p>
-        ) : null}
         <Table>
           <TableHeader>
             <TableRow>

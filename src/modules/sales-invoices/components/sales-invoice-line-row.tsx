@@ -60,16 +60,14 @@ export function SalesInvoiceLineRow({
   const { control, setValue, getValues } = useFormContext<CreateSalesInvoiceInput>();
   const [isResolvingPrice, setIsResolvingPrice] = React.useState(false);
 
-  // Temporary margin override preview (Ctrl+Shift+M) — display-only, never
-  // written into the `rate` field above, so what gets submitted/saved is
-  // always the real Pricing-Engine value regardless of whether this is
-  // active. See src/components/margin-override/margin-override-dialog.tsx.
+  // Temporary margin override (Ctrl+Shift+M) — writes the override-computed
+  // rate directly into the `rate` field, same as a normal price resolution,
+  // per explicit user request: what you see is what saves unless manually
+  // reverted before clicking Save. See
+  // src/components/margin-override/margin-override-dialog.tsx and its
+  // navbar CM badge (the one on-screen indicator — no per-line detail here).
   const marginOverride = useMarginOverride();
   const [resolvedCost, setResolvedCost] = React.useState<number | null>(null);
-  // Keyed by the cost it was computed from, so a stale preview from the
-  // previous product/cost never renders while a new one resolves — avoids
-  // an unconditional `setPreviewRate(null)` reset inside the effect below.
-  const [previewRate, setPreviewRate] = React.useState<{ cost: number; rate: number | null } | null>(null);
   const watchedProductId = useWatch({ control, name: `lines.${index}.productId` });
   const watchedQuantity = useWatch({ control, name: `lines.${index}.quantity` });
 
@@ -117,6 +115,11 @@ export function SalesInvoiceLineRow({
     };
   }, [marginOverride, watchedProductId, watchedQuantity, resolvedCost, customerId, invoiceDate]);
 
+  // Applies the override rate straight into the form field (re-applies
+  // whenever the active margin % changes, or once resolvedCost first
+  // resolves) — the resulting taxable/tax/total figures follow automatically
+  // through the form's own live-preview debounce (sales-invoice-form.tsx),
+  // exactly like any other rate change.
   React.useEffect(() => {
     if (!marginOverride || resolvedCost === null) {
       return;
@@ -124,15 +127,15 @@ export function SalesInvoiceLineRow({
     let cancelled = false;
     void previewMarginOverrideRateAction({ purchaseCost: resolvedCost, marginPercent: marginOverride.marginPercent }).then(
       (result) => {
-        if (!cancelled) {
-          setPreviewRate({ cost: resolvedCost, rate: result.success ? (result.data ?? null) : null });
+        if (!cancelled && result.success && result.data !== null && result.data !== undefined) {
+          setValue(`lines.${index}.rate`, result.data, { shouldValidate: true });
         }
       }
     );
     return () => {
       cancelled = true;
     };
-  }, [marginOverride, resolvedCost]);
+  }, [marginOverride, resolvedCost, index, setValue]);
 
   return (
     <TableRow>
@@ -213,11 +216,6 @@ export function SalesInvoiceLineRow({
             </FormItem>
           )}
         />
-        {marginOverride && previewRate && previewRate.cost === resolvedCost && previewRate.rate !== null ? (
-          <div className="mt-1 text-xs whitespace-nowrap text-ai-foreground">
-            Custom: {previewRate.rate.toFixed(2)} @ {marginOverride.marginPercent}%
-          </div>
-        ) : null}
       </TableCell>
 
       <TableCell>
