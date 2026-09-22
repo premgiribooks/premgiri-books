@@ -1,0 +1,60 @@
+# Self-hosted web deployment — see docs/web-deployment.md for the full
+# runbook (DNS, firewall/port-forwarding for the LAN Postgres instance,
+# first deploy, redeploys). Separate from the repo-root docker-compose.yml,
+# which is local dev only (bind-mounts source, NODE_ENV=development) and
+# must not be run alongside this one on the same host.
+#
+# No Postgres service here, deliberately — production data lives on the
+# existing LAN database (192.168.1.39 per .env's current "Prod"
+# DATABASE_URL), exposed to this VPS specifically per the network-level
+# steps in docs/web-deployment.md, not a fresh database spun up by this
+# file. DATABASE_URL comes from .env.production (gitignored — see
+# .env.production.example).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+    # No public port mapping — Caddy is the only container with a published
+    # port; it reverse-proxies to this service over the internal compose
+    # network (service name "app", port 3000).
+    expose:
+      - "3000"
+    volumes:
+      # Company-logo uploads and local backup files are real user data
+      # written at runtime (company-logo-service.ts / backup-service.ts) —
+      # without these, every redeploy (docker compose up -d --build)
+      # silently discards them.
+      - premgiri_uploads:/app/public/uploads
+      - premgiri_backups:/app/backups
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  premgiri_uploads:
+  premgiri_backups:
+  caddy_data:
+  caddy_config:

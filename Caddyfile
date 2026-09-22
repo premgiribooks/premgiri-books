@@ -1,0 +1,10 @@
+# Reverse proxy + automatic HTTPS (Let's Encrypt) for the self-hosted web
+# deployment. See docs/web-deployment.md.
+#
+# Replace the placeholder domain below with your real one before deploying
+# — Caddy will fail to provision a certificate for a domain that doesn't
+# actually resolve to this server's public IP.
+
+your-domain.example.com {
+	reverse_proxy app:3000
+}
