@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/table";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { SalesInvoiceDetailContent } from "@/modules/sales-invoices/components/sales-invoice-detail-content";
 import { SalesInvoiceDownloadPdfButton } from "@/modules/sales-invoices/components/sales-invoice-download-pdf-button";
 import { SalesInvoicePrintButton } from "@/modules/sales-invoices/components/sales-invoice-print-button";
 import { SalesInvoiceStatusActions } from "@/modules/sales-invoices/components/sales-invoice-status-actions";
 import { SalesInvoiceStatusBadge } from "@/modules/sales-invoices/components/sales-invoice-status-badge";
-import { formatSalesInvoiceDate } from "@/modules/sales-invoices/utils/format-sales-invoice-date";
 import { salesInvoiceService } from "@/modules/sales-invoices/services/sales-invoice-service";
 
 interface SalesInvoiceDetailPageProps {
@@ -150,77 +150,7 @@ export default async function SalesInvoiceDetailPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border p-4 sm:grid-cols-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Invoice Date</p>
-            <p className="font-financial text-sm text-foreground">
-              {formatSalesInvoiceDate(salesInvoice.invoiceDate)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Place of Supply</p>
-            <p className="text-sm text-foreground">
-              {salesInvoice.placeOfSupplyStateCode}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Paid / Grand Total</p>
-            <p className="font-financial text-sm text-foreground">
-              {salesInvoice.amountPaid.toFixed(2)} /{" "}
-              {salesInvoice.grandTotal.toFixed(2)}
-            </p>
-          </div>
-        </div>
-
-        {salesInvoice.narration ? (
-          <p className="text-sm text-muted-foreground">
-            {salesInvoice.narration}
-          </p>
-        ) : null}
-
-        <div className="overflow-x-auto rounded-2xl border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Fulfilled From</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Rate</TableHead>
-                <TableHead className="text-right">Taxable</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {salesInvoice.items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    {item.product.name}
-                    {item.product.productCode ? ` (${item.product.productCode})` : ""}
-                  </TableCell>
-                  <TableCell>
-                    {item.warehouseAllocations.length > 0
-                      ? item.warehouseAllocations
-                          .map((allocation) => `${allocation.warehouseName} (${allocation.quantity})`)
-                          .join(", ")
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-right font-financial">
-                    {item.quantity}
-                  </TableCell>
-                  <TableCell className="text-right font-financial">
-                    {item.rate.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-financial">
-                    {item.taxableAmount.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-financial">
-                    {item.totalAmount.toFixed(2)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <SalesInvoiceDetailContent salesInvoice={salesInvoice} />
 
         {salesInvoice.payments.length > 0 ? (
           <div className="overflow-x-auto rounded-2xl border border-border">

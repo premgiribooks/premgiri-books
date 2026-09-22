@@ -10,6 +10,7 @@ import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
 import { gstEngine } from "@/engines/gst/gst-engine";
 import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engines/gst/types";
+import { applyMarginOverride } from "@/engines/pricing/margin-override";
 import { pricingEngine } from "@/engines/pricing/pricing-engine";
 import { customerService } from "@/modules/customers/services/customer-service";
 import {
@@ -337,6 +338,70 @@ export const quotationService = {
       return null;
     }
     return quotation;
+  },
+
+  /**
+   * Backs the hidden "temporary margin override" feature (Ctrl+Shift+M) on
+   * the Quotation detail page and its Download button — NEVER persisted,
+   * purely a display/print-time recomputation. Mirrors
+   * salesInvoiceService.previewSalesInvoiceWithMarginOverride: resolves each
+   * line's current latest purchase cost via pricingEngine.resolvePrice, then
+   * feeds the overridden rate through this service's own `previewQuotation`
+   * (the exact GST Engine path a real quotation goes through) so no tax math
+   * is duplicated here.
+   */
+  async previewQuotationWithMarginOverride(id: string, marginPercent: number): Promise<QuotationDetail | null> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const quotation = await this.getQuotation(id);
+    if (!quotation) {
+      return null;
+    }
+
+    const costs = await Promise.all(
+      quotation.items.map((item) =>
+        pricingEngine.resolvePrice({ companyId: user.companyId, productId: item.productId, quantity: item.quantity })
+      )
+    );
+
+    const overrideLines = quotation.items.map((item, index) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      rate: applyMarginOverride(costs[index].purchaseCost, marginPercent) ?? item.rate,
+      discountPercent: item.discountPercent || undefined,
+      discountAmount: item.discountAmount || undefined,
+    }));
+
+    const preview = await this.previewQuotation({
+      customerId: quotation.customerId,
+      quotationDate: quotation.quotationDate.toISOString().slice(0, 10),
+      validUntil: quotation.validUntil ? quotation.validUntil.toISOString().slice(0, 10) : undefined,
+      placeOfSupplyStateCode: quotation.placeOfSupplyStateCode,
+      lines: overrideLines,
+    });
+
+    return {
+      ...quotation,
+      items: quotation.items.map((item, index) => ({
+        ...item,
+        rate: overrideLines[index].rate,
+        taxableAmount: preview.lines[index].taxableAmount,
+        cgst: preview.lines[index].cgst,
+        sgst: preview.lines[index].sgst,
+        igst: preview.lines[index].igst,
+        cess: preview.lines[index].cess,
+        totalAmount: preview.lines[index].totalAmount,
+      })),
+      subtotal: preview.totals.subtotal,
+      totalDiscount: preview.totals.totalDiscount,
+      taxableAmount: preview.totals.taxableAmount,
+      totalCgst: preview.totals.totalCgst,
+      totalSgst: preview.totals.totalSgst,
+      totalIgst: preview.totals.totalIgst,
+      totalCess: preview.totals.totalCess,
+      grandTotal: preview.totals.grandTotal,
+    };
   },
 
   async listQuotationFormOptions(): Promise<QuotationFormOptions> {

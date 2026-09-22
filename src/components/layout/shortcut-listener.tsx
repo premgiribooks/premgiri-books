@@ -8,6 +8,9 @@ import { comboFromKeyboardEvent } from "@/lib/shortcut-keys";
 import { dispatchShortcut } from "@/lib/shortcut-events";
 import { useResolvedShortcuts } from "@/hooks/use-shortcuts";
 import { toggleCommandPalette } from "@/hooks/use-command-palette";
+import { SHORTCUT_DEFINITIONS } from "@/config/shortcuts";
+
+const RESERVED_SHORTCUTS = SHORTCUT_DEFINITIONS.filter((definition) => definition.isReserved);
 
 /**
  * The single global keydown listener for every registered shortcut
@@ -44,6 +47,16 @@ export function ShortcutListener() {
     function handleKeyDown(event: KeyboardEvent) {
       const combo = comboFromKeyboardEvent(event);
       if (!combo) {
+        return;
+      }
+
+      // Reserved shortcuts are matched against their fixed defaultKeys
+      // first, ahead of the user-customizable resolved map, so no rebinding
+      // can ever shadow or intercept one (see ShortcutDefinition.isReserved).
+      const reserved = RESERVED_SHORTCUTS.find((definition) => definition.defaultKeys === combo);
+      if (reserved) {
+        event.preventDefault();
+        dispatchShortcut(reserved.id);
         return;
       }
 

@@ -8,6 +8,13 @@ export interface ShortcutDefinition {
   /** Normalized combo string (see shortcut-keys.ts) — the factory default,
    * restored by "Reset to default" on the customization page. */
   defaultKeys: string;
+  /** True for a shortcut whose combo is permanently fixed: it can never be
+   * rebound away from `defaultKeys`, and no other shortcut can be rebound
+   * onto its combo either. Enforced at the data layer (setShortcutBinding
+   * no-ops for a reserved id — use-shortcuts.ts) and at the input layer
+   * (ShortcutListener matches reserved combos before consulting the
+   * user-override map). The customization page renders it read-only. */
+  isReserved?: boolean;
 }
 
 /**
@@ -100,6 +107,15 @@ export const SHORTCUT_DEFINITIONS: readonly ShortcutDefinition[] = [
     description: "Scroll to and focus the payment section of the invoice being edited.",
     category: "billing",
     defaultKeys: "alt+shift+m",
+  },
+  {
+    id: "margin-override",
+    label: "Custom Margin Override",
+    description:
+      "Open the temporary margin override dialog. Reserved — this combo can never be reassigned.",
+    category: "billing",
+    defaultKeys: "mod+shift+m",
+    isReserved: true,
   },
 ] as const;
 

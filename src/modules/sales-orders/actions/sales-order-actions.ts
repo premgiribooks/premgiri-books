@@ -78,3 +78,13 @@ export async function previewSalesOrderAction(
 ): Promise<ActionResult<SalesOrderPreview>> {
   return runAction(() => salesOrderService.previewSalesOrder(input), []);
 }
+
+// Read-only — no revalidation. Backs the detail page's temporary margin
+// override preview (Ctrl+Shift+M) — never persisted, see
+// sales-order-service.ts's previewSalesOrderWithMarginOverride.
+export async function previewSalesOrderMarginOverrideAction(
+  id: string,
+  marginPercent: number
+): Promise<ActionResult<SalesOrderDetail | null>> {
+  return runAction(() => salesOrderService.previewSalesOrderWithMarginOverride(id, marginPercent), []);
+}

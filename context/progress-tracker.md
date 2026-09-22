@@ -5964,3 +5964,175 @@ having `comboFromKeyboardEvent` return `undefined` (its existing "nothing to com
 signal, already used for bare-modifier presses) when `event.key` is falsy, before calling
 `normalizeKeyToken` at all. Added two regression cases to `shortcut-keys.test.ts` (`key:
 undefined`, `key: ""`). Confirmed fixed by the user re-testing Customer creation.
+
+---
+
+## 2026-09-21 — Hidden "temporary margin override" feature (Ctrl+Shift+M), Phase 1: shared infrastructure + Sales Invoice
+
+Explicit user request: a secret, permanently-reserved keyboard shortcut that can never be
+reassigned, opening a dialog on any Sales page (and Price List) to type a custom margin %. The
+typed margin must only ever change what's *shown/printed*, stored client-side for up to 10 days —
+"in the database save correct margine whatever declared" — never the saved/posted price. Full plan
+at `C:\Users\kamlesh\.claude\plans\i-want-some-hidden-rosy-cosmos.md` (three phases: shared
+infra + Sales Invoice; then Quotations/Sales Orders/Delivery Challans/Credit Notes/Debit Notes;
+then Price List). This entry covers Phase 1 only. Branch: `feature/margin-override-shortcut`, not
+yet merged into `main`.
+
+Two different behaviors depending on the page, since they carry very different risk:
+- **Create/Edit forms** (Sales Invoice line editor) — the real `rate` field is NEVER touched; the
+  custom margin renders as a separate, non-destructive preview annotation only.
+- **Detail/View + Print/PDF** (read-only, nothing persists from here) — safe to fully replace
+  what's shown/printed, since posted documents can't be edited from this page anyway.
+
+**Reserved shortcut**:
+- `src/config/shortcuts.ts`: `ShortcutDefinition` gained `isReserved?: boolean`; new entry
+  `"margin-override"` (`mod+shift+m`, category `"billing"`, `isReserved: true`).
+- `src/hooks/use-shortcuts.ts`: `setShortcutBinding` no-ops for a reserved id (data-layer guard).
+- `src/components/layout/shortcut-listener.tsx`: reserved combos are matched against their fixed
+  `defaultKeys` **before** consulting the user-override map, so no rebinding can ever shadow one.
+- `src/modules/shortcuts/components/shortcuts-settings-table.tsx`: a reserved row renders its
+  combo read-only with a "Reserved" badge instead of the Change/Reset controls. The existing
+  collision check already stops any OTHER shortcut being rebound onto a reserved combo (it
+  compares against every definition's *resolved* value, and a reserved one's never changes).
+
+**Storage** (`src/lib/margin-override-cookie.ts`, `src/hooks/use-margin-override.ts`): a plain,
+non-httpOnly, client-written cookie (`premgiri_margin_override`, 10-day fixed expiry from
+`setAt`, checked on every read rather than relying solely on the cookie's own `max-age`) — not the
+Server-Action-set pattern `current-company.ts` uses for `companyId` etc., since this is a pure
+per-browser display preference and `AppShell` is itself a client component with no server-cookie
+prop path to thread through. `useMarginOverride()` mirrors `use-shortcuts.ts`'s
+`useSyncExternalStore` module-store pattern (survives `AppShell`'s full remount on navigation).
+
+**Calculation stays in the Pricing Engine**: `src/engines/pricing/margin-override.ts` exports
+`applyMarginOverride(cost, marginPercent)` — the same MARKUP formula as `applyProfile`
+(`price-resolution.ts`, whose rounding helper is now exported and reused, not duplicated).
+`src/lib/margin-override-actions.ts` (`"use server"`, lives in `lib/` not a single module's
+`actions/`, same precedent as `auth-actions.ts`, since this applies uniformly across every future
+Sales document type) wraps it as `previewMarginOverrideRateAction` — client code never calls
+Pricing Engine math directly, only through this approved boundary.
+
+**Dialog + on-screen indicator**: `src/components/margin-override/margin-override-dialog.tsx`
+(mounted once in `AppShell`/`PlatformShell`, subscribes via `useShortcutEffect("margin-override")`)
+and `margin-override-badge.tsx` (top navbar, the one on-screen indicator — never rendered in
+print). Uses the existing `--accent-ai` semantic token (first real usage of the `bg-ai`/`text-ai-
+foreground`/`border-ai` Tailwind utilities anywhere in the app).
+
+**Sales Invoice Create/Edit** (`sales-invoice-line-row.tsx`): resolves each line's purchase cost
+(from the existing `resolveLinePriceAction` call, or lazily on mount for an edit-mode line) and,
+while an override is active, calls `previewMarginOverrideRateAction` to render a "Custom: ₹X @ Y%"
+annotation next to the Rate cell — the bound `rate` field and what gets submitted are untouched.
+(Preview state is keyed by the cost it was computed from, not reset via a synchronous
+`setState()`-in-effect call, to satisfy `react-hooks/set-state-in-effect` — a stale preview from a
+prior cost simply fails the render-time identity check instead.)
+
+**Sales Invoice Detail/Print**: new `sales-invoice-service.ts` method
+`previewSalesInvoiceWithMarginOverride(id, marginPercent)` — loads the real invoice, resolves each
+line's current purchase cost via `pricingEngine.resolvePrice`, computes the overridden rate, then
+feeds it through the **existing** `previewSalesInvoice` (the exact GST Engine path real invoices
+use) so no tax math is duplicated — only the per-line `rate` fed into that computation changes.
+Wrapped as `previewSalesInvoiceMarginOverrideAction`. New client component
+`sales-invoice-detail-content.tsx` (split out of the detail page, itself a Server Component, since
+the swap needs client state) fetches this on mount when an override is active and fully replaces
+the items table + Grand Total display (never `amountPaid`, which is real money). The `[id]/pdf`
+route now accepts an optional `?marginOverride=<percent>` query param — validated,
+request-scoped only, never written to the DB — and uses the same service method before calling the
+unchanged `buildSalesInvoiceHtml`, so the PDF template/styling stays identical (no "custom" marker
+anywhere in print, per the user's explicit "subtle flag on screen only" decision). Both
+`SalesInvoicePrintButton` and `SalesInvoiceDownloadPdfButton` append that query param themselves
+when `useMarginOverride()` is active.
+
+**Deliberately deferred within Phase 1** (documented, not silently dropped): the Create/Edit form's
+totals footer does not yet show a secondary "Preview Total (custom margin)" row — the per-line
+preview annotations already satisfy the core ask, and building the footer total would need lifting
+each row's resolved cost up to the form level; left for a follow-up if requested rather than
+adding a state-lifting refactor beyond what was asked.
+
+Verified: `npx tsc --noEmit` (0 errors), `npx eslint` on every touched file (0 errors — including
+fixing two `react-hooks/set-state-in-effect` violations caught mid-implementation), and `next
+build` (clean, all routes compiled including the modified `[id]/pdf` route). Not yet manually
+exercised in a running app by the user.
+
+**Same-day follow-up, user feedback after reviewing the above**: two changes, requested directly
+after Phase 1 landed.
+
+1. **The override now writes straight into the Rate field on Create/Edit, not just a preview.**
+   Asked the user to confirm first (`AskUserQuestion`), since this reverses part of the original
+   "database save correct margin whatever declared" safety guarantee — they explicitly chose
+   "Yes — overwrite Rate on Create/Edit too," accepting that Saving without manually reverting now
+   persists the overridden price. `sales-invoice-line-row.tsx`: the `previewRate` display-only
+   state is gone; the same `previewMarginOverrideRateAction` result now `setValue`s
+   `lines.${index}.rate` directly (re-applies whenever the active margin % changes or a line's
+   cost first resolves), and downstream taxable/tax/total follow automatically through the form's
+   existing live-preview debounce — no new tax math added anywhere. The Detail/Print page's own
+   full-replace behavior (already like this since Phase 1) is unchanged.
+2. **No more descriptive margin text anywhere in the Sales Invoice UI — one plain "CM" badge
+   only.** `margin-override-badge.tsx` (the navbar indicator) simplified from a Button showing
+   "X% custom margin" to a small yellow (`border-warning`/`bg-warning`/`text-warning`) "CM" badge
+   with a title tooltip for the detail. Removed the per-line "Custom: ₹X @ Y%" annotation
+   (`sales-invoice-line-row.tsx` — moot now that the Rate field itself shows the number) and the
+   detail page's descriptive banner + "(custom margin)" label (`sales-invoice-detail-content.tsx`)
+   — the navbar's single CM badge is the only on-screen indicator left anywhere.
+
+Verified: `npx tsc --noEmit` (0 errors — after removing a corrupted, gitignored
+`.next/dev/types/routes.d.ts`/`validator.ts` pair that a concurrently-running `next dev` process
+had left in a malformed, duplicated-content state; unrelated to this change, safe to delete since
+`.next` is disposable build output regenerated by both `next dev` and `next build`), `npx eslint`
+on every touched file (0 errors), and `next build` (clean).
+
+User confirmed both changes tested and correct.
+
+---
+
+## 2026-09-21 — Margin override, Phases 2 & 3: Quotations, Sales Orders, and Price List; Delivery Challan/Credit Note/Debit Note found not applicable
+
+Continuing the same feature (full plan at
+`C:\Users\kamlesh\.claude\plans\i-want-some-hidden-rosy-cosmos.md`). Replicated the exact Sales
+Invoice pattern from Phase 1 (as amended by the same-day follow-up above — override writes
+straight into the Rate/Price field, single navbar CM badge, no other on-screen text) to every
+remaining Sales document type, module by module, verifying `tsc`/`eslint` after each and `next
+build` once at the end.
+
+**Quotations** (`quotation-service.ts`'s new `previewQuotationWithMarginOverride`,
+`quotation-actions.ts`'s `previewQuotationMarginOverrideAction`, `quotation-line-row.tsx`, new
+`quotation-detail-content.tsx`, `[id]/pdf/route.ts`'s `?marginOverride=`,
+`quotation-download-pdf-button.tsx`) and **Sales Orders** (identical shape:
+`sales-order-service.ts`, `sales-order-actions.ts`, `sales-order-line-row.tsx`, new
+`sales-order-detail-content.tsx`, its `[id]/pdf/route.ts`, `sales-order-download-pdf-button.tsx`)
+— both mirror Sales Invoice almost exactly (no `customerMode`/payments/tax-override, simpler
+header schema: `quotationDate`/`validUntil` vs. `orderDate`/`expectedDeliveryDate`). Sales Order's
+detail content keeps `deliveredQuantity`/pending-quantity columns sourced from the real order,
+never the override preview — only priced figures (`rate`/`taxableAmount`/tax/`totalAmount`/
+`grandTotal`) swap.
+
+**Delivery Challan, Credit Note, and Debit Note are correctly out of scope, not a gap**: read
+before touching anything.
+- `delivery-challan-line-row.tsx`'s own file comment confirms this document has "no pricing/tax
+  columns... this document never moves value, only goods" — product + quantity only, no Rate, no
+  margin concept exists to override.
+- `credit-note-line-editor.tsx`/`debit-note-line-editor.tsx` are both "freeform adjustment lines...
+  deliberately not derived from a product" — `description + taxableAmount + ratePercent/
+  cessPercent` entered directly by the user, no product, no cost, nothing a markup percent could
+  apply to.
+
+**Price List** (Phase 3) — a different risk profile from the read-only detail pages above: this
+module's item editor genuinely saves data (`price-list-item-row.tsx`'s inline edit,
+`price-list-add-item-form.tsx`'s add row), so it follows the same "writes into the real field"
+choice the user made for Sales Create/Edit, not the Sales detail pages' full-replace pattern —
+consistent risk-for-risk, not a new decision. New `priceListService.resolveProductPurchaseCost`
+(wraps `pricingEngine.resolvePrice` with `quantity: 1` — purchase cost itself never varies by
+quantity, only price-list-break resolution does, which this call doesn't use) and its
+`resolveProductPurchaseCostAction` wrapper back both forms: selecting/already having a product
+while an override is active resolves that product's cost, then writes the override-computed price
+straight into `sellingPrice` via the shared `previewMarginOverrideRateAction`. Cost is reset
+(`setResolvedCost(null)`) in each row's own product-selector `onChange` handler, not a bare
+`useEffect` body, to avoid the same `react-hooks/set-state-in-effect` violation fixed in Phase 1 —
+`price-list-item-row.tsx` additionally switched to watching the live `productId` form field
+(`useWatch`) rather than the original `item.productId` prop, since editing can change the product
+mid-edit.
+
+Verified: `npx tsc --noEmit` (0 errors), `npx eslint` on every touched file across all three
+modules (0 errors), and `next build` (clean, full app). Every Sales document type and Price List
+that has a margin/pricing concept now has the feature — this closes out the plan's Phase 2 and
+Phase 3 (Delivery Challan/Credit Note/Debit Note excluded as N/A, documented above rather than
+silently skipped). Not yet manually exercised in a running app by the user for these newly-touched
+modules.

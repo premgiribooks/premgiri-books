@@ -83,6 +83,16 @@ export async function previewSalesInvoiceAction(
   return runAction(() => salesInvoiceService.previewSalesInvoice(input), []);
 }
 
+// Read-only — no revalidation. Backs the detail page's temporary margin
+// override preview (Ctrl+Shift+M) — never persisted, see
+// sales-invoice-service.ts's previewSalesInvoiceWithMarginOverride.
+export async function previewSalesInvoiceMarginOverrideAction(
+  id: string,
+  marginPercent: number
+): Promise<ActionResult<SalesInvoiceDetail | null>> {
+  return runAction(() => salesInvoiceService.previewSalesInvoiceWithMarginOverride(id, marginPercent), []);
+}
+
 // Read-only — no revalidation. Backs the Create/Edit form's inline
 // outstanding-balance display for the selected Customer/payment ledger.
 export async function getLedgerOutstandingBalanceAction(

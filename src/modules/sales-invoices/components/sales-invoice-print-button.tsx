@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useMarginOverride } from "@/hooks/use-margin-override";
 
 interface SalesInvoicePrintButtonProps {
   salesInvoiceId: string;
@@ -20,11 +21,18 @@ export function SalesInvoicePrintButton({
   salesInvoiceId,
 }: SalesInvoicePrintButtonProps) {
   const [isPreparing, setIsPreparing] = useState(false);
+  const marginOverride = useMarginOverride();
 
   async function handlePrint() {
     setIsPreparing(true);
     try {
-      const response = await fetch(`/sales/invoices/${salesInvoiceId}/pdf`);
+      // Reflects the active temporary margin override (Ctrl+Shift+M), if
+      // any, in the printed output — never persisted, see
+      // sales-invoice-service.ts's previewSalesInvoiceWithMarginOverride.
+      const pdfUrl = marginOverride
+        ? `/sales/invoices/${salesInvoiceId}/pdf?marginOverride=${marginOverride.marginPercent}`
+        : `/sales/invoices/${salesInvoiceId}/pdf`;
+      const response = await fetch(pdfUrl);
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as {
           error?: string;

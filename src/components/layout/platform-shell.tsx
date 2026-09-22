@@ -11,6 +11,7 @@ import { BreadcrumbBar } from "@/components/layout/breadcrumb-bar";
 import { PageTabsBar } from "@/components/layout/page-tabs-bar";
 import { PageTabsOutlet } from "@/components/layout/page-tabs-outlet";
 import { ShortcutListener } from "@/components/layout/shortcut-listener";
+import { MarginOverrideDialog } from "@/components/margin-override/margin-override-dialog";
 import { useRecordPageVisit } from "@/hooks/use-page-tabs";
 
 interface PlatformShellProps {
@@ -45,6 +46,7 @@ export function PlatformShell({ children }: PlatformShellProps) {
       </div>
       <StatusBar />
       <ShortcutListener />
+      <MarginOverrideDialog />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
 import { gstEngine } from "@/engines/gst/gst-engine";
 import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engines/gst/types";
+import { applyMarginOverride } from "@/engines/pricing/margin-override";
 import { pricingEngine } from "@/engines/pricing/pricing-engine";
 import { customerService } from "@/modules/customers/services/customer-service";
 import { quotationService } from "@/modules/quotations/services/quotation-service";
@@ -367,6 +368,70 @@ export const salesOrderService = {
       return null;
     }
     return salesOrder;
+  },
+
+  /**
+   * Backs the hidden "temporary margin override" feature (Ctrl+Shift+M) on
+   * the Sales Order detail page and its Download button — NEVER persisted.
+   * Mirrors quotationService.previewQuotationWithMarginOverride /
+   * salesInvoiceService.previewSalesInvoiceWithMarginOverride. Leaves
+   * `deliveredQuantity` untouched — only the priced figures a margin
+   * recomputes.
+   */
+  async previewSalesOrderWithMarginOverride(id: string, marginPercent: number): Promise<SalesOrderDetail | null> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const salesOrder = await this.getSalesOrder(id);
+    if (!salesOrder) {
+      return null;
+    }
+
+    const costs = await Promise.all(
+      salesOrder.items.map((item) =>
+        pricingEngine.resolvePrice({ companyId: user.companyId, productId: item.productId, quantity: item.quantity })
+      )
+    );
+
+    const overrideLines = salesOrder.items.map((item, index) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      rate: applyMarginOverride(costs[index].purchaseCost, marginPercent) ?? item.rate,
+      discountPercent: item.discountPercent || undefined,
+      discountAmount: item.discountAmount || undefined,
+    }));
+
+    const preview = await this.previewSalesOrder({
+      customerId: salesOrder.customerId,
+      orderDate: salesOrder.orderDate.toISOString().slice(0, 10),
+      expectedDeliveryDate: salesOrder.expectedDeliveryDate
+        ? salesOrder.expectedDeliveryDate.toISOString().slice(0, 10)
+        : undefined,
+      placeOfSupplyStateCode: salesOrder.placeOfSupplyStateCode,
+      lines: overrideLines,
+    });
+
+    return {
+      ...salesOrder,
+      items: salesOrder.items.map((item, index) => ({
+        ...item,
+        rate: overrideLines[index].rate,
+        taxableAmount: preview.lines[index].taxableAmount,
+        cgst: preview.lines[index].cgst,
+        sgst: preview.lines[index].sgst,
+        igst: preview.lines[index].igst,
+        cess: preview.lines[index].cess,
+        totalAmount: preview.lines[index].totalAmount,
+      })),
+      subtotal: preview.totals.subtotal,
+      totalDiscount: preview.totals.totalDiscount,
+      taxableAmount: preview.totals.taxableAmount,
+      totalCgst: preview.totals.totalCgst,
+      totalSgst: preview.totals.totalSgst,
+      totalIgst: preview.totals.totalIgst,
+      totalCess: preview.totals.totalCess,
+      grandTotal: preview.totals.grandTotal,
+    };
   },
 
   /** `CONFIRMED`/`PARTIALLY_DELIVERED` orders for a customer — the lookup

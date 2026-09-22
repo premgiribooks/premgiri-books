@@ -133,7 +133,7 @@ function tierPercent(profile: MarginProfileLike, tier: CustomerType): number {
 // product prices are already stored 2-decimal). No shared `src/lib/`
 // rounder exists (nor should one — "no price math outside
 // src/engines/pricing/" is a grep-able invariant), so this stays local.
-function roundHalfUpToTwoDecimals(value: number): number {
+export function roundHalfUpToTwoDecimals(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 

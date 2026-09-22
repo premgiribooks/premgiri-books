@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { downloadOrPrintDocument } from "@/lib/pdf-client";
+import { useMarginOverride } from "@/hooks/use-margin-override";
 
 interface QuotationDownloadPdfButtonProps {
   quotationId: string;
@@ -24,11 +25,15 @@ interface QuotationDownloadPdfButtonProps {
  */
 export function QuotationDownloadPdfButton({ quotationId }: QuotationDownloadPdfButtonProps) {
   const [isPreparing, setIsPreparing] = useState(false);
+  const marginOverride = useMarginOverride();
 
   async function handleDownload() {
     setIsPreparing(true);
     try {
-      const { usedPrintFallback } = await downloadOrPrintDocument(`/sales/quotations/${quotationId}/pdf`);
+      const pdfUrl = marginOverride
+        ? `/sales/quotations/${quotationId}/pdf?marginOverride=${marginOverride.marginPercent}`
+        : `/sales/quotations/${quotationId}/pdf`;
+      const { usedPrintFallback } = await downloadOrPrintDocument(pdfUrl);
       if (usedPrintFallback) {
         toast.info('Choose "Save as PDF" in the print dialog to download this quotation.');
       }

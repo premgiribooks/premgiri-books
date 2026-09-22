@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 
@@ -21,7 +21,9 @@ import {
   ProductOptionSelector,
   type ProductOptionItem,
 } from "@/modules/products/components/product-option-selector";
-import { addPriceListItemAction } from "@/modules/price-lists/actions/price-list-actions";
+import { addPriceListItemAction, resolveProductPurchaseCostAction } from "@/modules/price-lists/actions/price-list-actions";
+import { useMarginOverride } from "@/hooks/use-margin-override";
+import { previewMarginOverrideRateAction } from "@/lib/margin-override-actions";
 import {
   priceListItemSchema,
   type PriceListItemInput,
@@ -59,6 +61,46 @@ export function PriceListAddItemForm({ priceListId, products }: PriceListAddItem
     defaultValues: EMPTY_VALUES,
   });
 
+  // Temporary margin override (Ctrl+Shift+M) — writes the override-computed
+  // price directly into the `sellingPrice` field, same as the Sales
+  // document line editors. See
+  // src/components/margin-override/margin-override-dialog.tsx.
+  const marginOverride = useMarginOverride();
+  const [resolvedCost, setResolvedCost] = React.useState<number | null>(null);
+  const watchedProductId = useWatch({ control: form.control, name: "productId" });
+
+  React.useEffect(() => {
+    if (!marginOverride || !watchedProductId || resolvedCost !== null) {
+      return;
+    }
+    let cancelled = false;
+    void resolveProductPurchaseCostAction(watchedProductId).then((result) => {
+      if (!cancelled && result.success) {
+        setResolvedCost(result.data ?? null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [marginOverride, watchedProductId, resolvedCost]);
+
+  React.useEffect(() => {
+    if (!marginOverride || resolvedCost === null) {
+      return;
+    }
+    let cancelled = false;
+    void previewMarginOverrideRateAction({ purchaseCost: resolvedCost, marginPercent: marginOverride.marginPercent }).then(
+      (result) => {
+        if (!cancelled && result.success && result.data !== null && result.data !== undefined) {
+          form.setValue("sellingPrice", result.data, { shouldValidate: true });
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [marginOverride, resolvedCost, form]);
+
   async function handleSubmit(data: PriceListItemInput) {
     setIsSubmitting(true);
     try {
@@ -93,7 +135,10 @@ export function PriceListAddItemForm({ priceListId, products }: PriceListAddItem
                 <ProductOptionSelector
                   options={products}
                   value={field.value || undefined}
-                  onChange={(value) => field.onChange(value ?? "")}
+                  onChange={(value) => {
+                    field.onChange(value ?? "");
+                    setResolvedCost(null);
+                  }}
                   allowNone={false}
                   placeholder="Select a product"
                   emptyLabel="No active products"

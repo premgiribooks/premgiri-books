@@ -2,6 +2,10 @@ import * as React from "react";
 
 import { SHORTCUT_DEFINITIONS } from "@/config/shortcuts";
 
+const RESERVED_IDS = new Set(
+  SHORTCUT_DEFINITIONS.filter((definition) => definition.isReserved).map((definition) => definition.id)
+);
+
 // User-customized keybinding overrides — pure client preference data
 // persisted to localStorage, same pattern as use-favorites.ts/
 // use-sidebar-state.ts. Stores only the ids that have been changed from
@@ -82,6 +86,10 @@ function getServerSnapshot(): ShortcutOverrides {
 }
 
 export function setShortcutBinding(id: string, combo: string): void {
+  if (RESERVED_IDS.has(id)) {
+    // Reserved shortcuts can never be rebound — see ShortcutDefinition.isReserved.
+    return;
+  }
   ensureHydrated();
   snapshot = { ...snapshot, [id]: combo };
   persist();

@@ -109,7 +109,11 @@ export function ShortcutsSettingsTable() {
                     <Badge variant="outline">{SHORTCUT_CATEGORY_LABELS[definition.category]}</Badge>
                   </TableCell>
                   <TableCell>
-                    {isRecording ? (
+                    {definition.isReserved ? (
+                      <kbd className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs">
+                        {formatShortcutCombo(definition.defaultKeys)}
+                      </kbd>
+                    ) : isRecording ? (
                       <div className="flex flex-col gap-1">
                         <input
                           autoFocus
@@ -128,26 +132,32 @@ export function ShortcutsSettingsTable() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => (isRecording ? stopRecording() : startRecording(definition.id))}
-                      >
-                        {isRecording ? "Cancel" : "Change"}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Reset ${definition.label} to default`}
-                        disabled={!isCustomized}
-                        onClick={() => resetShortcutBinding(definition.id)}
-                      >
-                        <RotateCcw size={14} />
-                      </Button>
-                    </div>
+                    {definition.isReserved ? (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        Reserved
+                      </Badge>
+                    ) : (
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => (isRecording ? stopRecording() : startRecording(definition.id))}
+                        >
+                          {isRecording ? "Cancel" : "Change"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Reset ${definition.label} to default`}
+                          disabled={!isCustomized}
+                          onClick={() => resetShortcutBinding(definition.id)}
+                        >
+                          <RotateCcw size={14} />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               );

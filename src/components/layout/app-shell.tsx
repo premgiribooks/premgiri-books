@@ -13,6 +13,7 @@ import { PageTabsBar } from "@/components/layout/page-tabs-bar";
 import { PageTabsOutlet } from "@/components/layout/page-tabs-outlet";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { ShortcutListener } from "@/components/layout/shortcut-listener";
+import { MarginOverrideDialog } from "@/components/margin-override/margin-override-dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ALL_NAV_LEAVES, type NavLeaf } from "@/config/navigation";
 import { useRecordPageVisit } from "@/hooks/use-page-tabs";
@@ -88,6 +89,7 @@ export function AppShell({ children }: AppShellProps) {
 
       <CommandPalette />
       <ShortcutListener />
+      <MarginOverrideDialog />
     </div>
   );
 }

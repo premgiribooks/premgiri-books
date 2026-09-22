@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { downloadOrPrintDocument } from "@/lib/pdf-client";
+import { useMarginOverride } from "@/hooks/use-margin-override";
 
 interface SalesOrderDownloadPdfButtonProps {
   salesOrderId: string;
@@ -24,11 +25,15 @@ interface SalesOrderDownloadPdfButtonProps {
  */
 export function SalesOrderDownloadPdfButton({ salesOrderId }: SalesOrderDownloadPdfButtonProps) {
   const [isPreparing, setIsPreparing] = useState(false);
+  const marginOverride = useMarginOverride();
 
   async function handleDownload() {
     setIsPreparing(true);
     try {
-      const { usedPrintFallback } = await downloadOrPrintDocument(`/sales/orders/${salesOrderId}/pdf`);
+      const pdfUrl = marginOverride
+        ? `/sales/orders/${salesOrderId}/pdf?marginOverride=${marginOverride.marginPercent}`
+        : `/sales/orders/${salesOrderId}/pdf`;
+      const { usedPrintFallback } = await downloadOrPrintDocument(pdfUrl);
       if (usedPrintFallback) {
         toast.info('Choose "Save as PDF" in the print dialog to download this sales order.');
       }
