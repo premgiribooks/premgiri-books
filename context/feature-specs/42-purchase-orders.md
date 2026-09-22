@@ -161,6 +161,12 @@ Decisions
   always manually overridable to the actually-negotiated price (no below-cost concept
   applies to a purchase — that check is a selling-side rule only, per code-standards.md's
   Pricing Rules).
+  > **Amended by `95-purchase-price-sync.md` (2026-09-22):** this "starting suggestion,
+  > never written back" posture no longer holds for confirmation. Confirming a Purchase
+  > Order now also writes `Product.purchasePrice` (via the shared
+  > `productPurchasePriceHistoryService`), a deliberate deviation recorded there and in
+  > `architecture-context.md`'s Purchase module section. The *rate-prefill* behavior
+  > described above is unchanged — only what happens at `confirmPurchaseOrder` changed.
 - `receivedQuantity` — maintained **exclusively** by Goods Receipt Note's posting flow
   (spec 43); this module exposes no method to set it directly. Always
   `0 ≤ receivedQuantity ≤ quantity`.

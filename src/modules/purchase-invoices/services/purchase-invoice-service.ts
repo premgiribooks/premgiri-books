@@ -27,6 +27,7 @@ import {
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
 import { getGroupSubtreeIds } from "@/modules/ledgers/utils/group-subtree";
 import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
+import { productPurchasePriceHistoryService } from "@/modules/product-purchase-price-history/services/product-purchase-price-history-service";
 import { purchaseOrderService } from "@/modules/purchase-orders/services/purchase-order-service";
 import {
   purchaseInvoiceRepository,
@@ -1157,6 +1158,24 @@ export const purchaseInvoiceService = {
         if (!posted) {
           throw new AppError(CANNOT_POST_MESSAGE);
         }
+
+        // Step 9: Latest Purchase Cost write-back + history
+        // (95-purchase-price-sync.md). Net-of-discount effective unit cost
+        // per line (taxableAmount / quantity); last line wins per product,
+        // resolved inside the shared service, on this same `tx`.
+        await productPurchasePriceHistoryService.syncFromPurchaseDocument(tx, user.companyId, {
+          lines: built.lines.map((line, index) => ({
+            productId: line.persist.productId,
+            lineNumber: index + 1,
+            netUnitCost: line.persist.quantity > 0 ? line.persist.taxableAmount / line.persist.quantity : 0,
+          })),
+          sourceDocumentType: "PURCHASE_INVOICE",
+          sourceDocumentId: current.id,
+          sourceDocumentNumber: generated.formatted,
+          sourceDocumentDate: current.invoiceDate,
+          changedByUserId: user.id,
+        });
+
         return posted;
       },
       SERIALIZABLE_RETRY

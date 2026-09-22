@@ -1,15 +1,16 @@
-import type { Prisma, PurchaseOrderStatus } from "@prisma/client";
+import { Prisma, type PurchaseOrderStatus } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertPermission } from "@/lib/permissions";
-import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import { isRetryableTransactionError, isUniqueConstraintError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
 import { gstEngine } from "@/engines/gst/gst-engine";
 import type { CalculateLineInput, DocumentGroupResult, SupplyType } from "@/engines/gst/types";
+import { productPurchasePriceHistoryService } from "@/modules/product-purchase-price-history/services/product-purchase-price-history-service";
 import { supplierService } from "@/modules/suppliers/services/supplier-service";
 import {
   purchaseOrderRepository,
@@ -57,6 +58,14 @@ const CANNOT_CHANGE_MESSAGE =
 const RECEIPT_NOT_APPLICABLE_MESSAGE =
   "A receipt can only be applied to a confirmed purchase order that is not yet fully received.";
 const RECEIPT_LINE_NOT_FOUND_MESSAGE = "One or more received lines do not belong to this purchase order.";
+// Guards confirmPurchaseOrder's read-then-write onto Product.purchasePrice
+// (95-purchase-price-sync.md) — mirrors purchase-invoice-service.ts's own
+// SERIALIZABLE_RETRY shape/reasoning exactly.
+const SERIALIZABLE_RETRY = {
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  retryable: isRetryableTransactionError,
+  conflictMessage: "This purchase order was changed by another request. Please try again.",
+};
 const RECEIPT_QUANTITY_INVALID_MESSAGE = "Received quantity must be greater than zero.";
 const RECEIPT_CONFLICT_MESSAGE =
   "This purchase order was updated by another receipt while applying this one. Please retry.";
@@ -469,11 +478,50 @@ export const purchaseOrderService = {
     return updated;
   },
 
+  /**
+   * `DRAFT -> CONFIRMED` — a PO's only commit/freeze moment
+   * (42-purchase-orders.md: confirming "freezes the header and line
+   * quantities/pricing"). Restructured into a Serializable transaction for
+   * 95-purchase-price-sync.md: confirming now also writes
+   * Product.purchasePrice + history (a deliberate, documented deviation —
+   * see that spec's Business Rules §1.2), so it needs the same
+   * read-then-write transactional guard postPurchaseInvoice already uses,
+   * which this method never needed before.
+   */
   async confirmPurchaseOrder(id: string): Promise<PurchaseOrderDetail> {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "purchase", "edit");
-    const count = await purchaseOrderRepository.updateStatus(prisma, id, user.companyId, ["DRAFT"], "CONFIRMED");
-    return afterTransition(id, count);
+
+    return runInTransaction(async (tx) => {
+      const current = await purchaseOrderRepository.findById(id, tx);
+      if (!current || current.companyId !== user.companyId) {
+        throw new AppError(NOT_FOUND_MESSAGE);
+      }
+
+      const count = await purchaseOrderRepository.updateStatus(tx, id, user.companyId, ["DRAFT"], "CONFIRMED");
+      if (count === 0) {
+        throw new AppError(CANNOT_CHANGE_MESSAGE);
+      }
+
+      await productPurchasePriceHistoryService.syncFromPurchaseDocument(tx, user.companyId, {
+        lines: current.items.map((item) => ({
+          productId: item.productId,
+          lineNumber: item.lineNumber,
+          netUnitCost: item.quantity > 0 ? item.taxableAmount / item.quantity : 0,
+        })),
+        sourceDocumentType: "PURCHASE_ORDER",
+        sourceDocumentId: current.id,
+        sourceDocumentNumber: current.orderNumber,
+        sourceDocumentDate: current.orderDate,
+        changedByUserId: user.id,
+      });
+
+      const updated = await purchaseOrderRepository.findById(id, tx);
+      if (!updated) {
+        throw new AppError(NOT_FOUND_MESSAGE);
+      }
+      return updated;
+    }, SERIALIZABLE_RETRY);
   },
 
   // Manual staff action confirming no further fulfillment is expected —

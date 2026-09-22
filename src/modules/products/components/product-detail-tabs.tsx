@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-export type ProductDetailTabKey = "overview" | "batches" | "serial-numbers";
+export type ProductDetailTabKey = "overview" | "batches" | "serial-numbers" | "purchase-price-history";
 
 export interface ProductDetailTab {
   key: ProductDetailTabKey;
@@ -38,6 +38,14 @@ export function getProductDetailTabs(
       href: `/masters/products/${productId}/serial-numbers`,
     });
   }
+  // Unconditional (95-purchase-price-sync.md) — unlike Batches/Serial
+  // Numbers, every product has a purchasePrice and can accumulate history,
+  // regardless of tracking mode.
+  tabs.push({
+    key: "purchase-price-history",
+    label: "Purchase Price History",
+    href: `/masters/products/${productId}/purchase-price-history`,
+  });
   return tabs;
 }
 

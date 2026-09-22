@@ -167,7 +167,15 @@ Responsibilities
 
 Responsibilities
 
-- Latest Purchase Cost
+- Latest Purchase Cost — the Engine owns the *selection rule* only
+  (`src/engines/pricing/purchase-cost-sync.ts`, 95-purchase-price-sync.md):
+  which line's cost becomes the new value, given a posted document's lines.
+  It has no IO. Reading `Product.purchasePrice` at resolve time
+  (`pricing-engine.ts`) is unchanged; *persisting* a new value plus its
+  history trail is the `product-purchase-price-history` module's job,
+  called from Purchase Invoice posting and Purchase Order confirmation.
+  Resolves the tension `30-pricing-engine.md:69-70` originally left open
+  ("Purchase Invoice overwrites it later" — never built until spec 95).
 - Margin Profiles
 - Price Lists
 - Customer Pricing
@@ -302,6 +310,22 @@ Responsible for
 - Purchase Returns
 
 Purchase communicates only through shared business engines.
+
+**Recorded exception (95-purchase-price-sync.md, 2026-09-22):** Purchase
+Invoice posting and Purchase Order confirmation each write one specific
+field of Product master data (`Product.purchasePrice`) as a posting side
+effect — but only ever through the shared
+`productPurchasePriceHistoryService.syncFromPurchaseDocument()` call, never
+by touching the `Product` table directly. This satisfies "Modules
+communicate through shared services, never by directly modifying another
+module's data" precisely because it goes through a shared service; it is
+not a boundary violation, but is called out here because it is the first
+case of Purchase writing (not just reading) Product-owned data. This is
+also a deliberate deviation from what `42-purchase-orders.md:156-163` and
+`30-pricing-engine.md:69-70` originally documented (only a Purchase Invoice
+was expected to ever write back, never a Purchase Order) — per explicit
+user instruction, both documents now participate, whichever posts/confirms
+most recently wins.
 
 ---
 
@@ -608,6 +632,9 @@ scoped feature spec:
    every table has `createdAt`/`updatedAt` but not the actor who made the
    change. `AuditLog.actorUserId` covers this for the 5 events it records;
    every other table still has no way to attribute historical writes.
+   `ProductPurchasePriceHistory.changedByUserId`
+   (95-purchase-price-sync.md) is a second narrow exception, scoped only to
+   automatic `Product.purchasePrice` changes — still not a general retrofit.
 5. ~~Platform (Super Admin) vs. Company (Company Admin/Company Users) is
    not yet a real distinction anywhere except the schema~~ — **resolved
    2026-07-13**. See the User Hierarchy / Authorization Flow sections
@@ -641,6 +668,21 @@ Pricing Engine always uses the latest purchase cost for
 - Selling Price Calculation
 - Margin Calculation
 - Inventory Valuation (Current Version)
+
+**As of 95-purchase-price-sync.md (2026-09-22), "Latest Purchase Cost" is no
+longer manual-entry-only.** `Product.purchasePrice` is automatically
+updated whenever a Purchase Invoice is posted or a Purchase Order is
+confirmed (whichever happens most recently wins), using the net-of-discount
+effective unit cost (`taxableAmount / quantity`) of the winning line per
+product. Every change is recorded in an append-only
+`ProductPurchasePriceHistory` trail (source document, old/new value, actor,
+timestamp) — a per-product *price-change audit trail*, not a per-movement
+cost layer; it is not, and must not become, the data source for any future
+FIFO/Weighted-Average implementation (see Future versions below). The
+product form's manual edit path is unchanged and still works — this is an
+additional automatic write path, not a replacement. Applies prospectively
+only: purchase documents posted/confirmed before this feature shipped were
+not backfilled.
 
 Future versions may support
 

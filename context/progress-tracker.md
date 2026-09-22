@@ -102,6 +102,7 @@ Mapping so far:
 | 85           | ERP Dashboard (`85-dashboard.md`)                                              | `context/Phases/phase-tracker.md` Phase 10 — Reporting (#82) — **implemented, reviewed, and fixed 2026-09-13** (see this file's own entry the same date); permission-aware home screen composing existing Phase 10 report services/engines, zero new business calculations |
 | 86           | Payment Mode Master (`86-payment-mode-master.md`)                             | `context/Phases/phase-tracker.md` **Phase 11 — Payment & Collections Management** (#83) — **implemented 2026-09-13** on branch `feature/payment-mode-master`; first item of the newly-inserted Phase 11 — a company-scoped Payment Mode lookup (Cash/Bank Transfer/UPI/Card/Cheque), each row carrying a `ledgerClass` (CASH/BANK/ANY) that specs 88–90 (#84–#86, not yet drafted) will validate a payment line's chosen ledger against; no cross-module validation helper built yet, per YAGNI — deferred to the first real consumer |
 | 87           | Liability Settlement (`87-liability-settlement.md`)                          | `context/Phases/phase-tracker.md` Phase 11 — Payment & Collections Management (#87) — **spec drafted 2026-09-13, not implemented**; added to the phase after its initial reservation, per explicit user request — a read+navigate wrapper over `64-trial-balance.md`'s `getTrialBalance` (lists every `LIABILITY`-nature ledger with an outstanding balance) and `52-payment-voucher.md`'s existing New-voucher screen (pre-filled "Settle" action), no new Prisma model, no invoice-wise/bill-wise allocation |
+| 95           | Purchase Price Sync to Product Master (`95-purchase-price-sync.md`)          | `context/Phases/phase-tracker.md` Phase 4 — Purchase Management (#88) — **implemented 2026-09-22** on branch `feature/purchase-price-sync`; post-closure amendment reopening Phase 4 (closed in full by spec 45). Rows 88–94 are not recorded in this table — gap noted, not backfilled. |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
@@ -2817,6 +2818,14 @@ Mapping so far:
 - **Accepted, not fixed: username/email uniqueness is global, so an Administrator can enumerate another company's usernames/emails** (found during feature-spec 10's security review, 2026-07-12). `10-user-management.md` explicitly requires "username and email must be unique across the system" (not per-company), and `user-service.ts`'s friendly "Username is already taken."/"Email is already registered." messages necessarily reveal existence across company boundaries to any Administrator who tries creating/editing a user with a guessed value. This is a direct, spec-mandated consequence of the global-uniqueness rule, not an implementation oversight — fixing it (e.g. collapsing both messages into one generic "already in use") would be easy but wasn't done, since every actor who could exploit it is already an authenticated Administrator (not a public/anonymous surface) and the spec's own wording doesn't leave room for per-company uniqueness instead. Flagged here rather than silently accepted in case a future phase (e.g. multi-tenant hardening) wants to revisit the global-uniqueness rule itself.
 - ~~Accepted, not fixed: real companies already in this project's local Postgres container predate `13-ledger-groups.md`/`14-ledger-master.md` and have zero or partial ledger groups, no "Cash-in-Hand," and no ledgers at all~~ — **resolved 2026-07-13** (see the Architecture Fix entry below): root cause found (`prisma/seed.ts` bootstrapped its "Default Company" via a direct `tx.company.create()` call that bypassed `companyService.createCompany()`'s seeding entirely) and fixed at the source; all four pre-existing companies in the local Postgres container were backfilled via a temporary, deleted-after-use script. No general-purpose "reseed chart of accounts" admin action was added — still no feature-spec has asked for one — this only fixed the specific gap this entry tracked.
 - **New, no admin-facing reseed/repair path exists for a company whose chart of accounts is damaged after creation** (recorded 2026-07-13, narrower successor to the entry above). `companyService.createCompany()` now reliably seeds every new company correctly, and the one known historical gap (companies bootstrapped outside that path) has been backfilled — but there is still no supported way to repair a company that somehow loses/corrupts its ledger group skeleton later (e.g. a future bulk-delete tool, a bad migration, manual DB surgery). Not fixed now since no such repair path has ever existed and nothing today can put a company into that state through normal application use; flagged so a future admin-tooling feature considers it rather than reinventing the ad hoc backfill script used this time.
+- **New — 95-purchase-price-sync.md's `productType` scope was decided implicitly, not asked** (recorded 2026-09-22). The sync applies to `TRADING`/`SERVICE`/`EXPENSE` lines alike (no gate), since `Product.purchasePrice` exists on all three and the Pricing Engine reads it for all three. Batch Tracking (spec 50) chose to gate `isBatchTracked` on `TRADING`-only, so there is precedent for narrowing this too if a future session/user decides `SERVICE`/`EXPENSE` cost tracking shouldn't behave this way.
+- **New — no reversal/audit row is written when a Purchase Invoice/Order that previously changed `purchasePrice` is later cancelled** (recorded 2026-09-22, per explicit user-approved design in `95-purchase-price-sync.md` §1.7). The alternative — a reversal history row noting "cancelled PI-0042; cost left at X" — was considered and deliberately deferred as a cheap future addition, not built now.
+- **New — back-dated purchase postings can overwrite a newer cost** (recorded 2026-09-22). `95-purchase-price-sync.md`'s "most recently posted wins" rule is an unconditional overwrite with no `sourceDocumentDate`-based guard, so posting an old-dated invoice today overwrites a newer cost. Accepted as the literal reading of the rule; flagged in case a future session wants date-aware precedence instead.
+- **New — a confirmed Purchase Order's rate can now override an already-invoiced cost** (recorded 2026-09-22). Per explicit user decision, both Purchase Order confirmation and Purchase Invoice posting write `Product.purchasePrice`, whichever happens most recently. A PO records an intended/negotiated rate that may never be invoiced, while an invoice records what was actually billed — "most recently posted wins" lets the aspirational PO rate win over a real invoiced cost. Flagged, not re-litigated; would be a small change to the resolution rule (compare `sourceDocumentType` priority) if the user later wants invoice-precedence instead.
+- **New — no backfill exists for purchase documents posted/confirmed before 95-purchase-price-sync.md shipped (2026-09-22)** — deliberate, explicit user decision (prospective-only scope, see that spec's Business Rules §1.9 and this file's Architecture Decisions entry below). A product's Purchase Price History tab shows no rows for activity before this feature's rollout, and `purchasePrice` for such products remains whatever was last manually entered until the next qualifying document posts.
+- **New — `StockTransaction.unitCost` remains unpopulated after 95-purchase-price-sync.md, despite this feature editing the exact Purchase Invoice posting code path (`stockLines`) that a future FIFO/Weighted-Average feature would need to populate it from** (recorded 2026-09-22). Deliberately out of scope for this feature (see its Do Not section) — `ProductPurchasePriceHistory` is a per-product *price-change audit trail*, not a per-movement cost layer, and must not be conflated with FIFO's own future data source. Flagged so a future costing feature doesn't assume this gap was closed.
+- **Accepted, not fixed: `syncFromPurchaseDocument`'s per-product write loop is N+1-shaped** (found during 95-purchase-price-sync.md's code review, 2026-09-22). `product-purchase-price-history-service.ts:52-63` issues one `updateMany` + one `create` per distinct product on a document, serially, inside the caller's Serializable transaction — extends transaction duration on a large multi-product document, slightly increasing retry-conflict odds under Postgres SSI. Not a correctness bug (reads already batched via `findCurrentPurchasePrices`; the existing bounded-retry wrapper absorbs the added contention). Not fixed now per YAGNI — no evidence 50+-distinct-product purchase documents occur in this app's actual usage; revisit with a single multi-row upsert/insert if that changes.
+- **Accepted, not fixed: `postPurchaseInvoice`'s Latest-Purchase-Cost sync derives `lineNumber` from `built.lines`' array index, an implicit ordering invariant with no test that would catch a future reorder** (found during the same code review). Correct as implemented today (`purchase-invoice-service.ts:1167-1171` — nothing reorders/filters `built.lines` between its index-derived `lineNumber` assignment and the sync call, and this mirrors an identical existing convention elsewhere in the same file). Flagged so a future refactor that reorders `built.lines` (e.g., grouping by warehouse) re-verifies the "last line wins" cost-sync rule still holds, since no automated test currently pins that ordering assumption directly.
 
 ## Architecture Decisions
 
@@ -2826,6 +2835,8 @@ Mapping so far:
 
 - **Company edit rights split by field sensitivity, not by a single all-or-nothing "company edit" permission (2026-07-14).** Company Admin may edit their own company's `companyName`, `displayName`, `businessType`, contact fields (mobile/alternate mobile/email/website), address fields, logo, and the two currency *display* fields (`currencySymbol`, `decimalPlaces`) — everything **except** the compliance-sensitive registration identifiers (`legalName`, `gstin`, `pan`, `tan`, `cin`) and the currency *ISO code* (`currency`), which remain Super-Admin-only via `/administration/companies/[id]/edit`. Both paths share the same underlying `companySchema`/`Company` row and the same `company`/`edit` permission gate — the split is enforced by `companyProfileSchema` (a `.omit()` of the compliance fields) and `companyService.updateCompanyProfile()` merging only the non-compliance subset onto the existing row, not by a second permission action. **Any future field added to `Company` must be explicitly classified into one of these two schemas** (`companySchema` for Super-Admin-only fields, `companyProfileSchema`'s allowed set for Company-Admin-editable fields) rather than defaulting to one or the other — there is no single rule like "financial fields are always Super-Admin-only" (currency display formatting is Company-Admin-editable; the currency code itself is not).
 
+- **Purchase Order confirmation now writes `Product.purchasePrice`, reversing what `30-pricing-engine.md`/`42-purchase-orders.md` originally documented (2026-09-22).** Both specs previously said (or implied) that only a Purchase Invoice would ever write back the "Latest Purchase Cost" — a Purchase Order's rate was purely a read-only suggestion. Per explicit user instruction (`95-purchase-price-sync.md`), confirming a Purchase Order now also participates: whichever of Purchase Invoice posting or Purchase Order confirmation happens most recently wins, unconditionally. This is a deliberate architecture reversal, not a bug — recorded here, in `architecture-context.md`'s Purchase module section, and with an inline amendment note added to `42-purchase-orders.md` itself, per `ai-workflow-rules.md`'s "prefer the documented architecture and record the discrepancy" rule (User Instructions rank #1 in that file's AI Decision Priority list, so the deviation is authorized — but must be written down, not silently applied).
+- **95-purchase-price-sync.md's cost basis is the net-of-discount effective unit cost (`taxableAmount / quantity`), not the gross `rate` field (2026-09-22), per explicit user decision.** This breaks the previously-exact round-trip symmetry between `product.purchasePrice` and the gross `rate` that prefills PO/PI line-entry fields and that the sales-side "below cost" warning compares against (`sales-invoice-service.ts:241` etc.) — `purchasePrice` is now a discount-net figure while sales rates stay gross. The below-cost comparison remains directionally correct (net cost is always ≤ gross rate for the same transaction) but is no longer a precise gross-to-gross comparison. Documented so a future session does not "fix" this mismatch as a bug.
 - **Company Admin "reassignment" always re-points to the target company's own Company Admin role by name, never carries the source role id across (2026-07-14).** Since `Role` is fully per-company (no shared/global rows, per the 2026-07-13 migration decision below), moving a User's `companyId` without also updating `roleId` would leave them pointing at a Role row belonging to a different company — a data-integrity violation, not just a permissions mismatch. `userRepository.reassignCompanyById()` therefore always looks up the destination company's Company Admin role by `COMPANY_ADMIN_ROLE_NAME` and reassigns both columns in the same write. This is the reference pattern for **any future cross-company move of a per-company-scoped entity** (not just Users): always re-resolve the per-company foreign key in the destination tenant, never carry the source id across untranslated. Reassignment reuses the existing "at least one active full-coverage user must remain per company" guard (applied to the *source* company) rather than introducing a parallel invariant, since leaving a company via reassignment has the identical end-state as deactivation there.
 
 - **Company-wide operational settings (theme/date format/number format/currency display format) live on the Profile page, not the Company edit page (2026-07-14).** Originally `CompanySettingsForm` sat on `/company/[id]/edit` alongside the legal/business fields; per explicit user request it moved to a new "Company Settings" tab on `/profile`, gated on the same `company`/`edit` permission the old page used. Rationale recorded here since it reverses the page's original placement: these are **per-user-session preferences about how the company's data displays to the person viewing it**, conceptually closer to "my account" than "the company record," even though the underlying `CompanySettings` row is still company-scoped (one row per company, not per user) — the Profile page was judged the more discoverable home for a setting every user with edit rights should be able to reach without navigating into the Company module specifically. `/company/[id]/edit` is now profile-fields-only (see the two decisions above). Any future "where does this new preference belong" question should default to: legal/compliance data → Company edit (Super Admin); company profile/contact/address → Company edit (Company Admin, via `companyProfileSchema`); operational display preferences → Profile page's Company Settings tab.
@@ -6136,3 +6147,170 @@ that has a margin/pricing concept now has the feature — this closes out the pl
 Phase 3 (Delivery Challan/Credit Note/Debit Note excluded as N/A, documented above rather than
 silently skipped). Not yet manually exercised in a running app by the user for these newly-touched
 modules.
+
+## 2026-09-22 — Purchase Price Sync to Product Master (feature-spec 95, tracker #88) implemented
+
+Implemented on branch `feature/purchase-price-sync`, branched from `main` immediately after
+merging `feature/margin-override-shortcut` (verified clean — 220 files/2947 tests, tsc, eslint,
+`next build` all passing — before the merge, per `ai-workflow-rules.md`'s "Merge to Main Before
+Starting the Next Branch" rule). Closes the documented gap `prisma/schema.prisma:946-949` and
+`30-pricing-engine.md:69-70` both left open: `Product.purchasePrice` ("Latest Purchase Cost") was
+100% manually entered and never updated by any purchase document, despite the schema comment's own
+promise that "the Purchase module will later overwrite it on each purchase."
+
+**Schema**: new `PurchasePriceSourceType` enum (`PURCHASE_INVOICE`/`PURCHASE_ORDER`) and
+`ProductPurchasePriceHistory` model (`companyId`, `productId`, `oldPurchasePrice`/
+`newPurchasePrice` Decimal(14,2), `sourceDocumentType`/`sourceDocumentId`/`sourceDocumentNumber`/
+`sourceDocumentDate`, `changedByUserId`, `createdAt` only — no `updatedAt`, append-only, mirrors
+`StockTransaction`'s immutability). Back-relations on `Company`, `Product`, `User`. Considered and
+rejected reusing `AuditLog` (explicitly scoped narrow, not a general retrofit) and `DocumentType`
+(a 26-value numbering-engine enum, 24 values invalid here) per `ai-workflow-rules.md`'s Database
+Workflow rule. **Migration applied by hand, not via `prisma migrate dev`**: the connected database
+(`premgiribooks` on `192.168.1.39`, a real populated 70-table database, confirmed live via a
+read-only `pg` query — role `premgiri_books` has `rolcreatedb = false`) cannot create the shadow
+database `prisma migrate dev` needs to diff. Per explicit user choice, hand-wrote
+`prisma/migrations/20260922120000_purchase_price_sync/migration.sql` matching this codebase's
+existing Prisma-generated SQL conventions exactly (verified against `20260911060923_batch_tracking`
+and other recent migrations), applied it with `prisma db execute --file`, then registered it via
+`prisma migrate resolve --applied` so `_prisma_migrations` history stays consistent for future
+`prisma migrate dev` runs. `prisma migrate status` confirms "Database schema is up to date!"
+afterward. One index name (`..._sourceDocumentType_sourceDocumentId_idx`) exceeds Postgres's
+63-byte identifier limit and is truncated automatically by Postgres itself at creation (standard
+`NAMEDATALEN` behavior, no error) — kept verbatim rather than pre-shortened, for fidelity with what
+`prisma migrate dev` itself would have generated and handed to Postgres.
+
+**Business rules** (`context/feature-specs/95-purchase-price-sync.md`, full detail there):
+triggers are `purchaseInvoiceService.postPurchaseInvoice` and
+`purchaseOrderService.confirmPurchaseOrder` only (not Purchase Return, GRN, or any sales
+document) — **both**, per explicit user decision, a deliberate reversal of what
+`30-pricing-engine.md`/`42-purchase-orders.md` originally documented (see the Architecture
+Decisions entry above); last line wins per product within one document (`lineNumber` is unique
+per document, so no tie-break is ever needed); the new cost is the **net-of-discount effective
+unit cost** (`taxableAmount / quantity`), per explicit user decision, not the gross `rate` (see
+the Architecture Decisions entry above for the resulting gross/net mismatch this introduces
+elsewhere); a resolved cost `<= 0` or equal to the current value (2-decimal precision) is a no-op
+(no product write, no history row); cancelling a posted invoice or confirmed order never reverts
+`purchasePrice` and never writes a history row; applies to `TRADING`/`SERVICE`/`EXPENSE` products
+alike (no gate); **prospective only** — no backfill for documents posted/confirmed before this
+feature shipped, per explicit user decision.
+
+**Engine/Service/Repository**: `src/engines/pricing/purchase-cost-sync.ts` —
+`resolveLatestPurchaseCostUpdates(lines)`, a pure function (no IO) implementing the
+last-line-wins/no-op-cost-drop selection rule, standalone in `engines/pricing/` mirroring
+`margin-override.ts`'s own shape. New module `src/modules/product-purchase-price-history/`
+(repository + service only — no `validation/` folder, since there is no user-facing input to
+validate, a deliberate deviation from the boilerplate module shape) mirrors
+`src/modules/product-batches/`'s "satellite-of-Product gets its own module" precedent.
+`productPurchasePriceHistoryService.syncFromPurchaseDocument(tx, companyId, input)` takes a
+**required** (not optional) `Prisma.TransactionClient` — it must never run outside the caller's
+own posting/confirmation transaction — and performs **no permission assertion of its own** (a
+deliberate, tested deviation: it is a system-driven side effect of an already-authorized purchase
+posting; gating it again on `masters:edit` would break posting for Purchase-role users, who by
+design hold `masters:view` only). The read path (`listHistoryForProduct`) is gated normally on
+`masters`/`view`, mirroring Batch Tracking's own "product-master data, not `inventory`/`purchase`"
+posture.
+
+**Wiring**: Purchase Invoice — one new step (`Step 9`) appended to `postPurchaseInvoice`'s existing
+transaction, after `replaceItemsAndPost`, using `built.lines` (the freshly recomputed lines, never
+stale draft data) and `generated.formatted` already in scope — no new transaction machinery.
+Purchase Order — `confirmPurchaseOrder` was previously a bare, non-transactional single
+`updateStatus` call; **restructured** into a `runInTransaction(..., SERIALIZABLE_RETRY)` block (a
+new module-level constant this file gained, mirroring `purchase-invoice-service.ts`'s identical
+shape/reasoning) that re-reads the order via `tx`, applies the guarded status transition, syncs,
+then re-reads the updated detail — all on the same `tx`. Serializable isolation matters here for
+the same reason `product-repository.ts`'s own read-then-write invariant guard already documents:
+two concurrent postings/confirmations touching the same product would otherwise both read the same
+old `purchasePrice` and both log it as the "old" value, a classic lost-update; bounded retry
+(already built into `runInTransaction`) handles the resulting `P2034` conflicts transparently.
+`closePurchaseOrder`/`cancelPurchaseOrder`/`cancelPurchaseInvoice` were deliberately left
+untouched (per `ai-workflow-rules.md`'s "do not mix unrelated changes") — confirmed via test that
+none of them call the sync.
+
+**UI**: new unconditional "Purchase Price History" tab on the Product detail page (unlike
+Batches/Serial Numbers, shown for every product, not gated on an opt-in flag) —
+`/masters/products/[id]/purchase-price-history`, mirroring the Batches tab's page-shell pattern
+exactly (same `masters`/`view` guard, same `AppShell`/`BreadcrumbLabelSetter`/`ProductDetailTabs`
+composition). `ProductPurchasePriceHistoryPanel` lives under `products/components/` (not
+`product-purchase-price-history/components/`), mirroring `product-batches-panel.tsx`'s own
+documented placement rule (the panel that composes a tab belongs to the host page's module; the
+table primitive belongs to the satellite module). `ProductPurchasePriceHistoryTable` is a plain
+read-only Server Component — no create/update/delete affordance anywhere, since history rows are
+system-generated only. Breadcrumb entry added (`"purchase-price-history": "Purchase Price
+History"`). No Server Action file was added — the page reads the service directly (a Server
+Component), per YAGNI, matching `batches/page.tsx`'s own identical choice; add one later only if a
+client component ever needs it.
+
+**Deliberately NOT done** (per the spec's Do Not): any change to
+`pricing-engine.ts`/`price-resolution.ts`/`margin-override.ts` (selling-price calculation is
+unaffected — it already reads `purchasePrice` live at resolve time, so no new code was needed
+there at all); a `Product.purchasePriceUpdatedAt` column (the history table's own `createdAt`
+already answers "when was this last updated" without a second, driftable source of truth); reuse
+of `AuditLog`; any write API for history rows; a revert on cancellation; wiring
+`StockTransaction.unitCost` (a distinct, future FIFO/costing feature's concern — see the Open
+Questions entry above); a backfill script; any change to `purchaseReturnService`'s posting flow
+(verified via test it still never calls the sync).
+
+**Testing**: 3 new test files (`purchase-cost-sync.test.ts` — 10 pure-function cases;
+`product-purchase-price-history-repository.test.ts`; `product-purchase-price-history-service.test.ts`
+— 24 new tests total), plus updates to `purchase-invoice-service.test.ts` (mocks the new service,
+asserts `postPurchaseInvoice` calls it exactly once with the correct net-unit-cost payload on the
+same `tx`, asserts `cancelPurchaseInvoice` never calls it), `purchase-order-service.test.ts` (same
+pattern for `confirmPurchaseOrder`/`cancelPurchaseOrder`, plus a new "rejects an order belonging to
+another company" case the restructure needed), `purchase-return-service.test.ts` (asserts
+`postPurchaseReturn` never calls it — pins the exclusion as a tested business rule, not an
+accident of omission), and `product-detail-tabs.test.ts` (all 5 existing cases updated for the new
+unconditional third tab, matching the guaranteed breakage the implementation plan flagged ahead of
+time).
+
+**Verified**: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, the same 2
+pre-existing unrelated warnings as before this feature), `npx vitest run` (223 files / 2972 tests,
+up from 220/2947, all passing), `next build` (clean, full app; `/masters/products/[id]/purchase-
+price-history` confirmed in the route table). Not yet manually exercised in a running app by the
+user (no browser tool available in this session; stated explicitly rather than claimed).
+
+**Documentation updated**: this file (mapping table row 95, six new Open Questions entries, two
+new Architecture Decisions entries, this dated entry), `context/Phases/phase-tracker.md` (new item
+#88, Phase 4 reopened for this amendment), `context/architecture-context.md` (Pricing Engine
+responsibilities, Purchase module boundary's recorded exception, Costing Strategy section),
+`context/feature-specs/42-purchase-orders.md` (inline amendment note near its now-superseded
+"rate prefills, never written back" claim).
+
+**Code review and security review (2026-09-22, run in parallel, mirroring every prior phase's
+practice) — both APPROVE, zero CRITICAL/HIGH findings.**
+
+- **Security review**: zero findings of any severity. Explicitly verified clean: multi-tenant
+  isolation (every repository query scoped by server-derived `companyId`, never client-supplied;
+  the cross-company case is pinned by test), the no-permission-check design on
+  `syncFromPurchaseDocument` (confirmed via grep — its only two callers are the already-
+  permission-checked `postPurchaseInvoice`/`confirmPurchaseOrder`, no Server Action or route
+  exposes it directly), the new UI route's `masters`/`view` gate (matches the Batches tab
+  byte-for-byte, plus two more independent scoping checks behind it), the pricing guard against
+  malformed input (non-finite/non-positive values dropped before ever reaching a stored price),
+  the hand-applied migration (additive-only, correct FK cascade behavior, no drift vs. schema.prisma),
+  and standard OWASP checks (no raw SQL, no secrets, no XSS, no leaking error messages).
+- **Code review**: APPROVE. Two MEDIUM observations, both **accepted, not fixed** (pre-existing
+  patterns/tradeoffs, not new defects, both already covered by existing safety nets — matching
+  this project's own "accepted, not fixed" Open Questions convention rather than silently closed):
+  1. `syncFromPurchaseDocument`'s per-product write loop (`product-purchase-price-history-service.ts:52-63`)
+     is N+1-shaped — one `updateMany` + one `create` per distinct product, serially, inside the
+     Serializable transaction, which extends how long the transaction stays open on a large
+     multi-product document and slightly increases retry-conflict odds under Postgres SSI. Not a
+     correctness bug (reads are already batched; the existing `SERIALIZABLE_RETRY` wrapper absorbs
+     it) — worth a single multi-row upsert/insert if 50+ distinct-product documents turn out to be
+     common. Added to Open Questions below rather than fixed speculatively (YAGNI — no evidence
+     this document size occurs in practice).
+  2. `postPurchaseInvoice`'s sync step derives `lineNumber` from array index (`built.lines.map((line, index) => ...)`,
+     `purchase-invoice-service.ts:1167-1171`) — consistent with an identical existing convention
+     elsewhere in the same file (line 847), correct as implemented since nothing reorders/filters
+     `built.lines` between assignment and the sync call, but it is an implicit invariant a future
+     refactor could silently break with no test catching it. Flagged, not changed — recorded here
+     so a future session touching `built.lines` ordering knows to re-check "last line wins" still
+     holds.
+  One LOW note (confirmed as a non-issue, not a finding): `purchase-cost-sync.ts`'s pure function
+  has no explicit batch-size guard, but is O(n) via a `Map` with no realistic risk at this app's
+  scale.
+
+**Merged to `main`**: pending — not yet merged as of this entry. This branch has not been manually
+exercised in a running app by the user (no browser tool available in this session, stated
+explicitly rather than claimed) — recommended before merge, given this writes financial/pricing
+data that flows into every computed selling price company-wide.

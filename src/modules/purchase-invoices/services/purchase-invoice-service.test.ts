@@ -38,6 +38,7 @@ const {
   recordMovementsMock,
   getLedgerBalanceMock,
   assertPaymentModeMatchesLedgerMock,
+  syncFromPurchaseDocumentMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -72,6 +73,7 @@ const {
   recordMovementsMock: vi.fn(),
   getLedgerBalanceMock: vi.fn(),
   assertPaymentModeMatchesLedgerMock: vi.fn(),
+  syncFromPurchaseDocumentMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -137,6 +139,9 @@ vi.mock("@/modules/purchase-orders/services/purchase-order-service", () => ({
 }));
 vi.mock("@/modules/company/services/company-settings-service", () => ({
   companySettingsService: { getSettings: getSettingsMock },
+}));
+vi.mock("@/modules/product-purchase-price-history/services/product-purchase-price-history-service", () => ({
+  productPurchasePriceHistoryService: { syncFromPurchaseDocument: syncFromPurchaseDocumentMock },
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -340,6 +345,7 @@ beforeEach(() => {
   recordMovementsMock.mockReset();
   getLedgerBalanceMock.mockReset();
   assertPaymentModeMatchesLedgerMock.mockReset();
+  syncFromPurchaseDocumentMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
@@ -484,6 +490,19 @@ describe("postPurchaseInvoice — orchestration order and ledger entries", () =>
       expect.any(Array),
       VOUCHER_ID
     );
+
+    // 95-purchase-price-sync.md Step 9: Latest Purchase Cost write-back, on
+    // the SAME tx, after the posting write, with the net-of-discount unit
+    // cost (200 taxable / 2 qty = 100).
+    expect(syncFromPurchaseDocumentMock).toHaveBeenCalledTimes(1);
+    expect(syncFromPurchaseDocumentMock).toHaveBeenCalledWith(FAKE_TX, COMPANY_ID, {
+      lines: [{ productId: PRODUCT_ID, lineNumber: 1, netUnitCost: 100 }],
+      sourceDocumentType: "PURCHASE_INVOICE",
+      sourceDocumentId: "pinv-1",
+      sourceDocumentNumber: "PINV-0001",
+      sourceDocumentDate: new Date("2026-09-10T00:00:00.000Z"),
+      changedByUserId: USER_ID,
+    });
   });
 
   it("produces IGST instead of CGST/SGST for an inter-state supply", async () => {
@@ -857,6 +876,9 @@ describe("cancelPurchaseInvoice", () => {
       FAKE_TX
     );
     expect(updateStatusMock).toHaveBeenCalledWith(FAKE_TX, "pinv-1", COMPANY_ID, ["POSTED"], "CANCELLED");
+    // 95-purchase-price-sync.md §1.7: cancellation never reverts
+    // purchasePrice and never writes a history row.
+    expect(syncFromPurchaseDocumentMock).not.toHaveBeenCalled();
   });
 
   it("rejects cancelling a DRAFT invoice", async () => {
