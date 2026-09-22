@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateMarginProfileAction,
   deactivateMarginProfileAction,
@@ -21,19 +24,29 @@ import {
 import { MarginProfileModeBadge } from "@/modules/margin-profiles/components/margin-profile-mode-badge";
 import { MarginProfileStatusBadge } from "@/modules/margin-profiles/components/margin-profile-status-badge";
 import { MARGIN_PROFILE_TIER_FIELDS } from "@/modules/margin-profiles/validation/margin-profile-schema";
+import type { ActionResult } from "@/types/api";
 import type { MarginProfile } from "@/types/margin-profile";
 
 interface MarginProfileTableProps {
   marginProfiles: MarginProfile[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<MarginProfile>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
 export function MarginProfileTable({
-  marginProfiles,
+  marginProfiles: initialMarginProfiles,
+  initialHasMore = false,
+  loadMore,
   canEdit = false,
   canManage = false,
 }: MarginProfileTableProps) {
+  const { items: marginProfiles, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialMarginProfiles,
+    initialHasMore,
+    loadMore,
+  });
   // Tracked per row (not a single pending id) so two rows toggled
   // concurrently each keep their own disabled state — the gst-rate-table.tsx
   // convention (hsn-code-table.tsx review fix, 2026-07-15).
@@ -74,69 +87,72 @@ export function MarginProfileTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Mode</TableHead>
-          {MARGIN_PROFILE_TIER_FIELDS.map(({ name, label }) => (
-            <TableHead key={name} className="text-right">
-              {label}
-            </TableHead>
-          ))}
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {marginProfiles.map((marginProfile) => (
-          <TableRow key={marginProfile.id}>
-            <TableCell>
-              <span className="font-medium text-foreground">{marginProfile.name}</span>
-            </TableCell>
-            <TableCell>
-              <MarginProfileModeBadge calculationMode={marginProfile.calculationMode} />
-            </TableCell>
-            {MARGIN_PROFILE_TIER_FIELDS.map(({ name }) => (
-              <TableCell key={name} className="text-right font-financial">
-                {marginProfile[name].toFixed(2)}
-              </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Mode</TableHead>
+            {MARGIN_PROFILE_TIER_FIELDS.map(({ name, label }) => (
+              <TableHead key={name} className="text-right">
+                {label}
+              </TableHead>
             ))}
-            <TableCell>
-              <MarginProfileStatusBadge isActive={marginProfile.isActive} />
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex justify-end gap-2">
-                {canEdit ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    nativeButton={false}
-                    render={
-                      <Link
-                        href={`/masters/margin-profiles/${marginProfile.id}/edit`}
-                        aria-label="Edit margin profile"
-                      >
-                        <Pencil size={16} />
-                      </Link>
-                    }
-                  />
-                ) : null}
-                {canManage ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pendingIds.has(marginProfile.id)}
-                    onClick={() => handleToggleActive(marginProfile)}
-                  >
-                    {marginProfile.isActive ? "Deactivate" : "Activate"}
-                  </Button>
-                ) : null}
-              </div>
-            </TableCell>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {marginProfiles.map((marginProfile) => (
+            <TableRow key={marginProfile.id}>
+              <TableCell>
+                <span className="font-medium text-foreground">{marginProfile.name}</span>
+              </TableCell>
+              <TableCell>
+                <MarginProfileModeBadge calculationMode={marginProfile.calculationMode} />
+              </TableCell>
+              {MARGIN_PROFILE_TIER_FIELDS.map(({ name }) => (
+                <TableCell key={name} className="text-right font-financial">
+                  {marginProfile[name].toFixed(2)}
+                </TableCell>
+              ))}
+              <TableCell>
+                <MarginProfileStatusBadge isActive={marginProfile.isActive} />
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  {canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/masters/margin-profiles/${marginProfile.id}/edit`}
+                          aria-label="Edit margin profile"
+                        >
+                          <Pencil size={16} />
+                        </Link>
+                      }
+                    />
+                  ) : null}
+                  {canManage ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingIds.has(marginProfile.id)}
+                      onClick={() => handleToggleActive(marginProfile)}
+                    >
+                      {marginProfile.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                  ) : null}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

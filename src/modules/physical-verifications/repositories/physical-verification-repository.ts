@@ -1,5 +1,6 @@
 import { Prisma, type PhysicalVerificationStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -124,6 +125,27 @@ export const physicalVerificationRepository = {
       orderBy: [{ verificationDate: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toPhysicalVerificationListRow);
+  },
+
+  /** Infinite-scroll page for the Physical Verifications list — same
+   * filters/ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: PhysicalVerificationListFilters,
+    page: PageParams
+  ): Promise<Page<PhysicalVerificationListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.physicalVerification.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...WAREHOUSE_NAME_INCLUDE, _count: { select: { items: true } } },
+          orderBy: [{ verificationDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPhysicalVerificationListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<PhysicalVerificationDetail | null> {

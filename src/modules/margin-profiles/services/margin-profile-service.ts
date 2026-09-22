@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import {
   marginProfileRepository,
@@ -50,6 +51,16 @@ export const marginProfileService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return marginProfileRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Margin Profiles list page. */
+  async listMarginProfilesPage(
+    filters: MarginProfileListFilters,
+    page: PageParams
+  ): Promise<Page<MarginProfile>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return marginProfileRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A profile belonging to a different company must resolve identically to

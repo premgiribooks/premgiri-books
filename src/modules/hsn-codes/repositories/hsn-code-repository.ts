@@ -1,5 +1,6 @@
 import type { HsnCodeType, Prisma } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -45,6 +46,24 @@ export const hsnCodeRepository = {
       where: buildWhere(companyId, filters),
       orderBy: { code: "asc" },
     });
+  },
+
+  /** Infinite-scroll page for the HSN Codes list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: HsnCodeListFilters,
+    page: PageParams
+  ): Promise<Page<HsnCode>> {
+    return fetchPage(
+      (args) =>
+        prisma.hsnCode.findMany({
+          where: buildWhere(companyId, filters),
+          orderBy: { code: "asc" },
+          ...args,
+        }),
+      page
+    );
   },
 
   async findById(id: string): Promise<HsnCode | null> {

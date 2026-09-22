@@ -4,6 +4,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Textarea } from "@/components/ui/textarea";
 import { createSerialNumberAction } from "@/modules/serial-numbers/actions/serial-number-actions";
 
@@ -115,6 +116,7 @@ export function SerialNumberForm({ productId, onSaved, onCancel }: SerialNumberF
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting || serialValues.length === 0}>
+          {isSubmitting ? <LoadingBar className="w-8" label="Registering" data-icon="inline-start" /> : null}
           {isSubmitting ? "Registering…" : "Register"}
         </Button>
       </div>

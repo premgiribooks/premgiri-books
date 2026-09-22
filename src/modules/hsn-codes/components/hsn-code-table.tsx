@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,21 +15,37 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateHsnCodeAction,
   deactivateHsnCodeAction,
 } from "@/modules/hsn-codes/actions/hsn-code-actions";
 import { HsnCodeStatusBadge } from "@/modules/hsn-codes/components/hsn-code-status-badge";
 import { HsnCodeTypeBadge } from "@/modules/hsn-codes/components/hsn-code-type-badge";
+import type { ActionResult } from "@/types/api";
 import type { HsnCode } from "@/types/hsn-code";
 
 interface HsnCodeTableProps {
   hsnCodes: HsnCode[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<HsnCode>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
-export function HsnCodeTable({ hsnCodes, canEdit = false, canManage = false }: HsnCodeTableProps) {
+export function HsnCodeTable({
+  hsnCodes: initialHsnCodes,
+  initialHasMore = false,
+  loadMore,
+  canEdit = false,
+  canManage = false,
+}: HsnCodeTableProps) {
+  const { items: hsnCodes, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialHsnCodes,
+    initialHasMore,
+    loadMore,
+  });
   // Tracked per row (not a single pending id) so two rows toggled
   // concurrently each keep their own disabled state — a lone id would be
   // overwritten by the second click and cleared by whichever action finishes
@@ -66,61 +83,64 @@ export function HsnCodeTable({ hsnCodes, canEdit = false, canManage = false }: H
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Code</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {hsnCodes.map((hsnCode) => (
-          <TableRow key={hsnCode.id}>
-            <TableCell>
-              <span className="font-financial font-medium text-foreground">{hsnCode.code}</span>
-            </TableCell>
-            <TableCell>
-              <HsnCodeTypeBadge codeType={hsnCode.codeType} />
-            </TableCell>
-            <TableCell>{hsnCode.description}</TableCell>
-            <TableCell>
-              <HsnCodeStatusBadge isActive={hsnCode.isActive} />
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex justify-end gap-2">
-                {canEdit ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    nativeButton={false}
-                    render={
-                      <Link
-                        href={`/masters/hsn-codes/${hsnCode.id}/edit`}
-                        aria-label="Edit HSN/SAC code"
-                      >
-                        <Pencil size={16} />
-                      </Link>
-                    }
-                  />
-                ) : null}
-                {canManage ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pendingIds.has(hsnCode.id)}
-                    onClick={() => handleToggleActive(hsnCode)}
-                  >
-                    {hsnCode.isActive ? "Deactivate" : "Activate"}
-                  </Button>
-                ) : null}
-              </div>
-            </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Code</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {hsnCodes.map((hsnCode) => (
+            <TableRow key={hsnCode.id}>
+              <TableCell>
+                <span className="font-financial font-medium text-foreground">{hsnCode.code}</span>
+              </TableCell>
+              <TableCell>
+                <HsnCodeTypeBadge codeType={hsnCode.codeType} />
+              </TableCell>
+              <TableCell>{hsnCode.description}</TableCell>
+              <TableCell>
+                <HsnCodeStatusBadge isActive={hsnCode.isActive} />
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  {canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/masters/hsn-codes/${hsnCode.id}/edit`}
+                          aria-label="Edit HSN/SAC code"
+                        >
+                          <Pencil size={16} />
+                        </Link>
+                      }
+                    />
+                  ) : null}
+                  {canManage ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingIds.has(hsnCode.id)}
+                      onClick={() => handleToggleActive(hsnCode)}
+                    >
+                      {hsnCode.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                  ) : null}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

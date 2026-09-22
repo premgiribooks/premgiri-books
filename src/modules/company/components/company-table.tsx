@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,15 +15,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateCompanyAction,
   deactivateCompanyAction,
 } from "@/modules/administration/actions/company-admin-actions";
 import { CompanyStatusBadge } from "@/modules/company/components/company-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { CompanyWithSettings } from "@/types/company";
 
 interface CompanyTableProps {
   companies: CompanyWithSettings[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<CompanyWithSettings>>>;
   // Activate/Deactivate (and the empty-state "Create Company" CTA) call
   // companyService.activateCompany/deactivateCompany, which assert
   // getCurrentSuperAdmin() — genuinely Super-Admin-only Platform
@@ -38,11 +44,18 @@ interface CompanyTableProps {
 }
 
 export function CompanyTable({
-  companies,
+  companies: initialCompanies,
+  initialHasMore = false,
+  loadMore,
   canManageStatus = false,
   canEdit = false,
   editBasePath = "/administration/companies",
 }: CompanyTableProps) {
+  const { items: companies, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialCompanies,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(company: CompanyWithSettings) {
@@ -75,7 +88,8 @@ export function CompanyTable({
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Company Name</TableHead>
@@ -138,6 +152,8 @@ export function CompanyTable({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

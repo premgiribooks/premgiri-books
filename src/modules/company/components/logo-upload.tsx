@@ -4,6 +4,7 @@ import * as React from "react";
 import NextImage from "next/image";
 import { Image as ImageIcon } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import {
   LOGO_ACCEPT_ATTRIBUTE,
@@ -97,6 +98,7 @@ export function LogoUpload({ value, onChange, disabled }: LogoUploadProps) {
             disabled={disabled || isUploading}
             onClick={() => inputRef.current?.click()}
           >
+            {isUploading ? <LoadingBar className="w-8" label="Uploading" data-icon="inline-start" /> : null}
             {isUploading ? "Uploading…" : "Upload logo"}
           </Button>
           {value && (

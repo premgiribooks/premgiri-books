@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,20 +15,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateGstRateAction,
   deactivateGstRateAction,
 } from "@/modules/gst-rates/actions/gst-rate-actions";
 import { GstRateStatusBadge } from "@/modules/gst-rates/components/gst-rate-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { GstRate } from "@/types/gst-rate";
 
 interface GstRateTableProps {
   gstRates: GstRate[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<GstRate>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
-export function GstRateTable({ gstRates, canEdit = false, canManage = false }: GstRateTableProps) {
+export function GstRateTable({
+  gstRates: initialGstRates,
+  initialHasMore = false,
+  loadMore,
+  canEdit = false,
+  canManage = false,
+}: GstRateTableProps) {
+  const { items: gstRates, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialGstRates,
+    initialHasMore,
+    loadMore,
+  });
   // Tracked per row (not a single pending id) so two rows toggled
   // concurrently each keep their own disabled state — a lone id would be
   // overwritten by the second click and cleared by whichever action finishes
@@ -66,63 +83,66 @@ export function GstRateTable({ gstRates, canEdit = false, canManage = false }: G
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead className="text-right">Rate %</TableHead>
-          <TableHead className="text-right">Cess %</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {gstRates.map((gstRate) => (
-          <TableRow key={gstRate.id}>
-            <TableCell>
-              <span className="font-medium text-foreground">{gstRate.name}</span>
-            </TableCell>
-            <TableCell className="text-right font-financial">
-              {gstRate.ratePercent.toFixed(2)}
-            </TableCell>
-            <TableCell className="text-right font-financial">
-              {gstRate.cessPercent.toFixed(2)}
-            </TableCell>
-            <TableCell>
-              <GstRateStatusBadge isActive={gstRate.isActive} />
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex justify-end gap-2">
-                {canEdit ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    nativeButton={false}
-                    render={
-                      <Link
-                        href={`/masters/gst-rates/${gstRate.id}/edit`}
-                        aria-label="Edit GST rate"
-                      >
-                        <Pencil size={16} />
-                      </Link>
-                    }
-                  />
-                ) : null}
-                {canManage ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pendingIds.has(gstRate.id)}
-                    onClick={() => handleToggleActive(gstRate)}
-                  >
-                    {gstRate.isActive ? "Deactivate" : "Activate"}
-                  </Button>
-                ) : null}
-              </div>
-            </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead className="text-right">Rate %</TableHead>
+            <TableHead className="text-right">Cess %</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {gstRates.map((gstRate) => (
+            <TableRow key={gstRate.id}>
+              <TableCell>
+                <span className="font-medium text-foreground">{gstRate.name}</span>
+              </TableCell>
+              <TableCell className="text-right font-financial">
+                {gstRate.ratePercent.toFixed(2)}
+              </TableCell>
+              <TableCell className="text-right font-financial">
+                {gstRate.cessPercent.toFixed(2)}
+              </TableCell>
+              <TableCell>
+                <GstRateStatusBadge isActive={gstRate.isActive} />
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  {canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={`/masters/gst-rates/${gstRate.id}/edit`}
+                          aria-label="Edit GST rate"
+                        >
+                          <Pencil size={16} />
+                        </Link>
+                      }
+                    />
+                  ) : null}
+                  {canManage ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingIds.has(gstRate.id)}
+                      onClick={() => handleToggleActive(gstRate)}
+                    >
+                      {gstRate.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                  ) : null}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

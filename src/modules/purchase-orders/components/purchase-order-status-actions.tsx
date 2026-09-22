@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import {
   cancelPurchaseOrderAction,
@@ -75,6 +76,7 @@ export function PurchaseOrderStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(confirmPurchaseOrderAction, "CONFIRMED", "Purchase order confirmed.")}
         >
+          {pending === "CONFIRMED" ? <LoadingBar className="w-8" label="Confirming" data-icon="inline-start" /> : null}
           {pending === "CONFIRMED" ? "Confirming…" : "Confirm"}
         </Button>
       ) : null}
@@ -85,6 +87,7 @@ export function PurchaseOrderStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(closePurchaseOrderAction, "CLOSED", "Purchase order closed.")}
         >
+          {pending === "CLOSED" ? <LoadingBar className="w-8" label="Closing" data-icon="inline-start" /> : null}
           {pending === "CLOSED" ? "Closing…" : "Close"}
         </Button>
       ) : null}
@@ -96,6 +99,7 @@ export function PurchaseOrderStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(cancelPurchaseOrderAction, "CANCELLED", "Purchase order cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

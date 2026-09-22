@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreAttendanceAction } from "@/modules/attendance/actions/attendance-actions";
 import { AttendanceHistoryFilterBar } from "@/modules/attendance/components/attendance-history-filter-bar";
 import { AttendanceHistoryTable } from "@/modules/attendance/components/attendance-history-table";
 import { attendanceService } from "@/modules/attendance/services/attendance-service";
@@ -73,9 +75,9 @@ export default async function AttendanceHistoryPage({ searchParams }: Attendance
 
   const filters = parseFilters(await searchParams);
 
-  const [employees, records, isAdmin] = await Promise.all([
+  const [employees, { items: records, hasMore }, isAdmin] = await Promise.all([
     employeeService.listSelectableEmployees(),
-    attendanceService.listAttendance(filters),
+    attendanceService.listAttendancePage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
   ]);
 
@@ -91,7 +93,12 @@ export default async function AttendanceHistoryPage({ searchParams }: Attendance
 
         <AttendanceHistoryFilterBar employees={employees} />
 
-        <AttendanceHistoryTable records={records} />
+        <AttendanceHistoryTable
+          key={JSON.stringify(filters)}
+          records={records}
+          initialHasMore={hasMore}
+          loadMore={loadMoreAttendanceAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

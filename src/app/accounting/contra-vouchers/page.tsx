@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreContraVouchersAction } from "@/modules/manual-vouchers/actions/contra-voucher-actions";
 import { ContraVoucherTable } from "@/modules/manual-vouchers/components/contra-voucher-table";
 import { contraVoucherService } from "@/modules/manual-vouchers/services/contra-voucher-service";
 import { paymentVoucherService } from "@/modules/manual-vouchers/services/payment-voucher-service";
@@ -17,8 +19,8 @@ export default async function ContraVoucherListPage() {
     redirect("/");
   }
 
-  const [vouchers, ledgerOptions, isAdmin, canCreate] = await Promise.all([
-    contraVoucherService.listContraVouchers(),
+  const [{ items: vouchers, hasMore }, ledgerOptions, isAdmin, canCreate] = await Promise.all([
+    contraVoucherService.listContraVouchersPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     paymentVoucherService.listLedgerOptions(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "accounting", "create"),
@@ -48,7 +50,12 @@ export default async function ContraVoucherListPage() {
           ) : null}
         </div>
 
-        <ContraVoucherTable vouchers={vouchers} ledgerNameById={ledgerNameById} />
+        <ContraVoucherTable
+          vouchers={vouchers}
+          ledgerNameById={ledgerNameById}
+          initialHasMore={hasMore}
+          loadMore={loadMoreContraVouchersAction.bind(null, {})}
+        />
       </div>
     </AppShell>
   );

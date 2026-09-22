@@ -1,15 +1,26 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { debitNoteService } from "@/modules/debit-notes/services/debit-note-service";
 import type { CreateDebitNoteInput, UpdateDebitNoteInput } from "@/modules/debit-notes/validation/debit-note-schema";
 import type { ActionResult } from "@/types/api";
-import type { DebitNoteDetail } from "@/types/debit-note";
+import type { DebitNoteDetail, DebitNoteListFilters, DebitNoteListRow } from "@/types/debit-note";
 
 const LIST_PATH = "/sales/debit-notes";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Debit Notes list — a pure read, so
+ * no paths are revalidated. */
+export async function loadMoreDebitNotesAction(
+  filters: DebitNoteListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<DebitNoteListRow>>> {
+  return runAction(() => debitNoteService.listDebitNotesPage(filters, { skip, take }), []);
 }
 
 export async function createDebitNoteDraftAction(input: CreateDebitNoteInput): Promise<ActionResult<DebitNoteDetail>> {

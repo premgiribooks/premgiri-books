@@ -1,15 +1,33 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { CreditNoteStatusBadge } from "@/modules/credit-notes/components/credit-note-status-badge";
 import { formatCreditNoteDate } from "@/modules/credit-notes/utils/format-credit-note-date";
+import type { ActionResult } from "@/types/api";
 import type { CreditNoteListRow } from "@/types/credit-note";
 
 interface CreditNoteTableProps {
   creditNotes: CreditNoteListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<CreditNoteListRow>>>;
 }
 
-export function CreditNoteTable({ creditNotes }: CreditNoteTableProps) {
+export function CreditNoteTable({
+  creditNotes: initialCreditNotes,
+  initialHasMore = false,
+  loadMore,
+}: CreditNoteTableProps) {
+  const { items: creditNotes, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialCreditNotes,
+    initialHasMore,
+    loadMore,
+  });
+
   if (creditNotes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -19,6 +37,7 @@ export function CreditNoteTable({ creditNotes }: CreditNoteTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -55,5 +74,7 @@ export function CreditNoteTable({ creditNotes }: CreditNoteTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

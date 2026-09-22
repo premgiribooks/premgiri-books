@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
@@ -322,6 +323,20 @@ export const quotationService = {
 
     await quotationRepository.expireOverdue(user.companyId, todayUtcDate());
     return quotationRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Quotations list page. */
+  async listQuotationsPage(filters: QuotationListFilters, page: PageParams): Promise<Page<QuotationListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+
+    await quotationRepository.expireOverdue(user.companyId, todayUtcDate());
+    return quotationRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   // Company-scoped only (not FY-scoped) — viewing one document by id needs

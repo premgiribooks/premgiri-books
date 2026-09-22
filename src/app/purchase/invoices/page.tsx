@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePurchaseInvoicesAction } from "@/modules/purchase-invoices/actions/purchase-invoice-actions";
 import { PurchaseInvoiceFilterBar } from "@/modules/purchase-invoices/components/purchase-invoice-filter-bar";
 import { PurchaseInvoiceTable } from "@/modules/purchase-invoices/components/purchase-invoice-table";
 import { purchaseInvoiceService } from "@/modules/purchase-invoices/services/purchase-invoice-service";
@@ -51,8 +53,8 @@ export default async function PurchaseInvoiceListPage({ searchParams }: Purchase
 
   const filters = parseFilters(await searchParams);
 
-  const [purchaseInvoices, suppliers, isAdmin, canCreate] = await Promise.all([
-    purchaseInvoiceService.listPurchaseInvoices(filters),
+  const [{ items: purchaseInvoices, hasMore }, suppliers, isAdmin, canCreate] = await Promise.all([
+    purchaseInvoiceService.listPurchaseInvoicesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     supplierService.listSelectableSuppliers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "create"),
@@ -91,7 +93,12 @@ export default async function PurchaseInvoiceListPage({ searchParams }: Purchase
           }))}
         />
 
-        <PurchaseInvoiceTable purchaseInvoices={purchaseInvoices} />
+        <PurchaseInvoiceTable
+          key={JSON.stringify(filters)}
+          purchaseInvoices={purchaseInvoices}
+          initialHasMore={hasMore}
+          loadMore={loadMorePurchaseInvoicesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

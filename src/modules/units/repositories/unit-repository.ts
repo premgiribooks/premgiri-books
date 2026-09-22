@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -43,6 +44,24 @@ export const unitRepository = {
       where: buildWhere(companyId, filters),
       orderBy: { name: "asc" },
     });
+  },
+
+  /** Infinite-scroll page for the Units list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: UnitListFilters,
+    page: PageParams
+  ): Promise<Page<Unit>> {
+    return fetchPage(
+      (args) =>
+        prisma.unit.findMany({
+          where: buildWhere(companyId, filters),
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
   },
 
   async findById(id: string): Promise<Unit | null> {

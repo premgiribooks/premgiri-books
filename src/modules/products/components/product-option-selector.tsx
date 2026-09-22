@@ -25,6 +25,9 @@ interface ProductOptionSelectorProps {
   emptyLabel?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** Forwarded to SearchableSelect — shows the shared loading indicator
+   * while the caller is resolving something async tied to this field. */
+  isLoading?: boolean;
   /** Forwarded to the trigger so FormControl can wire label/description/error
    * associations (id, aria-describedby, aria-invalid). */
   id?: string;
@@ -54,6 +57,7 @@ export function ProductOptionSelector({
   emptyLabel = "No options",
   placeholder,
   disabled,
+  isLoading,
   ...triggerProps
 }: ProductOptionSelectorProps) {
   return (
@@ -68,6 +72,7 @@ export function ProductOptionSelector({
       emptyLabel={emptyLabel}
       placeholder={placeholder}
       disabled={disabled}
+      isLoading={isLoading}
       {...triggerProps}
     />
   );

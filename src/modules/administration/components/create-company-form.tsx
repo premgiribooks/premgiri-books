@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -236,6 +237,7 @@ export function CreateCompanyForm() {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Creating" data-icon="inline-start" /> : null}
             {isSubmitting ? "Creating…" : "Create Company"}
           </Button>
         </div>

@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { priceListService } from "@/modules/price-lists/services/price-list-service";
 import type {
@@ -9,12 +10,28 @@ import type {
   UpdatePriceListItemInput,
 } from "@/modules/price-lists/validation/price-list-schema";
 import type { ActionResult } from "@/types/api";
-import type { PriceList, PriceListDetail, PriceListItemWithProduct } from "@/types/price-list";
+import type {
+  PriceList,
+  PriceListDetail,
+  PriceListItemWithProduct,
+  PriceListListFilters,
+  PriceListWithItemCount,
+} from "@/types/price-list";
 
 const LIST_PATH = "/masters/price-lists";
 
 function editPath(id: string): string {
   return `/masters/price-lists/${id}/edit`;
+}
+
+/** Infinite-scroll "load more" for the Price Lists list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMorePriceListsAction(
+  filters: PriceListListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PriceListWithItemCount>>> {
+  return runAction(() => priceListService.listPriceListsPage(filters, { skip, take }), []);
 }
 
 export async function createPriceListAction(

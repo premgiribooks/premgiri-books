@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreCustomersAction } from "@/modules/customers/actions/customer-actions";
 import { CustomerFilterBar } from "@/modules/customers/components/customer-filter-bar";
 import { CustomerTable } from "@/modules/customers/components/customer-table";
 import { customerService } from "@/modules/customers/services/customer-service";
@@ -53,8 +55,8 @@ export default async function CustomerListPage({ searchParams }: CustomerListPag
 
   const filters = parseFilters(await searchParams);
 
-  const [customers, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    customerService.listCustomers(filters),
+  const [{ items: customers, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    customerService.listCustomersPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "masters", "create"),
     hasPermission(user, "masters", "edit"),
@@ -93,7 +95,14 @@ export default async function CustomerListPage({ searchParams }: CustomerListPag
 
         <CustomerFilterBar />
 
-        <CustomerTable customers={customers} canEdit={canEdit} canManage={canManage} />
+        <CustomerTable
+          key={JSON.stringify(filters)}
+          customers={customers}
+          initialHasMore={hasMore}
+          loadMore={loadMoreCustomersAction.bind(null, filters)}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

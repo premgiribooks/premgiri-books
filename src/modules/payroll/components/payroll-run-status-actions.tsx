@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import {
   cancelPayrollRunAction,
   postPayrollRunAction,
@@ -60,12 +61,14 @@ export function PayrollRunStatusActions({ payrollRun, canRefresh, canApprove }: 
           disabled={isBusy}
           onClick={() => runTransition(refreshPayrollRunDraftAction, "REFRESH", "Payroll run refreshed.")}
         >
+          {pending === "REFRESH" ? <LoadingBar className="w-8" label="Refreshing" data-icon="inline-start" /> : null}
           {pending === "REFRESH" ? "Refreshing…" : "Refresh"}
         </Button>
       ) : null}
 
       {canApprove && payrollRun.status === "DRAFT" ? (
         <Button size="sm" disabled={isBusy} onClick={() => runTransition(postPayrollRunAction, "POSTED", "Payroll run posted.")}>
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -77,6 +80,7 @@ export function PayrollRunStatusActions({ payrollRun, canRefresh, canApprove }: 
           disabled={isBusy}
           onClick={() => runTransition(cancelPayrollRunAction, "CANCELLED", "Payroll run cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

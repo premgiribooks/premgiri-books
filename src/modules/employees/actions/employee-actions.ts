@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { employeeService } from "@/modules/employees/services/employee-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdateEmployeeInput,
 } from "@/modules/employees/validation/employee-schema";
 import type { ActionResult } from "@/types/api";
-import type { Employee } from "@/types/employee";
+import type { Employee, EmployeeListFilters, EmployeeWithRelations } from "@/types/employee";
 
 const LIST_PATH = "/masters/employees";
+
+/** Infinite-scroll "load more" for the Employees list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreEmployeesAction(
+  filters: EmployeeListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<EmployeeWithRelations>>> {
+  return runAction(() => employeeService.listEmployeesPage(filters, { skip, take }), []);
+}
 
 export async function createEmployeeAction(
   input: CreateEmployeeInput

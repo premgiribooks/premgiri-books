@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { cancelPurchaseReturnAction, postPurchaseReturnAction } from "@/modules/purchase-returns/actions/purchase-return-actions";
 import type { ActionResult } from "@/types/api";
 import type { PurchaseReturnDetail, PurchaseReturnStatus } from "@/types/purchase-return";
@@ -55,6 +56,7 @@ export function PurchaseReturnStatusActions({ purchaseReturn, canPost, canCancel
           disabled={isBusy}
           onClick={() => runTransition(postPurchaseReturnAction, "POSTED", "Purchase return posted.")}
         >
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -66,6 +68,7 @@ export function PurchaseReturnStatusActions({ purchaseReturn, canPost, canCancel
           disabled={isBusy}
           onClick={() => runTransition(cancelPurchaseReturnAction, "CANCELLED", "Purchase return cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

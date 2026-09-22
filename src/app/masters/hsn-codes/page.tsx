@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreHsnCodesAction } from "@/modules/hsn-codes/actions/hsn-code-actions";
 import { hsnCodeService } from "@/modules/hsn-codes/services/hsn-code-service";
 import { HsnCodeTable } from "@/modules/hsn-codes/components/hsn-code-table";
 
@@ -16,8 +18,8 @@ export default async function HsnCodeListPage() {
     redirect("/");
   }
 
-  const [hsnCodes, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    hsnCodeService.listHsnCodes(),
+  const [{ items: hsnCodes, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    hsnCodeService.listHsnCodesPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "masters", "create"),
     hasPermission(user, "masters", "edit"),
@@ -54,7 +56,13 @@ export default async function HsnCodeListPage() {
           ) : null}
         </div>
 
-        <HsnCodeTable hsnCodes={hsnCodes} canEdit={canEdit} canManage={canManage} />
+        <HsnCodeTable
+          hsnCodes={hsnCodes}
+          initialHasMore={hasMore}
+          loadMore={loadMoreHsnCodesAction.bind(null, {})}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

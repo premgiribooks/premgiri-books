@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreEmployeesAction } from "@/modules/employees/actions/employee-actions";
 import { EmployeeFilterBar } from "@/modules/employees/components/employee-filter-bar";
 import { EmployeeTable } from "@/modules/employees/components/employee-table";
 import { employeeService } from "@/modules/employees/services/employee-service";
@@ -47,8 +49,8 @@ export default async function EmployeeListPage({ searchParams }: EmployeeListPag
 
   const filters = parseFilters(await searchParams);
 
-  const [employees, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    employeeService.listEmployees(filters),
+  const [{ items: employees, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    employeeService.listEmployeesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "employees", "create"),
     hasPermission(user, "employees", "edit"),
@@ -87,7 +89,14 @@ export default async function EmployeeListPage({ searchParams }: EmployeeListPag
 
         <EmployeeFilterBar />
 
-        <EmployeeTable employees={employees} canEdit={canEdit} canManage={canManage} />
+        <EmployeeTable
+          key={JSON.stringify(filters)}
+          employees={employees}
+          initialHasMore={hasMore}
+          loadMore={loadMoreEmployeesAction.bind(null, filters)}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

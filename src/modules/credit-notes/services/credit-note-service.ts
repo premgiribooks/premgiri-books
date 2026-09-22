@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getLedgerPaymentClassMap } from "@/lib/ledger-class";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -306,6 +307,18 @@ export const creditNoteService = {
       return [];
     }
     return creditNoteRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Credit Notes list page. */
+  async listCreditNotesPage(filters: CreditNoteListFilters, page: PageParams): Promise<Page<CreditNoteListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return creditNoteRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   async getCreditNote(id: string): Promise<CreditNoteDetail | null> {

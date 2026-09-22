@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreMarginProfilesAction } from "@/modules/margin-profiles/actions/margin-profile-actions";
 import { MarginProfileFilterBar } from "@/modules/margin-profiles/components/margin-profile-filter-bar";
 import { MarginProfileTable } from "@/modules/margin-profiles/components/margin-profile-table";
 import { marginProfileService } from "@/modules/margin-profiles/services/margin-profile-service";
@@ -51,13 +53,14 @@ export default async function MarginProfileListPage({
 
   const filters = parseFilters(await searchParams);
 
-  const [marginProfiles, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    marginProfileService.listMarginProfiles(filters),
-    isCurrentUserCompanyAdmin(),
-    hasPermission(user, "masters", "create"),
-    hasPermission(user, "masters", "edit"),
-    hasPermission(user, "masters", "delete"),
-  ]);
+  const [{ items: marginProfiles, hasMore }, isAdmin, canCreate, canEdit, canManage] =
+    await Promise.all([
+      marginProfileService.listMarginProfilesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
+      isCurrentUserCompanyAdmin(),
+      hasPermission(user, "masters", "create"),
+      hasPermission(user, "masters", "edit"),
+      hasPermission(user, "masters", "delete"),
+    ]);
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -92,7 +95,10 @@ export default async function MarginProfileListPage({
         <MarginProfileFilterBar />
 
         <MarginProfileTable
+          key={JSON.stringify(filters)}
           marginProfiles={marginProfiles}
+          initialHasMore={hasMore}
+          loadMore={loadMoreMarginProfilesAction.bind(null, filters)}
           canEdit={canEdit}
           canManage={canManage}
         />

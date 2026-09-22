@@ -5,8 +5,10 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { customerService } from "@/modules/customers/services/customer-service";
+import { loadMoreQuotationsAction } from "@/modules/quotations/actions/quotation-actions";
 import { QuotationFilterBar } from "@/modules/quotations/components/quotation-filter-bar";
 import { QuotationTable } from "@/modules/quotations/components/quotation-table";
 import { quotationService } from "@/modules/quotations/services/quotation-service";
@@ -54,8 +56,8 @@ export default async function QuotationListPage({ searchParams }: QuotationListP
 
   const filters = parseFilters(await searchParams);
 
-  const [quotations, customers, isAdmin, canCreate] = await Promise.all([
-    quotationService.listQuotations(filters),
+  const [{ items: quotations, hasMore }, customers, isAdmin, canCreate] = await Promise.all([
+    quotationService.listQuotationsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     customerService.listSelectableCustomers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
@@ -92,7 +94,12 @@ export default async function QuotationListPage({ searchParams }: QuotationListP
           }))}
         />
 
-        <QuotationTable quotations={quotations} />
+        <QuotationTable
+          key={JSON.stringify(filters)}
+          quotations={quotations}
+          initialHasMore={hasMore}
+          loadMore={loadMoreQuotationsAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

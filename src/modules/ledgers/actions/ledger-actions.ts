@@ -1,12 +1,23 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { ledgerService } from "@/modules/ledgers/services/ledger-service";
 import type { CreateLedgerInput, UpdateLedgerInput } from "@/modules/ledgers/validation/ledger-schema";
 import type { ActionResult } from "@/types/api";
-import type { Ledger } from "@/types/ledger";
+import type { Ledger, LedgerListFilters, LedgerWithGroup } from "@/types/ledger";
 
 const LIST_PATH = "/accounting/ledgers";
+
+/** Infinite-scroll "load more" for the Ledgers list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreLedgersAction(
+  filters: LedgerListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<LedgerWithGroup>>> {
+  return runAction(() => ledgerService.listLedgersPage(filters, { skip, take }), []);
+}
 
 export async function createLedgerAction(input: CreateLedgerInput): Promise<ActionResult<Ledger>> {
   return runAction(() => ledgerService.createLedger(input), [LIST_PATH]);

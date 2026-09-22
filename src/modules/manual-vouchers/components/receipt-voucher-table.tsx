@@ -1,14 +1,22 @@
+"use client";
+
 import Link from "next/link";
 import { Eye } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { PostedVoucher } from "@/engines/voucher/types";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
+import type { ActionResult } from "@/types/api";
 
 interface ReceiptVoucherTableProps {
   vouchers: PostedVoucher[];
   ledgerNameById: ReadonlyMap<string, string>;
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<PostedVoucher>>>;
 }
 
 function formatDate(date: Date): string {
@@ -23,7 +31,17 @@ function receivedFromSummary(voucher: PostedVoucher, ledgerNameById: ReadonlyMap
   return creditLedgerIds.map((id) => ledgerNameById.get(id) ?? "—").join(", ");
 }
 
-export function ReceiptVoucherTable({ vouchers, ledgerNameById }: ReceiptVoucherTableProps) {
+export function ReceiptVoucherTable({
+  vouchers: initialVouchers,
+  ledgerNameById,
+  initialHasMore = false,
+  loadMore,
+}: ReceiptVoucherTableProps) {
+  const { items: vouchers, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialVouchers,
+    initialHasMore,
+    loadMore,
+  });
   if (vouchers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -33,7 +51,8 @@ export function ReceiptVoucherTable({ vouchers, ledgerNameById }: ReceiptVoucher
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Number</TableHead>
@@ -78,6 +97,8 @@ export function ReceiptVoucherTable({ vouchers, ledgerNameById }: ReceiptVoucher
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

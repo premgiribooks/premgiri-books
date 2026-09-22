@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { ledgerGroupRepository } from "@/modules/ledger-groups/repositories/ledger-group-repository";
 import {
@@ -103,6 +104,13 @@ export const ledgerService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "accounting", "view");
     return ledgerRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Ledgers list page. */
+  async listLedgersPage(filters: LedgerListFilters, page: PageParams): Promise<Page<LedgerWithGroup>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "accounting", "view");
+    return ledgerRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A ledger belonging to a different company must resolve identically to

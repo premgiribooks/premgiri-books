@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { numericFieldWidth } from "@/lib/utils";
 import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding-balance";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { getLedgerOutstandingBalanceAction } from "@/modules/manual-vouchers/actions/payment-voucher-actions";
 import { createReceiptVoucherAction } from "@/modules/manual-vouchers/actions/receipt-voucher-actions";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
@@ -298,6 +299,7 @@ export function ReceiptVoucherForm({ ledgerOptions, paymentModes, prefill }: Rec
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
             {isSubmitting ? "Posting…" : "Post Receipt Voucher"}
           </Button>
         </div>

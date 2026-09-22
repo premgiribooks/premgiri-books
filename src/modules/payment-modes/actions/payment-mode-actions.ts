@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdatePaymentModeInput,
 } from "@/modules/payment-modes/validation/payment-mode-schema";
 import type { ActionResult } from "@/types/api";
-import type { PaymentMode } from "@/types/payment-mode";
+import type { PaymentMode, PaymentModeListFilters } from "@/types/payment-mode";
 
 const LIST_PATH = "/accounting/payment-modes";
+
+/** Infinite-scroll "load more" for the Payment Modes list — a pure read, so
+ * no paths are revalidated. */
+export async function loadMorePaymentModesAction(
+  filters: PaymentModeListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PaymentMode>>> {
+  return runAction(() => paymentModeService.listPaymentModesPage(filters, { skip, take }), []);
+}
 
 export async function createPaymentModeAction(
   input: CreatePaymentModeInput

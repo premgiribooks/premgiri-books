@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { downloadOrPrintDocument } from "@/lib/pdf-client";
 
 interface DeliveryChallanDownloadPdfButtonProps {
@@ -41,7 +42,7 @@ export function DeliveryChallanDownloadPdfButton({ deliveryChallanId }: Delivery
 
   return (
     <Button type="button" variant="outline" onClick={handleDownload} disabled={isPreparing}>
-      <Download size={16} />
+      {isPreparing ? <LoadingBar className="w-8" label="Preparing" /> : <Download size={16} />}
       {isPreparing ? "Preparing…" : "Download PDF"}
     </Button>
   );

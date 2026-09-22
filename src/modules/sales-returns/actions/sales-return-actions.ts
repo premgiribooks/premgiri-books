@@ -1,16 +1,33 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { salesReturnService } from "@/modules/sales-returns/services/sales-return-service";
 import type { CreateSalesReturnInput, UpdateSalesReturnInput } from "@/modules/sales-returns/validation/sales-return-schema";
 import type { ActionResult } from "@/types/api";
-import type { ReturnableInvoiceDetail, ReturnableInvoiceOption, SalesReturnDetail } from "@/types/sales-return";
+import type {
+  ReturnableInvoiceDetail,
+  ReturnableInvoiceOption,
+  SalesReturnDetail,
+  SalesReturnListFilters,
+  SalesReturnListRow,
+} from "@/types/sales-return";
 
 const LIST_PATH = "/sales/returns";
 const INVOICE_LIST_PATH = "/sales/invoices";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Sales Returns list — a pure read, so
+ * no paths are revalidated. */
+export async function loadMoreSalesReturnsAction(
+  filters: SalesReturnListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<SalesReturnListRow>>> {
+  return runAction(() => salesReturnService.listSalesReturnsPage(filters, { skip, take }), []);
 }
 
 export async function createSalesReturnDraftAction(input: CreateSalesReturnInput): Promise<ActionResult<SalesReturnDetail>> {

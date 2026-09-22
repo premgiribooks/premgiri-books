@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import {
@@ -56,6 +57,16 @@ export const warehouseService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return warehouseRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Warehouses list page. */
+  async listWarehousesPage(
+    filters: WarehouseListFilters,
+    page: PageParams
+  ): Promise<Page<WarehouseWithBranch>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return warehouseRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A warehouse belonging to a different company must resolve identically to

@@ -5,8 +5,10 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { supplierService } from "@/modules/suppliers/services/supplier-service";
+import { loadMorePurchaseOrdersAction } from "@/modules/purchase-orders/actions/purchase-order-actions";
 import { PurchaseOrderFilterBar } from "@/modules/purchase-orders/components/purchase-order-filter-bar";
 import { PurchaseOrderTable } from "@/modules/purchase-orders/components/purchase-order-table";
 import { purchaseOrderService } from "@/modules/purchase-orders/services/purchase-order-service";
@@ -54,8 +56,8 @@ export default async function PurchaseOrderListPage({ searchParams }: PurchaseOr
 
   const filters = parseFilters(await searchParams);
 
-  const [purchaseOrders, suppliers, isAdmin, canCreate] = await Promise.all([
-    purchaseOrderService.listPurchaseOrders(filters),
+  const [{ items: purchaseOrders, hasMore }, suppliers, isAdmin, canCreate] = await Promise.all([
+    purchaseOrderService.listPurchaseOrdersPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     supplierService.listSelectableSuppliers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "create"),
@@ -92,7 +94,12 @@ export default async function PurchaseOrderListPage({ searchParams }: PurchaseOr
           }))}
         />
 
-        <PurchaseOrderTable purchaseOrders={purchaseOrders} />
+        <PurchaseOrderTable
+          key={JSON.stringify(filters)}
+          purchaseOrders={purchaseOrders}
+          initialHasMore={hasMore}
+          loadMore={loadMorePurchaseOrdersAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePurchaseReturnsAction } from "@/modules/purchase-returns/actions/purchase-return-actions";
 import { PurchaseReturnFilterBar } from "@/modules/purchase-returns/components/purchase-return-filter-bar";
 import { PurchaseReturnTable } from "@/modules/purchase-returns/components/purchase-return-table";
 import { purchaseReturnService } from "@/modules/purchase-returns/services/purchase-return-service";
@@ -45,8 +47,8 @@ export default async function PurchaseReturnListPage({ searchParams }: PurchaseR
 
   const filters = parseFilters(await searchParams);
 
-  const [purchaseReturns, isAdmin, canCreate] = await Promise.all([
-    purchaseReturnService.listPurchaseReturns(filters),
+  const [{ items: purchaseReturns, hasMore }, isAdmin, canCreate] = await Promise.all([
+    purchaseReturnService.listPurchaseReturnsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "create"),
   ]);
@@ -77,7 +79,12 @@ export default async function PurchaseReturnListPage({ searchParams }: PurchaseR
 
         <PurchaseReturnFilterBar />
 
-        <PurchaseReturnTable purchaseReturns={purchaseReturns} />
+        <PurchaseReturnTable
+          key={JSON.stringify(filters)}
+          purchaseReturns={purchaseReturns}
+          initialHasMore={hasMore}
+          loadMore={loadMorePurchaseReturnsAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

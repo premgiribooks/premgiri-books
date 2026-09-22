@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { runInTransaction } from "@/lib/transaction";
 import { auditLogService } from "@/modules/administration/services/audit-log-service";
@@ -40,6 +41,16 @@ export const bankAccountService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "accounting", "view");
     return bankAccountRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Bank Accounts list page. */
+  async listBankAccountsPage(
+    filters: BankAccountListFilters,
+    page: PageParams
+  ): Promise<Page<BankAccountWithLedger>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "accounting", "view");
+    return bankAccountRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A bank account belonging to a different company must resolve

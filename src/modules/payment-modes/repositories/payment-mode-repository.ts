@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -49,6 +50,24 @@ export const paymentModeRepository = {
       where: buildWhere(companyId, filters),
       orderBy: { name: "asc" },
     });
+  },
+
+  /** Infinite-scroll page for the Payment Modes list — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: PaymentModeListFilters,
+    page: PageParams
+  ): Promise<Page<PaymentMode>> {
+    return fetchPage(
+      (args) =>
+        prisma.paymentMode.findMany({
+          where: buildWhere(companyId, filters),
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
   },
 
   async findActive(companyId: string): Promise<PaymentMode[]> {

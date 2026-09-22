@@ -1,6 +1,7 @@
 import { Prisma, type GoodsReceiptNoteStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
   GoodsReceiptNoteDetail,
@@ -132,6 +133,27 @@ export const goodsReceiptNoteRepository = {
       orderBy: [{ grnDate: "desc" }, { grnNumber: "desc" }],
     });
     return rows.map(toGoodsReceiptNoteListRow);
+  },
+
+  /** Infinite-scroll page for the Goods Receipt Notes list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: GoodsReceiptNoteListFilters,
+    page: PageParams
+  ): Promise<Page<GoodsReceiptNoteListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.goodsReceiptNote.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...SUPPLIER_INCLUDE, ...PURCHASE_ORDER_INCLUDE, items: { select: { id: true } } },
+          orderBy: [{ grnDate: "desc" }, { grnNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toGoodsReceiptNoteListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<GoodsReceiptNoteDetail | null> {

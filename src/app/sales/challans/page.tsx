@@ -5,8 +5,10 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { customerService } from "@/modules/customers/services/customer-service";
+import { loadMoreDeliveryChallansAction } from "@/modules/delivery-challans/actions/delivery-challan-actions";
 import { DeliveryChallanFilterBar } from "@/modules/delivery-challans/components/delivery-challan-filter-bar";
 import { DeliveryChallanTable } from "@/modules/delivery-challans/components/delivery-challan-table";
 import { deliveryChallanService } from "@/modules/delivery-challans/services/delivery-challan-service";
@@ -54,8 +56,8 @@ export default async function DeliveryChallanListPage({ searchParams }: Delivery
 
   const filters = parseFilters(await searchParams);
 
-  const [deliveryChallans, customers, isAdmin, canCreate] = await Promise.all([
-    deliveryChallanService.listDeliveryChallans(filters),
+  const [{ items: deliveryChallans, hasMore }, customers, isAdmin, canCreate] = await Promise.all([
+    deliveryChallanService.listDeliveryChallansPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     customerService.listSelectableCustomers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
@@ -93,7 +95,12 @@ export default async function DeliveryChallanListPage({ searchParams }: Delivery
           }))}
         />
 
-        <DeliveryChallanTable deliveryChallans={deliveryChallans} />
+        <DeliveryChallanTable
+          key={JSON.stringify(filters)}
+          deliveryChallans={deliveryChallans}
+          initialHasMore={hasMore}
+          loadMore={loadMoreDeliveryChallansAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

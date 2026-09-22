@@ -2,7 +2,9 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertPermission } from "@/lib/permissions";
+import type { Page, PageParams } from "@/lib/pagination";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
+import { voucherRepository } from "@/modules/vouchers/repositories/voucher-repository";
 import type { PostedVoucher, VoucherListFilters } from "@/engines/voucher/types";
 import {
   createJournalVoucherSchema,
@@ -39,6 +41,25 @@ export const journalVoucherService = {
       voucherType: "JOURNAL",
       financialYearId: financialYear.id,
     });
+  },
+
+  /** Infinite-scroll page for the Journal Vouchers list. */
+  async listJournalVouchersPage(
+    filters: Omit<VoucherListFilters, "voucherType">,
+    page: PageParams
+  ): Promise<Page<PostedVoucher>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, MODULE, "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return voucherRepository.findManyPage(
+      user.companyId,
+      { ...filters, voucherType: "JOURNAL", financialYearId: financialYear.id },
+      page
+    );
   },
 
   // A voucher belonging to a different company, or one that isn't a Journal

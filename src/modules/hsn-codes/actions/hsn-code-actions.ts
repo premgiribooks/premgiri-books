@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { hsnCodeService } from "@/modules/hsn-codes/services/hsn-code-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdateHsnCodeInput,
 } from "@/modules/hsn-codes/validation/hsn-code-schema";
 import type { ActionResult } from "@/types/api";
-import type { HsnCode } from "@/types/hsn-code";
+import type { HsnCode, HsnCodeListFilters } from "@/types/hsn-code";
 
 const LIST_PATH = "/masters/hsn-codes";
+
+/** Infinite-scroll "load more" for the HSN Codes list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreHsnCodesAction(
+  filters: HsnCodeListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<HsnCode>>> {
+  return runAction(() => hsnCodeService.listHsnCodesPage(filters, { skip, take }), []);
+}
 
 export async function createHsnCodeAction(
   input: CreateHsnCodeInput

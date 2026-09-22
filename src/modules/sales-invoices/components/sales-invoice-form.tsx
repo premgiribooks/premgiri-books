@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
 import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding-balance";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -459,6 +460,7 @@ export function SalesInvoiceForm({ options, salesInvoice, deliveryChallanPrefill
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Save Draft"}
           </Button>
         </div>

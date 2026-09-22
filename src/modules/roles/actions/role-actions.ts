@@ -4,10 +4,22 @@ import type { Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import type { Page } from "@/lib/pagination";
 import { assertNotRestoring } from "@/lib/restore-lock";
+import { runAction } from "@/lib/run-action";
 import { roleService } from "@/modules/roles/services/role-service";
 import type { RoleFormInput } from "@/modules/roles/validation/role-schema";
 import type { ActionResult } from "@/types/api";
+import type { RoleWithPermissionCount } from "@/types/role";
+
+/** Infinite-scroll "load more" for the Roles list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreRolesAction(
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<RoleWithPermissionCount>>> {
+  return runAction(() => roleService.listRolesPage({ skip, take }), []);
+}
 
 export async function createRoleAction(input: RoleFormInput): Promise<ActionResult<Role>> {
   let role: Role;

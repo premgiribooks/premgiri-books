@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -185,6 +186,7 @@ export function GstRateForm({ gstRate }: GstRateFormProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create GST Rate"}
           </Button>
         </div>

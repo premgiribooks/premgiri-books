@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { gstRateService } from "@/modules/gst-rates/services/gst-rate-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdateGstRateInput,
 } from "@/modules/gst-rates/validation/gst-rate-schema";
 import type { ActionResult } from "@/types/api";
-import type { GstRate } from "@/types/gst-rate";
+import type { GstRate, GstRateListFilters } from "@/types/gst-rate";
 
 const LIST_PATH = "/masters/gst-rates";
+
+/** Infinite-scroll "load more" for the GST Rates list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreGstRatesAction(
+  filters: GstRateListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<GstRate>>> {
+  return runAction(() => gstRateService.listGstRatesPage(filters, { skip, take }), []);
+}
 
 export async function createGstRateAction(
   input: CreateGstRateInput

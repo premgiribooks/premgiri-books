@@ -3,11 +3,23 @@
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import type { Page } from "@/lib/pagination";
 import { assertNotRestoring } from "@/lib/restore-lock";
+import { runAction } from "@/lib/run-action";
 import { userService } from "@/modules/users/services/user-service";
 import type { UserFormInput } from "@/modules/users/validation/user-schema";
 import type { ActionResult } from "@/types/api";
-import type { UserWithRole } from "@/types/user";
+import type { UserListFilters, UserWithRole } from "@/types/user";
+
+/** Infinite-scroll "load more" for the Users list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreUsersAction(
+  filters: UserListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<UserWithRole>>> {
+  return runAction(() => userService.listUsersPage(filters, { skip, take }), []);
+}
 
 export async function createUserAction(
   input: UserFormInput

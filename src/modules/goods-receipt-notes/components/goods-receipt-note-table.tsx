@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import {
   Table,
   TableBody,
@@ -8,15 +11,35 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { GoodsReceiptNoteStatusBadge } from "@/modules/goods-receipt-notes/components/goods-receipt-note-status-badge";
 import { formatGoodsReceiptNoteDate } from "@/modules/goods-receipt-notes/utils/format-goods-receipt-note-date";
+import type { ActionResult } from "@/types/api";
 import type { GoodsReceiptNoteListRow } from "@/types/goods-receipt-note";
 
 interface GoodsReceiptNoteTableProps {
   goodsReceiptNotes: GoodsReceiptNoteListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<GoodsReceiptNoteListRow>>>;
 }
 
-export function GoodsReceiptNoteTable({ goodsReceiptNotes }: GoodsReceiptNoteTableProps) {
+export function GoodsReceiptNoteTable({
+  goodsReceiptNotes: initialGoodsReceiptNotes,
+  initialHasMore = false,
+  loadMore,
+}: GoodsReceiptNoteTableProps) {
+  const {
+    items: goodsReceiptNotes,
+    hasMore,
+    isLoading,
+    sentinelRef,
+  } = useInfiniteList({
+    initialItems: initialGoodsReceiptNotes,
+    initialHasMore,
+    loadMore,
+  });
+
   if (goodsReceiptNotes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -26,7 +49,8 @@ export function GoodsReceiptNoteTable({ goodsReceiptNotes }: GoodsReceiptNoteTab
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Number</TableHead>
@@ -75,6 +99,8 @@ export function GoodsReceiptNoteTable({ goodsReceiptNotes }: GoodsReceiptNoteTab
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

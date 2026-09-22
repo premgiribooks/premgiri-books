@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import {
@@ -75,6 +76,16 @@ export const employeeService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "employees", "view");
     return employeeRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Employees list page. */
+  async listEmployeesPage(
+    filters: EmployeeListFilters,
+    page: PageParams
+  ): Promise<Page<EmployeeWithRelations>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "employees", "view");
+    return employeeRepository.findManyPage(user.companyId, filters, page);
   },
 
   // An employee belonging to a different company must resolve identically to

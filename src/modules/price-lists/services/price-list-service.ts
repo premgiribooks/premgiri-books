@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { pricingEngine } from "@/engines/pricing/pricing-engine";
@@ -86,6 +87,16 @@ export const priceListService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return priceListRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Price Lists list page. */
+  async listPriceListsPage(
+    filters: PriceListListFilters,
+    page: PageParams
+  ): Promise<Page<PriceListWithItemCount>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return priceListRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A list belonging to a different company must resolve identically to

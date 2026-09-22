@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { numericFieldWidth } from "@/lib/utils";
 import { LedgerOutstandingBalance } from "@/components/common/ledger-outstanding-balance";
+import { LoadingBar } from "@/components/common/loading-bar";
 import {
   createPaymentVoucherAction,
   getLedgerOutstandingBalanceAction,
@@ -298,6 +299,7 @@ export function PaymentVoucherForm({ ledgerOptions, paymentModes, prefill }: Pay
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
             {isSubmitting ? "Posting…" : "Post Payment Voucher"}
           </Button>
         </div>

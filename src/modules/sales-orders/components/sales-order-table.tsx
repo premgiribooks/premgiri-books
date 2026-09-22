@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import {
   Table,
   TableBody,
@@ -8,16 +11,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { SalesOrderFulfillmentProgress } from "@/modules/sales-orders/components/sales-order-fulfillment-progress";
 import { SalesOrderStatusBadge } from "@/modules/sales-orders/components/sales-order-status-badge";
 import { formatSalesOrderDate } from "@/modules/sales-orders/utils/format-sales-order-date";
+import type { ActionResult } from "@/types/api";
 import type { SalesOrderListRow } from "@/types/sales-order";
 
 interface SalesOrderTableProps {
   salesOrders: SalesOrderListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<SalesOrderListRow>>>;
 }
 
-export function SalesOrderTable({ salesOrders }: SalesOrderTableProps) {
+export function SalesOrderTable({
+  salesOrders: initialSalesOrders,
+  initialHasMore = false,
+  loadMore,
+}: SalesOrderTableProps) {
+  const { items: salesOrders, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialSalesOrders,
+    initialHasMore,
+    loadMore,
+  });
+
   if (salesOrders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -27,6 +45,7 @@ export function SalesOrderTable({ salesOrders }: SalesOrderTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -73,5 +92,7 @@ export function SalesOrderTable({ salesOrders }: SalesOrderTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

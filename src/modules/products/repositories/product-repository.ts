@@ -1,6 +1,7 @@
 import { Prisma, type ProductType } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError, isRetryableTransactionError } from "@/lib/prisma-errors";
@@ -363,6 +364,26 @@ export const productRepository = {
       orderBy: { name: "asc" },
     });
     return rows.map(toProduct);
+  },
+
+  /** Infinite-scroll page for the Products list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: ProductListFilters,
+    page: PageParams
+  ): Promise<Page<ProductWithRelations>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.product.findMany({
+          where: buildWhere(companyId, filters),
+          include: PRODUCT_INCLUDE,
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toProduct), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<ProductWithRelations | null> {

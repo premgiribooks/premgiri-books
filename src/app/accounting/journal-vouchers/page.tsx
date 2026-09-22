@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreJournalVouchersAction } from "@/modules/manual-vouchers/actions/journal-voucher-actions";
 import { JournalVoucherTable } from "@/modules/manual-vouchers/components/journal-voucher-table";
 import { journalVoucherService } from "@/modules/manual-vouchers/services/journal-voucher-service";
 
@@ -16,8 +18,8 @@ export default async function JournalVoucherListPage() {
     redirect("/");
   }
 
-  const [vouchers, isAdmin, canCreate] = await Promise.all([
-    journalVoucherService.listJournalVouchers(),
+  const [{ items: vouchers, hasMore }, isAdmin, canCreate] = await Promise.all([
+    journalVoucherService.listJournalVouchersPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "accounting", "approve"),
   ]);
@@ -46,7 +48,11 @@ export default async function JournalVoucherListPage() {
           ) : null}
         </div>
 
-        <JournalVoucherTable vouchers={vouchers} />
+        <JournalVoucherTable
+          vouchers={vouchers}
+          initialHasMore={hasMore}
+          loadMore={loadMoreJournalVouchersAction.bind(null, {})}
+        />
       </div>
     </AppShell>
   );

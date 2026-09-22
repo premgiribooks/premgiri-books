@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreGstRatesAction } from "@/modules/gst-rates/actions/gst-rate-actions";
 import { gstRateService } from "@/modules/gst-rates/services/gst-rate-service";
 import { GstRateTable } from "@/modules/gst-rates/components/gst-rate-table";
 
@@ -16,8 +18,8 @@ export default async function GstRateListPage() {
     redirect("/");
   }
 
-  const [gstRates, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    gstRateService.listGstRates(),
+  const [{ items: gstRates, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    gstRateService.listGstRatesPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "masters", "create"),
     hasPermission(user, "masters", "edit"),
@@ -54,7 +56,13 @@ export default async function GstRateListPage() {
           ) : null}
         </div>
 
-        <GstRateTable gstRates={gstRates} canEdit={canEdit} canManage={canManage} />
+        <GstRateTable
+          gstRates={gstRates}
+          initialHasMore={hasMore}
+          loadMore={loadMoreGstRatesAction.bind(null, {})}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

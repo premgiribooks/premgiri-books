@@ -1,0 +1,22 @@
+<svg width="260" height="24" viewBox="0 0 260 24" xmlns="http://www.w3.org/2000/svg" role="progressbar" aria-label="Loading">
+  <style>
+    .thumb { animation: slide 1.8s cubic-bezier(.45, 0, .55, 1) infinite; }
+    @keyframes slide {
+      0%   { transform: translateX(-70px); }
+      50%  { transform: translateX(200px); }
+      100% { transform: translateX(-70px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .thumb { animation: none; transform: translateX(68px); }
+    }
+  </style>
+
+  <defs>
+    <clipPath id="trackClipA"><rect x="30" y="6" width="200" height="12" rx="6"/></clipPath>
+  </defs>
+
+  <rect x="30" y="6" width="200" height="6" rx="6" fill="#00000000"/>
+  <g clip-path="url(#trackClipA)">
+    <rect class="thumb" x="40" y="6" width="44" height="6" rx="6" fill="#00c8d4"/>
+  </g>
+</svg>

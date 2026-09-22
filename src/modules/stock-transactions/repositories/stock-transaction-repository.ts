@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Prisma, type ProductType, type StockDirection } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { batchKey, pairKey } from "@/engines/inventory/inventory-validation";
 import type { SerialMovementRecord } from "@/engines/inventory/inventory-validation";
@@ -148,6 +149,61 @@ function toRecordedStockTransaction(raw: {
 
 function toDecimalSum(sum: Prisma.Decimal | null): number {
   return (sum ?? new Prisma.Decimal(0)).toNumber();
+}
+
+function buildOpeningStockWhere(
+  companyId: string,
+  filters: OpeningStockListFilters
+): Prisma.StockTransactionWhereInput {
+  const search = filters.search?.trim();
+  return {
+    companyId,
+    transactionType: "OPENING_STOCK",
+    ...(filters.productId ? { productId: filters.productId } : {}),
+    ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
+    ...(search
+      ? {
+          product: {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { productCode: { contains: search, mode: "insensitive" } },
+            ],
+          },
+        }
+      : {}),
+  };
+}
+
+const OPENING_STOCK_SELECT = {
+  id: true,
+  productId: true,
+  warehouseId: true,
+  quantity: true,
+  unitCost: true,
+  transactionDate: true,
+  narration: true,
+  createdAt: true,
+  product: { select: { name: true, productCode: true, unit: { select: { symbol: true } } } },
+  warehouse: { select: { name: true } },
+} as const;
+
+type OpeningStockEntryRaw = Prisma.StockTransactionGetPayload<{ select: typeof OPENING_STOCK_SELECT }>;
+
+function toOpeningStockListRow(row: OpeningStockEntryRaw): OpeningStockListRow {
+  return {
+    id: row.id,
+    productId: row.productId,
+    productName: row.product.name,
+    productCode: row.product.productCode,
+    warehouseId: row.warehouseId,
+    warehouseName: row.warehouse.name,
+    quantity: row.quantity.toNumber(),
+    unitSymbol: row.product.unit.symbol,
+    unitCost: row.unitCost === null ? null : row.unitCost.toNumber(),
+    transactionDate: row.transactionDate,
+    narration: row.narration,
+    createdAt: row.createdAt,
+  };
 }
 
 export const stockTransactionRepository = {
@@ -721,51 +777,31 @@ export const stockTransactionRepository = {
    * view over StockTransaction, not a new table"). `search` matches the
    * product's name or code. */
   async findOpeningStockEntries(companyId: string, filters: OpeningStockListFilters = {}): Promise<OpeningStockListRow[]> {
-    const search = filters.search?.trim();
     const rows = await prisma.stockTransaction.findMany({
-      where: {
-        companyId,
-        transactionType: "OPENING_STOCK",
-        ...(filters.productId ? { productId: filters.productId } : {}),
-        ...(filters.warehouseId ? { warehouseId: filters.warehouseId } : {}),
-        ...(search
-          ? {
-              product: {
-                OR: [
-                  { name: { contains: search, mode: "insensitive" } },
-                  { productCode: { contains: search, mode: "insensitive" } },
-                ],
-              },
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        productId: true,
-        warehouseId: true,
-        quantity: true,
-        unitCost: true,
-        transactionDate: true,
-        narration: true,
-        createdAt: true,
-        product: { select: { name: true, productCode: true, unit: { select: { symbol: true } } } },
-        warehouse: { select: { name: true } },
-      },
+      where: buildOpeningStockWhere(companyId, filters),
+      select: OPENING_STOCK_SELECT,
       orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
     });
-    return rows.map((row) => ({
-      id: row.id,
-      productId: row.productId,
-      productName: row.product.name,
-      productCode: row.product.productCode,
-      warehouseId: row.warehouseId,
-      warehouseName: row.warehouse.name,
-      quantity: row.quantity.toNumber(),
-      unitSymbol: row.product.unit.symbol,
-      unitCost: row.unitCost === null ? null : row.unitCost.toNumber(),
-      transactionDate: row.transactionDate,
-      narration: row.narration,
-      createdAt: row.createdAt,
-    }));
+    return rows.map(toOpeningStockListRow);
+  },
+
+  /** Infinite-scroll page for the Opening Stock list — same filters/
+   * ordering as `findOpeningStockEntries`, just `skip`/`take`-bounded. */
+  async findOpeningStockEntriesPage(
+    companyId: string,
+    filters: OpeningStockListFilters,
+    page: PageParams
+  ): Promise<Page<OpeningStockListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.stockTransaction.findMany({
+          where: buildOpeningStockWhere(companyId, filters),
+          select: OPENING_STOCK_SELECT,
+          orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toOpeningStockListRow), hasMore: result.hasMore };
   },
 };

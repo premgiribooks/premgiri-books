@@ -1,15 +1,33 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { SalesReturnStatusBadge } from "@/modules/sales-returns/components/sales-return-status-badge";
 import { formatSalesReturnDate } from "@/modules/sales-returns/utils/format-sales-return-date";
+import type { ActionResult } from "@/types/api";
 import type { SalesReturnListRow } from "@/types/sales-return";
 
 interface SalesReturnTableProps {
   salesReturns: SalesReturnListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<SalesReturnListRow>>>;
 }
 
-export function SalesReturnTable({ salesReturns }: SalesReturnTableProps) {
+export function SalesReturnTable({
+  salesReturns: initialSalesReturns,
+  initialHasMore = false,
+  loadMore,
+}: SalesReturnTableProps) {
+  const { items: salesReturns, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialSalesReturns,
+    initialHasMore,
+    loadMore,
+  });
+
   if (salesReturns.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -19,6 +37,7 @@ export function SalesReturnTable({ salesReturns }: SalesReturnTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -55,5 +74,7 @@ export function SalesReturnTable({ salesReturns }: SalesReturnTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

@@ -1,15 +1,38 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { PurchaseReturnStatusBadge } from "@/modules/purchase-returns/components/purchase-return-status-badge";
 import { formatPurchaseReturnDate } from "@/modules/purchase-returns/utils/format-purchase-return-date";
+import type { ActionResult } from "@/types/api";
 import type { PurchaseReturnListRow } from "@/types/purchase-return";
 
 interface PurchaseReturnTableProps {
   purchaseReturns: PurchaseReturnListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<PurchaseReturnListRow>>>;
 }
 
-export function PurchaseReturnTable({ purchaseReturns }: PurchaseReturnTableProps) {
+export function PurchaseReturnTable({
+  purchaseReturns: initialPurchaseReturns,
+  initialHasMore = false,
+  loadMore,
+}: PurchaseReturnTableProps) {
+  const {
+    items: purchaseReturns,
+    hasMore,
+    isLoading,
+    sentinelRef,
+  } = useInfiniteList({
+    initialItems: initialPurchaseReturns,
+    initialHasMore,
+    loadMore,
+  });
+
   if (purchaseReturns.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -19,7 +42,8 @@ export function PurchaseReturnTable({ purchaseReturns }: PurchaseReturnTableProp
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Number</TableHead>
@@ -54,6 +78,8 @@ export function PurchaseReturnTable({ purchaseReturns }: PurchaseReturnTableProp
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

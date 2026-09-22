@@ -4,6 +4,7 @@ import * as React from "react";
 import type { Permission } from "@prisma/client";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -141,6 +142,7 @@ export function PermissionMatrix({
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={isSaving || !isDirty}>
+          {isSaving ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
           {isSaving ? "Saving…" : "Save Permissions"}
         </Button>
       </div>

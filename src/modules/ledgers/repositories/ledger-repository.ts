@@ -1,6 +1,7 @@
 import { Prisma, type Ledger as PrismaLedger, type LedgerGroup } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { CASH_IN_HAND_GROUP_NAME } from "@/modules/ledger-groups/constants/default-groups";
@@ -219,6 +220,26 @@ export const ledgerRepository = {
       orderBy: { name: "asc" },
     });
     return rows.map(toLedgerWithGroup);
+  },
+
+  /** Infinite-scroll page for the Ledgers list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: LedgerListFilters,
+    page: PageParams
+  ): Promise<Page<LedgerWithGroup>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.ledger.findMany({
+          where: buildWhere(companyId, filters),
+          include: { ledgerGroup: true },
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toLedgerWithGroup), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<LedgerWithGroup | null> {

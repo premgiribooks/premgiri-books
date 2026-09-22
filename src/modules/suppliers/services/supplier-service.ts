@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { runInTransaction } from "@/lib/transaction";
@@ -87,6 +88,16 @@ export const supplierService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return supplierRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Suppliers list page. */
+  async listSuppliersPage(
+    filters: SupplierListFilters,
+    page: PageParams
+  ): Promise<Page<SupplierWithLedger>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return supplierRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A supplier belonging to a different company must resolve identically to

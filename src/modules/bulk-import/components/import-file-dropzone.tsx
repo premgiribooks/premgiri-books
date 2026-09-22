@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Download, Upload } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { isAllowedImportFilename } from "@/modules/bulk-import/validation/bulk-import-schema";
 import type { BulkImportTargetKey } from "@/types/bulk-import";
@@ -49,7 +50,7 @@ export function ImportFileDropzone({ target, targetLabel, isUploading, onFileSel
           className="hidden"
         />
         <Button type="button" disabled={isUploading} onClick={() => inputRef.current?.click()}>
-          <Upload size={16} />
+          {isUploading ? <LoadingBar className="w-8" label="Uploading" /> : <Upload size={16} />}
           {isUploading ? "Uploading…" : "Choose File"}
         </Button>
         <Button

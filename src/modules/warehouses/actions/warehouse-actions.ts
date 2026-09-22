@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { warehouseService } from "@/modules/warehouses/services/warehouse-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdateWarehouseInput,
 } from "@/modules/warehouses/validation/warehouse-schema";
 import type { ActionResult } from "@/types/api";
-import type { Warehouse } from "@/types/warehouse";
+import type { Warehouse, WarehouseListFilters, WarehouseWithBranch } from "@/types/warehouse";
 
 const LIST_PATH = "/masters/warehouses";
+
+/** Infinite-scroll "load more" for the Warehouses list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreWarehousesAction(
+  filters: WarehouseListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<WarehouseWithBranch>>> {
+  return runAction(() => warehouseService.listWarehousesPage(filters, { skip, take }), []);
+}
 
 export async function createWarehouseAction(
   input: CreateWarehouseInput

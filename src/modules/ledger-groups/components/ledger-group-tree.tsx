@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -106,12 +107,8 @@ function LedgerGroupTreeRow({ node, depth, canEdit, canManage }: LedgerGroupTree
             />
           ) : null}
           {node.isSystemDefined || !canManage ? null : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isPending}
-              onClick={handleToggleActive}
-            >
+            <Button variant="outline" size="sm" disabled={isPending} onClick={handleToggleActive}>
+              {isPending ? <LoadingBar className="w-8" label="Updating ledger group status" data-icon="inline-start" /> : null}
               {node.isActive ? "Deactivate" : "Activate"}
             </Button>
           )}

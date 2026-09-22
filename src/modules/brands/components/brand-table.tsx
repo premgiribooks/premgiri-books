@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,20 +15,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateBrandAction,
   deactivateBrandAction,
 } from "@/modules/brands/actions/brand-actions";
 import { BrandStatusBadge } from "@/modules/brands/components/brand-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { Brand } from "@/types/brand";
 
 interface BrandTableProps {
   brands: Brand[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<Brand>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
-export function BrandTable({ brands, canEdit = false, canManage = false }: BrandTableProps) {
+export function BrandTable({
+  brands: initialBrands,
+  initialHasMore = false,
+  loadMore,
+  canEdit = false,
+  canManage = false,
+}: BrandTableProps) {
+  const { items: brands, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialBrands,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(brand: Brand) {
@@ -57,54 +74,57 @@ export function BrandTable({ brands, canEdit = false, canManage = false }: Brand
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Description</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {brands.map((brand) => (
-          <TableRow key={brand.id}>
-            <TableCell>
-              <span className="font-medium text-foreground">{brand.name}</span>
-            </TableCell>
-            <TableCell>{brand.description ?? "—"}</TableCell>
-            <TableCell>
-              <BrandStatusBadge isActive={brand.isActive} />
-            </TableCell>
-            <TableCell className="text-right">
-              <div className="flex justify-end gap-2">
-                {canEdit ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    nativeButton={false}
-                    render={
-                      <Link href={`/masters/brands/${brand.id}/edit`} aria-label="Edit brand">
-                        <Pencil size={16} />
-                      </Link>
-                    }
-                  />
-                ) : null}
-                {canManage ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pendingId === brand.id}
-                    onClick={() => handleToggleActive(brand)}
-                  >
-                    {brand.isActive ? "Deactivate" : "Activate"}
-                  </Button>
-                ) : null}
-              </div>
-            </TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Description</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {brands.map((brand) => (
+            <TableRow key={brand.id}>
+              <TableCell>
+                <span className="font-medium text-foreground">{brand.name}</span>
+              </TableCell>
+              <TableCell>{brand.description ?? "—"}</TableCell>
+              <TableCell>
+                <BrandStatusBadge isActive={brand.isActive} />
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  {canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      nativeButton={false}
+                      render={
+                        <Link href={`/masters/brands/${brand.id}/edit`} aria-label="Edit brand">
+                          <Pencil size={16} />
+                        </Link>
+                      }
+                    />
+                  ) : null}
+                  {canManage ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pendingId === brand.id}
+                      onClick={() => handleToggleActive(brand)}
+                    >
+                      {brand.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                  ) : null}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

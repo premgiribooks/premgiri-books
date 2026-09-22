@@ -10,6 +10,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormSection } from "@/components/common/form-section";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -405,6 +406,7 @@ export function SalesReturnForm({ invoice, options, salesReturn }: SalesReturnFo
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Sales Return"}
           </Button>
         </div>

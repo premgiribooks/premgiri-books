@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
@@ -181,6 +182,21 @@ export const physicalVerificationService = {
       return [];
     }
     return physicalVerificationRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Physical Verifications list page. */
+  async listPhysicalVerificationsPage(
+    filters: PhysicalVerificationListFilters,
+    page: PageParams
+  ): Promise<Page<PhysicalVerificationListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "inventory", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return physicalVerificationRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   async getPhysicalVerification(id: string): Promise<PhysicalVerificationDetail | null> {

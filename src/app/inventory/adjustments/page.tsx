@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreStockAdjustmentsAction } from "@/modules/stock-adjustments/actions/stock-adjustment-actions";
 import { StockAdjustmentFilterBar } from "@/modules/stock-adjustments/components/stock-adjustment-filter-bar";
 import { StockAdjustmentTable } from "@/modules/stock-adjustments/components/stock-adjustment-table";
 import { stockAdjustmentService } from "@/modules/stock-adjustments/services/stock-adjustment-service";
@@ -45,8 +47,8 @@ export default async function StockAdjustmentListPage({ searchParams }: StockAdj
 
   const filters = parseFilters(await searchParams);
 
-  const [stockAdjustments, isAdmin, canCreate] = await Promise.all([
-    stockAdjustmentService.listStockAdjustments(filters),
+  const [{ items: stockAdjustments, hasMore }, isAdmin, canCreate] = await Promise.all([
+    stockAdjustmentService.listStockAdjustmentsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "inventory", "create"),
   ]);
@@ -76,7 +78,12 @@ export default async function StockAdjustmentListPage({ searchParams }: StockAdj
 
         <StockAdjustmentFilterBar />
 
-        <StockAdjustmentTable stockAdjustments={stockAdjustments} />
+        <StockAdjustmentTable
+          key={JSON.stringify(filters)}
+          stockAdjustments={stockAdjustments}
+          initialHasMore={hasMore}
+          loadMore={loadMoreStockAdjustmentsAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

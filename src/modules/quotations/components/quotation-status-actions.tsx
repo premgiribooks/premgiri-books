@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import {
   acceptQuotationAction,
@@ -89,6 +90,7 @@ export function QuotationStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(sendQuotationAction, "SENT", "Quotation sent.")}
         >
+          {pending === "SENT" ? <LoadingBar className="w-8" label="Sending" data-icon="inline-start" /> : null}
           {pending === "SENT" ? "Sending…" : "Send"}
         </Button>
       ) : null}
@@ -99,6 +101,7 @@ export function QuotationStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(acceptQuotationAction, "ACCEPTED", "Quotation accepted.")}
         >
+          {pending === "ACCEPTED" ? <LoadingBar className="w-8" label="Accepting" data-icon="inline-start" /> : null}
           {pending === "ACCEPTED" ? "Accepting…" : "Accept"}
         </Button>
       ) : null}
@@ -110,6 +113,7 @@ export function QuotationStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(rejectQuotationAction, "REJECTED", "Quotation rejected.")}
         >
+          {pending === "REJECTED" ? <LoadingBar className="w-8" label="Rejecting" data-icon="inline-start" /> : null}
           {pending === "REJECTED" ? "Rejecting…" : "Reject"}
         </Button>
       ) : null}
@@ -121,12 +125,14 @@ export function QuotationStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(cancelQuotationAction, "CANCELLED", "Quotation cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}
 
       {canCreateSalesOrder && (quotation.status === "SENT" || quotation.status === "ACCEPTED") ? (
         <Button size="sm" variant="outline" disabled={isBusy} onClick={() => void convertToSalesOrder()}>
+          {pending === "CONVERTING" ? <LoadingBar className="w-8" label="Converting" data-icon="inline-start" /> : null}
           {pending === "CONVERTING" ? "Converting…" : "Convert to Sales Order"}
         </Button>
       ) : null}

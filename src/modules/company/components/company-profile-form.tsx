@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -397,6 +398,7 @@ export function CompanyProfileForm({ companyId, defaultValues }: CompanyProfileF
 
         <div className="flex justify-end gap-2">
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : "Save Changes"}
           </Button>
         </div>

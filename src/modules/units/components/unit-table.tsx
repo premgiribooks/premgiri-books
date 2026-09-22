@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,17 +15,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { activateUnitAction, deactivateUnitAction } from "@/modules/units/actions/unit-actions";
 import { UnitStatusBadge } from "@/modules/units/components/unit-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { Unit } from "@/types/unit";
 
 interface UnitTableProps {
   units: Unit[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<Unit>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
-export function UnitTable({ units, canEdit = false, canManage = false }: UnitTableProps) {
+export function UnitTable({
+  units: initialUnits,
+  initialHasMore = false,
+  loadMore,
+  canEdit = false,
+  canManage = false,
+}: UnitTableProps) {
+  const { items: units, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialUnits,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(unit: Unit) {
@@ -54,7 +71,8 @@ export function UnitTable({ units, canEdit = false, canManage = false }: UnitTab
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -106,6 +124,8 @@ export function UnitTable({ units, canEdit = false, canManage = false }: UnitTab
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreSalesReturnsAction } from "@/modules/sales-returns/actions/sales-return-actions";
 import { SalesReturnFilterBar } from "@/modules/sales-returns/components/sales-return-filter-bar";
 import { SalesReturnTable } from "@/modules/sales-returns/components/sales-return-table";
 import { salesReturnService } from "@/modules/sales-returns/services/sales-return-service";
@@ -45,8 +47,8 @@ export default async function SalesReturnListPage({ searchParams }: SalesReturnL
 
   const filters = parseFilters(await searchParams);
 
-  const [salesReturns, isAdmin, canCreate] = await Promise.all([
-    salesReturnService.listSalesReturns(filters),
+  const [{ items: salesReturns, hasMore }, isAdmin, canCreate] = await Promise.all([
+    salesReturnService.listSalesReturnsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
   ]);
@@ -76,7 +78,12 @@ export default async function SalesReturnListPage({ searchParams }: SalesReturnL
 
         <SalesReturnFilterBar />
 
-        <SalesReturnTable salesReturns={salesReturns} />
+        <SalesReturnTable
+          key={JSON.stringify(filters)}
+          salesReturns={salesReturns}
+          initialHasMore={hasMore}
+          loadMore={loadMoreSalesReturnsAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

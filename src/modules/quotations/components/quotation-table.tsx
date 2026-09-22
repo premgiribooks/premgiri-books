@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import {
   Table,
   TableBody,
@@ -8,15 +11,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { QuotationStatusBadge } from "@/modules/quotations/components/quotation-status-badge";
 import { formatQuotationDate } from "@/modules/quotations/utils/format-quotation-date";
+import type { ActionResult } from "@/types/api";
 import type { QuotationListRow } from "@/types/quotation";
 
 interface QuotationTableProps {
   quotations: QuotationListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<QuotationListRow>>>;
 }
 
-export function QuotationTable({ quotations }: QuotationTableProps) {
+export function QuotationTable({
+  quotations: initialQuotations,
+  initialHasMore = false,
+  loadMore,
+}: QuotationTableProps) {
+  const { items: quotations, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialQuotations,
+    initialHasMore,
+    loadMore,
+  });
+
   if (quotations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -26,6 +44,7 @@ export function QuotationTable({ quotations }: QuotationTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -73,5 +92,7 @@ export function QuotationTable({ quotations }: QuotationTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

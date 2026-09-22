@@ -3,12 +3,24 @@
 import { revalidatePath } from "next/cache";
 
 import { toActionErrorMessage } from "@/lib/action-error";
+import type { Page } from "@/lib/pagination";
+import { runAction } from "@/lib/run-action";
 import { assertNotRestoring } from "@/lib/restore-lock";
 import { companyService } from "@/modules/company/services/company-service";
 import type { CreateCompanyInput } from "@/modules/administration/validation/create-company-schema";
 import type { CompanyInput } from "@/modules/company/validation/company-schema";
 import type { ActionResult } from "@/types/api";
-import type { CompanyWithSettings } from "@/types/company";
+import type { CompanyListFilters, CompanyWithSettings } from "@/types/company";
+
+/** Infinite-scroll "load more" for the Companies list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreCompaniesAction(
+  filters: CompanyListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<CompanyWithSettings>>> {
+  return runAction(() => companyService.listCompaniesPage(filters, { skip, take }), []);
+}
 
 // Relocated from modules/company/actions/company-actions.ts — per the
 // Company Module split, creating/editing legal info/activating/

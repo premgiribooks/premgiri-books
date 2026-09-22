@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { purchaseInvoiceService } from "@/modules/purchase-invoices/services/purchase-invoice-service";
 import type {
@@ -9,7 +10,13 @@ import type {
 } from "@/modules/purchase-invoices/validation/purchase-invoice-schema";
 import type { LedgerBalanceResult } from "@/engines/voucher/types";
 import type { ActionResult } from "@/types/api";
-import type { GoodsReceiptNotePrefill, PurchaseInvoiceDetail, PurchaseInvoicePreview } from "@/types/purchase-invoice";
+import type {
+  GoodsReceiptNotePrefill,
+  PurchaseInvoiceDetail,
+  PurchaseInvoiceListFilters,
+  PurchaseInvoiceListRow,
+  PurchaseInvoicePreview,
+} from "@/types/purchase-invoice";
 
 const LIST_PATH = "/purchase/invoices";
 const RECEIPT_LIST_PATH = "/purchase/receipts";
@@ -17,6 +24,16 @@ const ORDER_LIST_PATH = "/purchase/orders";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Purchase Invoices list — a pure
+ * read, so no paths are revalidated. */
+export async function loadMorePurchaseInvoicesAction(
+  filters: PurchaseInvoiceListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PurchaseInvoiceListRow>>> {
+  return runAction(() => purchaseInvoiceService.listPurchaseInvoicesPage(filters, { skip, take }), []);
 }
 
 export async function createDraftAction(input: CreatePurchaseInvoiceInput): Promise<ActionResult<PurchaseInvoiceDetail>> {

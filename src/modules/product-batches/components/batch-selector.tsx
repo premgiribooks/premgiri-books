@@ -90,6 +90,7 @@ export function BatchSelector({
       emptyLabel="No active batches"
       placeholder={placeholder}
       disabled={isDisabled}
+      isLoading={isLoading}
       {...triggerProps}
     />
   );

@@ -1,6 +1,7 @@
 import type { CustomerType, Prisma } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -105,6 +106,29 @@ export const priceListRepository = {
       orderBy: { name: "asc" },
     });
     return rows.map(({ _count, ...header }) => ({ ...header, itemCount: _count.items }));
+  },
+
+  /** Infinite-scroll page for the Price Lists list — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: PriceListListFilters,
+    page: PageParams
+  ): Promise<Page<PriceListWithItemCount>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.priceList.findMany({
+          where: buildWhere(companyId, filters),
+          include: { _count: { select: { items: true } } },
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return {
+      items: result.items.map(({ _count, ...header }) => ({ ...header, itemCount: _count.items })),
+      hasMore: result.hasMore,
+    };
   },
 
   async findById(id: string): Promise<PriceListDetail | null> {

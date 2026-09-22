@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePaymentModesAction } from "@/modules/payment-modes/actions/payment-mode-actions";
 import { paymentModeService } from "@/modules/payment-modes/services/payment-mode-service";
 import { PaymentModeTable } from "@/modules/payment-modes/components/payment-mode-table";
 
@@ -16,8 +18,8 @@ export default async function PaymentModeListPage() {
     redirect("/");
   }
 
-  const [paymentModes, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    paymentModeService.listPaymentModes(),
+  const [{ items: paymentModes, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    paymentModeService.listPaymentModesPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "accounting", "create"),
     hasPermission(user, "accounting", "edit"),
@@ -47,7 +49,13 @@ export default async function PaymentModeListPage() {
           ) : null}
         </div>
 
-        <PaymentModeTable paymentModes={paymentModes} canEdit={canEdit} canManage={canManage} />
+        <PaymentModeTable
+          paymentModes={paymentModes}
+          initialHasMore={hasMore}
+          loadMore={loadMorePaymentModesAction.bind(null, {})}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

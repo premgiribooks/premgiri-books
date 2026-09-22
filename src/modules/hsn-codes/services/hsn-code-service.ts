@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import {
   hsnCodeRepository,
@@ -43,6 +44,16 @@ export const hsnCodeService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return hsnCodeRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the HSN Codes list page. */
+  async listHsnCodesPage(
+    filters: HsnCodeListFilters,
+    page: PageParams
+  ): Promise<Page<HsnCode>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return hsnCodeRepository.findManyPage(user.companyId, filters, page);
   },
 
   // An HSN code belonging to a different company must resolve identically to

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import {
   activateCategoryAction,
@@ -107,6 +108,7 @@ function CategoryTreeRow({ node, depth, canEdit, canManage }: CategoryTreeRowPro
           ) : null}
           {canManage ? (
             <Button variant="outline" size="sm" disabled={isPending} onClick={handleToggleActive}>
+              {isPending ? <LoadingBar className="w-8" label="Updating category status" data-icon="inline-start" /> : null}
               {node.isActive ? "Deactivate" : "Activate"}
             </Button>
           ) : null}

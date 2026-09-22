@@ -1,5 +1,6 @@
 import { Prisma, type DeliveryChallanStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -124,6 +125,27 @@ export const deliveryChallanRepository = {
       orderBy: [{ challanDate: "desc" }, { challanNumber: "desc" }],
     });
     return rows.map(toDeliveryChallanListRow);
+  },
+
+  /** Infinite-scroll page for the Delivery Challans list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: DeliveryChallanListFilters,
+    page: PageParams
+  ): Promise<Page<DeliveryChallanListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.deliveryChallan.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...CUSTOMER_INCLUDE, ...SALES_ORDER_INCLUDE, items: { select: { id: true } } },
+          orderBy: [{ challanDate: "desc" }, { challanNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toDeliveryChallanListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<DeliveryChallanDetail | null> {

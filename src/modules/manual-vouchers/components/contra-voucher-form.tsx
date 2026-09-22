@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { numericFieldWidth } from "@/lib/utils";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { createContraVoucherAction } from "@/modules/manual-vouchers/actions/contra-voucher-actions";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import {
@@ -243,6 +244,7 @@ export function ContraVoucherForm({ ledgerOptions, paymentModes }: ContraVoucher
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
             {isSubmitting ? "Posting…" : "Post Contra Voucher"}
           </Button>
         </div>

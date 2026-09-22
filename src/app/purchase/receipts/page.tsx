@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreGoodsReceiptNotesAction } from "@/modules/goods-receipt-notes/actions/goods-receipt-note-actions";
 import { GoodsReceiptNoteFilterBar } from "@/modules/goods-receipt-notes/components/goods-receipt-note-filter-bar";
 import { GoodsReceiptNoteTable } from "@/modules/goods-receipt-notes/components/goods-receipt-note-table";
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
@@ -54,8 +56,8 @@ export default async function GoodsReceiptNoteListPage({ searchParams }: GoodsRe
 
   const filters = parseFilters(await searchParams);
 
-  const [goodsReceiptNotes, suppliers, isAdmin, canCreate] = await Promise.all([
-    goodsReceiptNoteService.listGoodsReceiptNotes(filters),
+  const [{ items: goodsReceiptNotes, hasMore }, suppliers, isAdmin, canCreate] = await Promise.all([
+    goodsReceiptNoteService.listGoodsReceiptNotesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     supplierService.listSelectableSuppliers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "create"),
@@ -93,7 +95,12 @@ export default async function GoodsReceiptNoteListPage({ searchParams }: GoodsRe
           }))}
         />
 
-        <GoodsReceiptNoteTable goodsReceiptNotes={goodsReceiptNotes} />
+        <GoodsReceiptNoteTable
+          key={JSON.stringify(filters)}
+          goodsReceiptNotes={goodsReceiptNotes}
+          initialHasMore={hasMore}
+          loadMore={loadMoreGoodsReceiptNotesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

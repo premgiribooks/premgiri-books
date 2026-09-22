@@ -13,6 +13,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
 } from "@/components/ui/combobox";
+import { LoadingBar } from "@/components/common/loading-bar";
 
 export interface SearchableSelectProps<T> {
   /** The pickable options — typically a company's active master/reference
@@ -42,6 +43,10 @@ export interface SearchableSelectProps<T> {
   emptyLabel?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** Shows the shared loading indicator while the caller is fetching this
+   * field's own options (e.g. batch/serial selectors that self-fetch on
+   * product change) — distinct from `disabled`, which also blocks input. */
+  isLoading?: boolean;
   /** When there's exactly one option and nothing is selected yet, pick it
    * automatically instead of making the user open the dropdown for a
    * foregone conclusion (e.g. a company with only one Warehouse). Only
@@ -92,6 +97,7 @@ export function SearchableSelect<T>({
   emptyLabel = "No options",
   placeholder,
   disabled,
+  isLoading = false,
   autoSelectSingleOption = true,
   className,
   id,
@@ -128,6 +134,7 @@ export function SearchableSelect<T>({
           aria-label={ariaLabel}
           placeholder={displayPlaceholder}
         />
+        {isLoading ? <LoadingBar className="h-2 w-6" label="Loading options" /> : null}
         {allowNone ? <ComboboxClear aria-label="Clear selection" /> : null}
         <ComboboxTrigger aria-label="Open options" />
       </ComboboxInputGroup>

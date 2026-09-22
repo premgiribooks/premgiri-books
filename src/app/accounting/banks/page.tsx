@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreBankAccountsAction } from "@/modules/bank-accounts/actions/bank-account-actions";
 import { bankAccountService } from "@/modules/bank-accounts/services/bank-account-service";
 import { BankAccountTable } from "@/modules/bank-accounts/components/bank-account-table";
 
@@ -16,8 +18,8 @@ export default async function BankAccountListPage() {
     redirect("/");
   }
 
-  const [bankAccounts, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    bankAccountService.listBankAccounts(),
+  const [{ items: bankAccounts, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    bankAccountService.listBankAccountsPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "accounting", "create"),
     hasPermission(user, "accounting", "edit"),
@@ -47,7 +49,13 @@ export default async function BankAccountListPage() {
           ) : null}
         </div>
 
-        <BankAccountTable bankAccounts={bankAccounts} canEdit={canEdit} canManage={canManage} />
+        <BankAccountTable
+          bankAccounts={bankAccounts}
+          initialHasMore={hasMore}
+          loadMore={loadMoreBankAccountsAction.bind(null, {})}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

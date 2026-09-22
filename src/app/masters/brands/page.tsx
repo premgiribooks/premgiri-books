@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreBrandsAction } from "@/modules/brands/actions/brand-actions";
 import { brandService } from "@/modules/brands/services/brand-service";
 import { BrandTable } from "@/modules/brands/components/brand-table";
 
@@ -16,8 +18,8 @@ export default async function BrandListPage() {
     redirect("/");
   }
 
-  const [brands, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    brandService.listBrands(),
+  const [{ items: brands, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    brandService.listBrandsPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "masters", "create"),
     hasPermission(user, "masters", "edit"),
@@ -54,7 +56,13 @@ export default async function BrandListPage() {
           ) : null}
         </div>
 
-        <BrandTable brands={brands} canEdit={canEdit} canManage={canManage} />
+        <BrandTable
+          brands={brands}
+          initialHasMore={hasMore}
+          loadMore={loadMoreBrandsAction.bind(null, {})}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

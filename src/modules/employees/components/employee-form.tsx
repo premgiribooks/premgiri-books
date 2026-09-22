@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Form } from "@/components/ui/form";
 import {
   createEmployeeAction,
@@ -122,6 +123,7 @@ export function EmployeeForm({ employee, branchOptions, userOptions }: EmployeeF
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Employee"}
           </Button>
         </div>

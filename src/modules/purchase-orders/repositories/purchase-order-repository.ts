@@ -1,6 +1,7 @@
 import { Prisma, type PurchaseOrderStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
   PurchaseOrderDetail,
@@ -187,6 +188,27 @@ export const purchaseOrderRepository = {
       orderBy: [{ orderDate: "desc" }, { orderNumber: "desc" }],
     });
     return rows.map(toPurchaseOrderListRow);
+  },
+
+  /** Infinite-scroll page for the Purchase Orders list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: PurchaseOrderListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseOrderListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.purchaseOrder.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...SUPPLIER_INCLUDE, ...ITEM_PROGRESS_INCLUDE },
+          orderBy: [{ orderDate: "desc" }, { orderNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPurchaseOrderListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<PurchaseOrderDetail | null> {

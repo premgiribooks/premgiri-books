@@ -2,11 +2,13 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
 import type { PostedVoucher, VoucherListFilters } from "@/engines/voucher/types";
 import { prisma } from "@/lib/prisma";
+import { voucherRepository } from "@/modules/vouchers/repositories/voucher-repository";
 import {
   createContraVoucherSchema,
   type CreateContraVoucherInput,
@@ -41,6 +43,25 @@ export const contraVoucherService = {
       voucherType: "CONTRA",
       financialYearId: financialYear.id,
     });
+  },
+
+  /** Infinite-scroll page for the Contra Vouchers list. */
+  async listContraVouchersPage(
+    filters: Omit<VoucherListFilters, "voucherType">,
+    page: PageParams
+  ): Promise<Page<PostedVoucher>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, MODULE, "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return voucherRepository.findManyPage(
+      user.companyId,
+      { ...filters, voucherType: "CONTRA", financialYearId: financialYear.id },
+      page
+    );
   },
 
   // A voucher belonging to a different company, or one that isn't a Contra

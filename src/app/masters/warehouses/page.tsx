@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreWarehousesAction } from "@/modules/warehouses/actions/warehouse-actions";
 import { warehouseService } from "@/modules/warehouses/services/warehouse-service";
 import { WarehouseTable } from "@/modules/warehouses/components/warehouse-table";
 
@@ -16,8 +18,8 @@ export default async function WarehouseListPage() {
     redirect("/");
   }
 
-  const [warehouses, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    warehouseService.listWarehouses(),
+  const [{ items: warehouses, hasMore }, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
+    warehouseService.listWarehousesPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "masters", "create"),
     hasPermission(user, "masters", "edit"),
@@ -55,7 +57,13 @@ export default async function WarehouseListPage() {
           ) : null}
         </div>
 
-        <WarehouseTable warehouses={warehouses} canEdit={canEdit} canManage={canManage} />
+        <WarehouseTable
+          warehouses={warehouses}
+          initialHasMore={hasMore}
+          loadMore={loadMoreWarehousesAction.bind(null, {})}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

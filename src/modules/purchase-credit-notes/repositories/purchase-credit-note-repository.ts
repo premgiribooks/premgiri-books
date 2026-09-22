@@ -1,6 +1,7 @@
 import { Prisma, type CreditNoteStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
   PurchaseCreditNoteDetail,
@@ -164,6 +165,27 @@ export const purchaseCreditNoteRepository = {
       orderBy: [{ noteDate: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toPurchaseCreditNoteListRow);
+  },
+
+  /** Infinite-scroll page for the Purchase Credit Notes list — same
+   * filters/ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: PurchaseCreditNoteListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseCreditNoteListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.purchaseCreditNote.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...SUPPLIER_INCLUDE, ...PURCHASE_INVOICE_INCLUDE },
+          orderBy: [{ noteDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPurchaseCreditNoteListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<PurchaseCreditNoteDetail | null> {

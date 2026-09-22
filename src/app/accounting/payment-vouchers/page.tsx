@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePaymentVouchersAction } from "@/modules/manual-vouchers/actions/payment-voucher-actions";
 import { PaymentVoucherTable } from "@/modules/manual-vouchers/components/payment-voucher-table";
 import { paymentVoucherService } from "@/modules/manual-vouchers/services/payment-voucher-service";
 
@@ -16,8 +18,8 @@ export default async function PaymentVoucherListPage() {
     redirect("/");
   }
 
-  const [vouchers, ledgerOptions, isAdmin, canCreate] = await Promise.all([
-    paymentVoucherService.listPaymentVouchers(),
+  const [{ items: vouchers, hasMore }, ledgerOptions, isAdmin, canCreate] = await Promise.all([
+    paymentVoucherService.listPaymentVouchersPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     paymentVoucherService.listLedgerOptions(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "accounting", "create"),
@@ -47,7 +49,12 @@ export default async function PaymentVoucherListPage() {
           ) : null}
         </div>
 
-        <PaymentVoucherTable vouchers={vouchers} ledgerNameById={ledgerNameById} />
+        <PaymentVoucherTable
+          vouchers={vouchers}
+          ledgerNameById={ledgerNameById}
+          initialHasMore={hasMore}
+          loadMore={loadMorePaymentVouchersAction.bind(null, {})}
+        />
       </div>
     </AppShell>
   );

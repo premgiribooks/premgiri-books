@@ -5,8 +5,10 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { customerService } from "@/modules/customers/services/customer-service";
+import { loadMoreSalesInvoicesAction } from "@/modules/sales-invoices/actions/sales-invoice-actions";
 import { SalesInvoiceFilterBar } from "@/modules/sales-invoices/components/sales-invoice-filter-bar";
 import { SalesInvoiceTable } from "@/modules/sales-invoices/components/sales-invoice-table";
 import { salesInvoiceService } from "@/modules/sales-invoices/services/sales-invoice-service";
@@ -51,8 +53,8 @@ export default async function SalesInvoiceListPage({ searchParams }: SalesInvoic
 
   const filters = parseFilters(await searchParams);
 
-  const [salesInvoices, customers, isAdmin, canCreate] = await Promise.all([
-    salesInvoiceService.listSalesInvoices(filters),
+  const [{ items: salesInvoices, hasMore }, customers, isAdmin, canCreate] = await Promise.all([
+    salesInvoiceService.listSalesInvoicesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     customerService.listSelectableCustomers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
@@ -97,7 +99,12 @@ export default async function SalesInvoiceListPage({ searchParams }: SalesInvoic
           }))}
         />
 
-        <SalesInvoiceTable salesInvoices={salesInvoices} />
+        <SalesInvoiceTable
+          key={JSON.stringify(filters)}
+          salesInvoices={salesInvoices}
+          initialHasMore={hasMore}
+          loadMore={loadMoreSalesInvoicesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

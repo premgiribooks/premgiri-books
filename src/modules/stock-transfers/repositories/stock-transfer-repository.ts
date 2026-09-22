@@ -1,5 +1,6 @@
 import { Prisma, type StockTransferStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -125,6 +126,27 @@ export const stockTransferRepository = {
       orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toStockTransferListRow);
+  },
+
+  /** Infinite-scroll page for the Stock Transfers list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: StockTransferListFilters,
+    page: PageParams
+  ): Promise<Page<StockTransferListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.stockTransfer.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...WAREHOUSE_NAME_INCLUDE, _count: { select: { items: true } } },
+          orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toStockTransferListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<StockTransferDetail | null> {

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
 import { runInTransaction } from "@/lib/transaction";
@@ -36,6 +37,16 @@ export const openingStockService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "inventory", "view");
     return stockTransactionRepository.findOpeningStockEntries(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Opening Stock list page. */
+  async listOpeningStockEntriesPage(
+    filters: OpeningStockListFilters,
+    page: PageParams
+  ): Promise<Page<OpeningStockListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "inventory", "view");
+    return stockTransactionRepository.findOpeningStockEntriesPage(user.companyId, filters, page);
   },
 
   async listFormOptions(): Promise<OpeningStockFormOptions> {

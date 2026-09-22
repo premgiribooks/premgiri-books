@@ -1,6 +1,7 @@
 import { Prisma, type Employee as PrismaEmployee } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -159,6 +160,26 @@ export const employeeRepository = {
       orderBy: { fullName: "asc" },
     });
     return rows.map(toEmployeeWithRelations);
+  },
+
+  /** Infinite-scroll page for the Employees list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: EmployeeListFilters,
+    page: PageParams
+  ): Promise<Page<EmployeeWithRelations>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.employee.findMany({
+          where: buildWhere(companyId, filters),
+          include: EMPLOYEE_INCLUDE,
+          orderBy: { fullName: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toEmployeeWithRelations), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<EmployeeWithRelations | null> {

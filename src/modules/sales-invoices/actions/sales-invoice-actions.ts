@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { salesInvoiceService } from "@/modules/sales-invoices/services/sales-invoice-service";
 import type {
@@ -13,6 +14,8 @@ import type {
   DeliveryChallanPrefill,
   ResolvedSalesInvoiceLinePrice,
   SalesInvoiceDetail,
+  SalesInvoiceListFilters,
+  SalesInvoiceListRow,
   SalesInvoicePreview,
 } from "@/types/sales-invoice";
 
@@ -22,6 +25,16 @@ const ORDER_LIST_PATH = "/sales/orders";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Sales Invoices list — a pure read, so
+ * no paths are revalidated. */
+export async function loadMoreSalesInvoicesAction(
+  filters: SalesInvoiceListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<SalesInvoiceListRow>>> {
+  return runAction(() => salesInvoiceService.listSalesInvoicesPage(filters, { skip, take }), []);
 }
 
 export async function createDraftAction(input: CreateSalesInvoiceInput): Promise<ActionResult<SalesInvoiceDetail>> {

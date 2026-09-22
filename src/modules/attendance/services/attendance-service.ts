@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import {
   attendanceRepository,
@@ -34,6 +35,16 @@ export const attendanceService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "employees", "view");
     return attendanceRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Attendance History list page. */
+  async listAttendancePage(
+    filters: AttendanceListFilters,
+    page: PageParams
+  ): Promise<Page<AttendanceWithRelations>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "employees", "view");
+    return attendanceRepository.findManyPage(user.companyId, filters, page);
   },
 
   // The roster page's single-row mark — an upsert, never a separate "edit"

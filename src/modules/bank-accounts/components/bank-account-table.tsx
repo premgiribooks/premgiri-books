@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,25 +15,37 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateBankAccountAction,
   deactivateBankAccountAction,
 } from "@/modules/bank-accounts/actions/bank-account-actions";
 import { BankAccountStatusBadge } from "@/modules/bank-accounts/components/bank-account-status-badge";
 import { BANK_ACCOUNT_TYPE_LABELS } from "@/modules/bank-accounts/validation/bank-account-schema";
+import type { ActionResult } from "@/types/api";
 import type { BankAccountWithLedger } from "@/types/bank-account";
 
 interface BankAccountTableProps {
   bankAccounts: BankAccountWithLedger[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<BankAccountWithLedger>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
 export function BankAccountTable({
-  bankAccounts,
+  bankAccounts: initialBankAccounts,
+  initialHasMore = false,
+  loadMore,
   canEdit = false,
   canManage = false,
 }: BankAccountTableProps) {
+  const { items: bankAccounts, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialBankAccounts,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(bankAccount: BankAccountWithLedger) {
@@ -62,7 +75,8 @@ export function BankAccountTable({
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Account</TableHead>
@@ -125,6 +139,8 @@ export function BankAccountTable({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

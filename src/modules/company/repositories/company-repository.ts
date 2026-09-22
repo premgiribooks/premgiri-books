@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import type { CompanyPersistData } from "@/modules/company/utils/normalize-company-input";
 import { isRecordNotFoundError } from "@/modules/company/utils/prisma-errors";
 import type { CompanyListFilters, CompanyWithSettings } from "@/types/company";
@@ -34,6 +35,21 @@ export const companyRepository = {
       include: { settings: true },
       orderBy: { companyName: "asc" },
     });
+  },
+
+  /** Infinite-scroll page for the Companies list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  findManyPage(filters: CompanyListFilters, page: PageParams): Promise<Page<CompanyWithSettings>> {
+    return fetchPage(
+      (args) =>
+        prisma.company.findMany({
+          where: buildWhere(filters),
+          include: { settings: true },
+          orderBy: { companyName: "asc" },
+          ...args,
+        }),
+      page
+    );
   },
 
   findById(id: string): Promise<CompanyWithSettings | null> {

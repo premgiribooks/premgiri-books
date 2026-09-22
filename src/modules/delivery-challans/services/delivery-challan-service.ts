@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError, isUniqueConstraintError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
@@ -260,6 +261,22 @@ export const deliveryChallanService = {
     }
 
     return deliveryChallanRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Delivery Challans list page. */
+  async listDeliveryChallansPage(
+    filters: DeliveryChallanListFilters,
+    page: PageParams
+  ): Promise<Page<DeliveryChallanListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+
+    return deliveryChallanRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   // Company-scoped only (not FY-scoped) — mirrors salesOrderService.getSalesOrder.

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,10 +95,12 @@ export function PayrollRunCreateForm({ isLedgerMappingComplete }: PayrollRunCrea
 
       <div className="flex gap-2">
         <Button type="button" variant="outline" disabled={!canPreview || isPreviewing} onClick={handlePreview}>
+          {isPreviewing ? <LoadingBar className="w-8" label="Computing" data-icon="inline-start" /> : null}
           {isPreviewing ? "Computing…" : preview ? "Refresh Preview" : "Preview"}
         </Button>
         {preview ? (
           <Button type="button" disabled={isSaving} onClick={handleSaveDraft}>
+            {isSaving ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSaving ? "Saving…" : "Create Draft"}
           </Button>
         ) : null}

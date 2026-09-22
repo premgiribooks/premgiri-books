@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import {
   brandRepository,
@@ -41,6 +42,13 @@ export const brandService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return brandRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Brands list page. */
+  async listBrandsPage(filters: BrandListFilters, page: PageParams): Promise<Page<Brand>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return brandRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A brand belonging to a different company must resolve identically to

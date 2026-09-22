@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Eye, Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,21 +15,37 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateProductAction,
   deactivateProductAction,
 } from "@/modules/products/actions/product-actions";
 import { ProductStatusBadge } from "@/modules/products/components/product-status-badge";
 import { ProductTypeBadge } from "@/modules/products/components/product-type-badge";
+import type { ActionResult } from "@/types/api";
 import type { ProductWithRelations } from "@/types/product";
 
 interface ProductTableProps {
   products: ProductWithRelations[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<ProductWithRelations>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
-export function ProductTable({ products, canEdit = false, canManage = false }: ProductTableProps) {
+export function ProductTable({
+  products: initialProducts,
+  initialHasMore = false,
+  loadMore,
+  canEdit = false,
+  canManage = false,
+}: ProductTableProps) {
+  const { items: products, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialProducts,
+    initialHasMore,
+    loadMore,
+  });
   // Tracked per row (not a single pending id) so two rows toggled
   // concurrently each keep their own disabled state — the
   // hsn-code-table.tsx review-fix pattern (2026-07-15).
@@ -65,7 +82,8 @@ export function ProductTable({ products, canEdit = false, canManage = false }: P
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -149,6 +167,8 @@ export function ProductTable({ products, canEdit = false, canManage = false }: P
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

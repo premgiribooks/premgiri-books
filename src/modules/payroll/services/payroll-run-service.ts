@@ -3,6 +3,7 @@ import { Prisma, type CompanySettings } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
@@ -77,6 +78,16 @@ async function requireFinancialYear(): Promise<{ id: string }> {
     throw new AppError(NO_FINANCIAL_YEAR_MESSAGE);
   }
   return financialYear;
+}
+
+function toListFilters(rawFilters: PayrollRunListFiltersInput): PayrollRunListFilters {
+  const parsed = payrollRunListFiltersSchema.parse(rawFilters);
+  return {
+    search: parsed.search,
+    status: parsed.status,
+    dateFrom: parsed.dateFrom ? toUtcDate(parsed.dateFrom) : undefined,
+    dateTo: parsed.dateTo ? toUtcDate(parsed.dateTo) : undefined,
+  };
 }
 
 interface BuiltPayrollRun {
@@ -182,14 +193,25 @@ export const payrollRunService = {
       return [];
     }
 
-    const parsed = payrollRunListFiltersSchema.parse(rawFilters);
-    const filters: PayrollRunListFilters = {
-      search: parsed.search,
-      status: parsed.status,
-      dateFrom: parsed.dateFrom ? toUtcDate(parsed.dateFrom) : undefined,
-      dateTo: parsed.dateTo ? toUtcDate(parsed.dateTo) : undefined,
-    };
+    const filters = toListFilters(rawFilters);
     return payrollRunRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Payroll Runs list page. */
+  async listPayrollRunsPage(
+    rawFilters: PayrollRunListFiltersInput,
+    page: PageParams
+  ): Promise<Page<PayrollRunListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "employees", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+
+    const filters = toListFilters(rawFilters);
+    return payrollRunRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   /**

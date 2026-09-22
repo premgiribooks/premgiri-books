@@ -82,6 +82,7 @@ export function SerialSelector({
       emptyLabel="No serials in stock"
       placeholder={placeholder}
       disabled={isDisabled}
+      isLoading={isLoading}
       {...triggerProps}
     />
   );

@@ -1,5 +1,6 @@
 import { Prisma, type QuotationStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -163,6 +164,27 @@ export const quotationRepository = {
       orderBy: [{ quotationDate: "desc" }, { quotationNumber: "desc" }],
     });
     return rows.map(toQuotationListRow);
+  },
+
+  /** Infinite-scroll page for the Quotations list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: QuotationListFilters,
+    page: PageParams
+  ): Promise<Page<QuotationListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.quotation.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: CUSTOMER_INCLUDE,
+          orderBy: [{ quotationDate: "desc" }, { quotationNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toQuotationListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<QuotationDetail | null> {

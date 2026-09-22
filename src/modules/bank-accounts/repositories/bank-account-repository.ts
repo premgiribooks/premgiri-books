@@ -6,6 +6,7 @@ import {
   type LedgerGroup,
 } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { toLedgerWithGroup } from "@/modules/ledgers/repositories/ledger-repository";
 import { isRecordNotFoundError } from "@/modules/bank-accounts/utils/prisma-errors";
@@ -87,6 +88,26 @@ export const bankAccountRepository = {
       orderBy: { bankName: "asc" },
     });
     return rows.map(toBankAccountWithLedger);
+  },
+
+  /** Infinite-scroll page for the Bank Accounts list — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: BankAccountListFilters,
+    page: PageParams
+  ): Promise<Page<BankAccountWithLedger>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.bankAccount.findMany({
+          where: buildWhere(companyId, filters),
+          include: LEDGER_WITH_GROUP_INCLUDE,
+          orderBy: { bankName: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toBankAccountWithLedger), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<BankAccountWithLedger | null> {

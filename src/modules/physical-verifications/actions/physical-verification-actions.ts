@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { physicalVerificationService } from "@/modules/physical-verifications/services/physical-verification-service";
 import type {
@@ -7,12 +8,26 @@ import type {
   UpdatePhysicalVerificationInput,
 } from "@/modules/physical-verifications/validation/physical-verification-schema";
 import type { ActionResult } from "@/types/api";
-import type { PhysicalVerificationDetail } from "@/types/physical-verification";
+import type {
+  PhysicalVerificationDetail,
+  PhysicalVerificationListFilters,
+  PhysicalVerificationListRow,
+} from "@/types/physical-verification";
 
 const LIST_PATH = "/inventory/verifications";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Physical Verifications list — a pure
+ * read, so no paths are revalidated. */
+export async function loadMorePhysicalVerificationsAction(
+  filters: PhysicalVerificationListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PhysicalVerificationListRow>>> {
+  return runAction(() => physicalVerificationService.listPhysicalVerificationsPage(filters, { skip, take }), []);
 }
 
 export async function createPhysicalVerificationDraftAction(

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { cancelDebitNoteAction, postDebitNoteAction } from "@/modules/debit-notes/actions/debit-note-actions";
 import type { ActionResult } from "@/types/api";
@@ -49,6 +50,7 @@ export function DebitNoteStatusActions({ debitNote, canPost, canCancel }: DebitN
     <div className="flex flex-wrap gap-2">
       {canPost && debitNote.status === "DRAFT" ? (
         <Button size="sm" disabled={isBusy} onClick={() => runTransition(postDebitNoteAction, "POSTED", "Debit note posted.")}>
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -60,6 +62,7 @@ export function DebitNoteStatusActions({ debitNote, canPost, canCancel }: DebitN
           disabled={isBusy}
           onClick={() => runTransition(cancelDebitNoteAction, "CANCELLED", "Debit note cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

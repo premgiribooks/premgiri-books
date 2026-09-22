@@ -1,6 +1,7 @@
 import { Prisma, type Attendance as PrismaAttendance } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import type { AttendanceListFilters, AttendanceSummary, AttendanceWithRelations } from "@/types/attendance";
@@ -105,6 +106,25 @@ export const attendanceRepository = {
       include: ATTENDANCE_INCLUDE,
       orderBy: [{ date: "desc" }, { employee: { fullName: "asc" } }],
     });
+  },
+
+  /** Infinite-scroll page for the Attendance History list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: AttendanceListFilters,
+    page: PageParams
+  ): Promise<Page<AttendanceWithRelations>> {
+    return fetchPage(
+      (args) =>
+        prisma.attendance.findMany({
+          where: buildWhere(companyId, filters),
+          include: ATTENDANCE_INCLUDE,
+          orderBy: [{ date: "desc" }, { employee: { fullName: "asc" } }],
+          ...args,
+        }),
+      page
+    );
   },
 
   // A single-row upsert against @@unique([companyId, employeeId, date]) — a

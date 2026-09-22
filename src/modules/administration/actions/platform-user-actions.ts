@@ -10,10 +10,22 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from "@/constants/password-policy";
+import type { Page } from "@/lib/pagination";
+import { runAction } from "@/lib/run-action";
 import { assertNotRestoring } from "@/lib/restore-lock";
 import { platformUserService } from "@/modules/administration/services/platform-user-service";
 import type { SaveCompanyAdminInput } from "@/modules/administration/validation/create-company-schema";
 import type { ActionResult } from "@/types/api";
+import type { CompanyAdminSummary } from "@/types/user";
+
+/** Infinite-scroll "load more" for the Company Admins list — a pure read,
+ * so no paths are revalidated. */
+export async function loadMoreCompanyAdminsAction(
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<CompanyAdminSummary>>> {
+  return runAction(() => platformUserService.listCompanyAdminsPage({ skip, take }), []);
+}
 
 const resetPasswordSchema = z
   .string()

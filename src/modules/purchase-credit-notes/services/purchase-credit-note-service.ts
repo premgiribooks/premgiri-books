@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertPermission } from "@/lib/permissions";
+import type { Page, PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
@@ -263,6 +264,21 @@ export const purchaseCreditNoteService = {
       return [];
     }
     return purchaseCreditNoteRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Purchase Credit Notes list page. */
+  async listPurchaseCreditNotesPage(
+    filters: PurchaseCreditNoteListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseCreditNoteListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "purchase", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return purchaseCreditNoteRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   async getPurchaseCreditNote(id: string): Promise<PurchaseCreditNoteDetail | null> {

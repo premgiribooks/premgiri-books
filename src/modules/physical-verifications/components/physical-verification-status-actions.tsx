@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import {
   cancelPhysicalVerificationAction,
   completePhysicalVerificationAction,
@@ -64,6 +65,7 @@ export function PhysicalVerificationStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(completePhysicalVerificationAction, "COMPLETED", "Physical verification completed.")}
         >
+          {pending === "COMPLETED" ? <LoadingBar className="w-8" label="Completing" data-icon="inline-start" /> : null}
           {pending === "COMPLETED" ? "Completing…" : "Complete"}
         </Button>
       ) : null}
@@ -75,6 +77,7 @@ export function PhysicalVerificationStatusActions({
           disabled={isBusy}
           onClick={() => runTransition(cancelPhysicalVerificationAction, "CANCELLED", "Physical verification cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

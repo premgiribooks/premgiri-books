@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import {
@@ -67,6 +68,16 @@ export const productService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return productRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Products list page. */
+  async listProductsPage(
+    filters: ProductListFilters,
+    page: PageParams
+  ): Promise<Page<ProductWithRelations>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return productRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A product belonging to a different company must resolve identically to

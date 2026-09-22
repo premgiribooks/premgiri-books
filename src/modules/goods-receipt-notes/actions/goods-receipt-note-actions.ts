@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { goodsReceiptNoteService } from "@/modules/goods-receipt-notes/services/goods-receipt-note-service";
 import type {
@@ -7,13 +8,28 @@ import type {
   UpdateGoodsReceiptNoteInput,
 } from "@/modules/goods-receipt-notes/validation/goods-receipt-note-schema";
 import type { ActionResult } from "@/types/api";
-import type { GoodsReceiptNoteDetail, PurchaseOrderPrefill } from "@/types/goods-receipt-note";
+import type {
+  GoodsReceiptNoteDetail,
+  GoodsReceiptNoteListFilters,
+  GoodsReceiptNoteListRow,
+  PurchaseOrderPrefill,
+} from "@/types/goods-receipt-note";
 
 const LIST_PATH = "/purchase/receipts";
 const PURCHASE_ORDER_LIST_PATH = "/purchase/orders";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Goods Receipt Notes list — a pure
+ * read, so no paths are revalidated. */
+export async function loadMoreGoodsReceiptNotesAction(
+  filters: GoodsReceiptNoteListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<GoodsReceiptNoteListRow>>> {
+  return runAction(() => goodsReceiptNoteService.listGoodsReceiptNotesPage(filters, { skip, take }), []);
 }
 
 export async function createGoodsReceiptNoteAction(

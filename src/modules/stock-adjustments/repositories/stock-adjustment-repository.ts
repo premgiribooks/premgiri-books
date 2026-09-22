@@ -1,5 +1,6 @@
 import { Prisma, type StockAdjustmentStatus, type StockDirection } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -107,6 +108,27 @@ export const stockAdjustmentRepository = {
       orderBy: [{ adjustmentDate: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toStockAdjustmentListRow);
+  },
+
+  /** Infinite-scroll page for the Stock Adjustments list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: StockAdjustmentListFilters,
+    page: PageParams
+  ): Promise<Page<StockAdjustmentListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.stockAdjustment.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { _count: { select: { items: true } } },
+          orderBy: [{ adjustmentDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toStockAdjustmentListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<StockAdjustmentDetail | null> {

@@ -1,5 +1,6 @@
 import { Prisma, type Role } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { hasOtherActiveFullCoverageRole, isFullCoverageRole } from "@/modules/roles/utils/role-coverage";
@@ -19,6 +20,21 @@ export const roleRepository = {
       include: { _count: { select: { permissions: true } } },
       orderBy: { name: "asc" },
     });
+  },
+
+  /** Infinite-scroll page for the Roles list — same ordering as `findMany`,
+   * just `skip`/`take`-bounded. */
+  async findManyPage(companyId: string, page: PageParams): Promise<Page<RoleWithPermissionCount>> {
+    return fetchPage(
+      (args) =>
+        prisma.role.findMany({
+          where: { companyId },
+          include: { _count: { select: { permissions: true } } },
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
   },
 
   // Platform-wide (cross-company) read, unlike every other method here —

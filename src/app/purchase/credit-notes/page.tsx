@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePurchaseCreditNotesAction } from "@/modules/purchase-credit-notes/actions/purchase-credit-note-actions";
 import { PurchaseCreditNoteFilterBar } from "@/modules/purchase-credit-notes/components/purchase-credit-note-filter-bar";
 import { PurchaseCreditNoteTable } from "@/modules/purchase-credit-notes/components/purchase-credit-note-table";
 import { purchaseCreditNoteService } from "@/modules/purchase-credit-notes/services/purchase-credit-note-service";
@@ -51,8 +53,8 @@ export default async function PurchaseCreditNoteListPage({ searchParams }: Purch
 
   const filters = parseFilters(await searchParams);
 
-  const [purchaseCreditNotes, suppliers, isAdmin, canCreate] = await Promise.all([
-    purchaseCreditNoteService.listPurchaseCreditNotes(filters),
+  const [{ items: purchaseCreditNotes, hasMore }, suppliers, isAdmin, canCreate] = await Promise.all([
+    purchaseCreditNoteService.listPurchaseCreditNotesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     supplierService.listSelectableSuppliers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "purchase", "create"),
@@ -83,7 +85,12 @@ export default async function PurchaseCreditNoteListPage({ searchParams }: Purch
 
         <PurchaseCreditNoteFilterBar suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.ledger.name }))} />
 
-        <PurchaseCreditNoteTable purchaseCreditNotes={purchaseCreditNotes} />
+        <PurchaseCreditNoteTable
+          key={JSON.stringify(filters)}
+          purchaseCreditNotes={purchaseCreditNotes}
+          initialHasMore={hasMore}
+          loadMore={loadMorePurchaseCreditNotesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

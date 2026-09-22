@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
@@ -249,6 +250,18 @@ export const debitNoteService = {
       return [];
     }
     return debitNoteRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Debit Notes list page. */
+  async listDebitNotesPage(filters: DebitNoteListFilters, page: PageParams): Promise<Page<DebitNoteListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return debitNoteRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   async getDebitNote(id: string): Promise<DebitNoteDetail | null> {

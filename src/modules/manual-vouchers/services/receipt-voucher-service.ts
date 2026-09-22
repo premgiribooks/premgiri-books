@@ -4,7 +4,9 @@ import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
 import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
+import type { Page, PageParams } from "@/lib/pagination";
 import { voucherEngine } from "@/engines/voucher/voucher-engine";
+import { voucherRepository } from "@/modules/vouchers/repositories/voucher-repository";
 import { toPaise } from "@/engines/voucher/voucher-validation";
 import type { PostedVoucher, VoucherListFilters } from "@/engines/voucher/types";
 import { prisma } from "@/lib/prisma";
@@ -49,6 +51,25 @@ export const receiptVoucherService = {
       voucherType: "RECEIPT",
       financialYearId: financialYear.id,
     });
+  },
+
+  /** Infinite-scroll page for the Receipt Vouchers list. */
+  async listReceiptVouchersPage(
+    filters: Omit<VoucherListFilters, "voucherType">,
+    page: PageParams
+  ): Promise<Page<PostedVoucher>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, MODULE, "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return voucherRepository.findManyPage(
+      user.companyId,
+      { ...filters, voucherType: "RECEIPT", financialYearId: financialYear.id },
+      page
+    );
   },
 
   // A voucher belonging to a different company, or one that isn't a Receipt

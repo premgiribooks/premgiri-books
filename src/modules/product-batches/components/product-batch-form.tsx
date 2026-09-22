@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import {
@@ -138,6 +139,7 @@ export function ProductBatchForm({ productId, batch, onSaved, onCancel }: Produc
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting || disabled}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Batch"}
           </Button>
         </div>

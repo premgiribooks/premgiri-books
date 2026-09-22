@@ -3,6 +3,7 @@ import type { Prisma, SalesOrderStatus } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { prisma } from "@/lib/prisma";
@@ -356,6 +357,19 @@ export const salesOrderService = {
     }
 
     return salesOrderRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Sales Orders list page. */
+  async listSalesOrdersPage(filters: SalesOrderListFilters, page: PageParams): Promise<Page<SalesOrderListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+
+    return salesOrderRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   // Company-scoped only (not FY-scoped) — mirrors quotationService.getQuotation.

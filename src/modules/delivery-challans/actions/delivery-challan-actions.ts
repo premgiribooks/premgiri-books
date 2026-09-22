@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { deliveryChallanService } from "@/modules/delivery-challans/services/delivery-challan-service";
 import type {
@@ -7,13 +8,28 @@ import type {
   UpdateDeliveryChallanInput,
 } from "@/modules/delivery-challans/validation/delivery-challan-schema";
 import type { ActionResult } from "@/types/api";
-import type { DeliveryChallanDetail, SalesOrderPrefill } from "@/types/delivery-challan";
+import type {
+  DeliveryChallanDetail,
+  DeliveryChallanListFilters,
+  DeliveryChallanListRow,
+  SalesOrderPrefill,
+} from "@/types/delivery-challan";
 
 const LIST_PATH = "/sales/challans";
 const SALES_ORDER_LIST_PATH = "/sales/orders";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Delivery Challans list — a pure read,
+ * so no paths are revalidated. */
+export async function loadMoreDeliveryChallansAction(
+  filters: DeliveryChallanListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<DeliveryChallanListRow>>> {
+  return runAction(() => deliveryChallanService.listDeliveryChallansPage(filters, { skip, take }), []);
 }
 
 export async function createDeliveryChallanAction(

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -289,6 +290,7 @@ export function SalesOrderForm({ options, salesOrder }: SalesOrderFormProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Sales Order"}
           </Button>
         </div>

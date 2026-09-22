@@ -139,6 +139,7 @@ export function SalesOrderLineRow({
                   allowNone={false}
                   placeholder={isResolvingPrice ? "Resolving price…" : "Select a product"}
                   disabled={isResolvingPrice}
+                  isLoading={isResolvingPrice}
                 />
               </FormControl>
               <FormMessage />

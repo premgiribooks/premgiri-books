@@ -1,6 +1,7 @@
 import { Prisma, type PurchaseInvoiceStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
   ItemWisePurchaseAggregateRow,
@@ -253,6 +254,27 @@ export const purchaseInvoiceRepository = {
       orderBy: [{ invoiceDate: "desc" }, { supplierInvoiceNumber: "desc" }],
     });
     return rows.map(toPurchaseInvoiceListRow);
+  },
+
+  /** Infinite-scroll page for the Purchase Invoices list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: PurchaseInvoiceListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseInvoiceListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.purchaseInvoice.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...SUPPLIER_INCLUDE, ...PURCHASE_ORDER_INCLUDE, ...GOODS_RECEIPT_NOTE_INCLUDE },
+          orderBy: [{ invoiceDate: "desc" }, { supplierInvoiceNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPurchaseInvoiceListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<PurchaseInvoiceDetail | null> {

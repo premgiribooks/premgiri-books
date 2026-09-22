@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,19 +15,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateUserAction,
   deactivateUserAction,
 } from "@/modules/users/actions/user-actions";
 import { UserStatusBadge } from "@/modules/users/components/user-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { UserWithRole } from "@/types/user";
 
 interface UserTableProps {
   users: UserWithRole[];
   currentUserId: string;
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<UserWithRole>>>;
 }
 
-export function UserTable({ users, currentUserId }: UserTableProps) {
+export function UserTable({
+  users: initialUsers,
+  currentUserId,
+  initialHasMore = false,
+  loadMore,
+}: UserTableProps) {
+  const { items: users, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialUsers,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(user: UserWithRole) {
@@ -62,6 +78,7 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -115,5 +132,7 @@ export function UserTable({ users, currentUserId }: UserTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

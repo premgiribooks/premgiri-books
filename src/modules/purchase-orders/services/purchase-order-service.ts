@@ -5,6 +5,7 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError, isUniqueConstraintError } from "@/lib/prisma-errors";
+import type { Page, PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
@@ -317,6 +318,22 @@ export const purchaseOrderService = {
     }
 
     return purchaseOrderRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Purchase Orders list page. */
+  async listPurchaseOrdersPage(
+    filters: PurchaseOrderListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseOrderListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "purchase", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+
+    return purchaseOrderRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   // Company-scoped only (not FY-scoped) — mirrors salesOrderService.getSalesOrder.

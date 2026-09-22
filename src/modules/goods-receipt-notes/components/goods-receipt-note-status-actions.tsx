@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import {
   cancelGoodsReceiptNoteAction,
@@ -65,6 +66,7 @@ export function GoodsReceiptNoteStatusActions({ goodsReceiptNote, canEdit, canCr
           disabled={isBusy}
           onClick={() => runTransition(receiveGoodsReceiptNoteAction, "RECEIVED", "Goods receipt note received.")}
         >
+          {pending === "RECEIVED" ? <LoadingBar className="w-8" label="Receiving" data-icon="inline-start" /> : null}
           {pending === "RECEIVED" ? "Receiving…" : "Receive"}
         </Button>
       ) : null}
@@ -76,6 +78,7 @@ export function GoodsReceiptNoteStatusActions({ goodsReceiptNote, canEdit, canCr
           disabled={isBusy}
           onClick={() => runTransition(cancelGoodsReceiptNoteAction, "CANCELLED", "Goods receipt note cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

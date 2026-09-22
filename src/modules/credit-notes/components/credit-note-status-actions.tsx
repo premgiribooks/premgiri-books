@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { cancelCreditNoteAction, postCreditNoteAction } from "@/modules/credit-notes/actions/credit-note-actions";
 import type { ActionResult } from "@/types/api";
@@ -49,6 +50,7 @@ export function CreditNoteStatusActions({ creditNote, canPost, canCancel }: Cred
     <div className="flex flex-wrap gap-2">
       {canPost && creditNote.status === "DRAFT" ? (
         <Button size="sm" disabled={isBusy} onClick={() => runTransition(postCreditNoteAction, "POSTED", "Credit note posted.")}>
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -60,6 +62,7 @@ export function CreditNoteStatusActions({ creditNote, canPost, canCancel }: Cred
           disabled={isBusy}
           onClick={() => runTransition(cancelCreditNoteAction, "CANCELLED", "Credit note cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

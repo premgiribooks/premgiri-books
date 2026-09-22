@@ -3,10 +3,11 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
+import { SearchableSelect } from "@/components/common/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SearchableSelect } from "@/components/common/searchable-select";
 import {
   Table,
   TableBody,
@@ -15,16 +16,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   resetCompanyAdminPasswordAction,
   saveCompanyAdminAction,
   setCompanyAdminActiveAction,
 } from "@/modules/administration/actions/platform-user-actions";
+import type { ActionResult } from "@/types/api";
 import type { CompanyAdminSummary } from "@/types/user";
 
 interface CompanyAdminTableProps {
   companyAdmins: CompanyAdminSummary[];
   companies: { id: string; companyName: string }[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<CompanyAdminSummary>>>;
 }
 
 interface ProfileDraft {
@@ -45,7 +51,17 @@ function toProfileDraft(admin: CompanyAdminSummary): ProfileDraft {
   };
 }
 
-export function CompanyAdminTable({ companyAdmins, companies }: CompanyAdminTableProps) {
+export function CompanyAdminTable({
+  companyAdmins: initialCompanyAdmins,
+  companies,
+  initialHasMore = false,
+  loadMore,
+}: CompanyAdminTableProps) {
+  const { items: companyAdmins, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialCompanyAdmins,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
   const [resetTargetId, setResetTargetId] = React.useState<string | null>(null);
   const [newPassword, setNewPassword] = React.useState("");
@@ -138,7 +154,8 @@ export function CompanyAdminTable({ companyAdmins, companies }: CompanyAdminTabl
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Username</TableHead>
@@ -289,6 +306,8 @@ export function CompanyAdminTable({ companyAdmins, companies }: CompanyAdminTabl
           </React.Fragment>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

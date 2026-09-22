@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { productService } from "@/modules/products/services/product-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdateProductInput,
 } from "@/modules/products/validation/product-schema";
 import type { ActionResult } from "@/types/api";
-import type { ProductWithRelations } from "@/types/product";
+import type { ProductListFilters, ProductWithRelations } from "@/types/product";
 
 const LIST_PATH = "/masters/products";
+
+/** Infinite-scroll "load more" for the Products list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreProductsAction(
+  filters: ProductListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<ProductWithRelations>>> {
+  return runAction(() => productService.listProductsPage(filters, { skip, take }), []);
+}
 
 export async function createProductAction(
   input: CreateProductInput

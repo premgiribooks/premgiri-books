@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { cancelPurchaseCreditNoteAction, postPurchaseCreditNoteAction } from "@/modules/purchase-credit-notes/actions/purchase-credit-note-actions";
 import type { ActionResult } from "@/types/api";
 import type { CreditNoteStatus, PurchaseCreditNoteDetail } from "@/types/purchase-credit-note";
@@ -54,6 +55,7 @@ export function PurchaseCreditNoteStatusActions({ purchaseCreditNote, canPost, c
           disabled={isBusy}
           onClick={() => runTransition(postPurchaseCreditNoteAction, "POSTED", "Purchase credit note posted.")}
         >
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -65,6 +67,7 @@ export function PurchaseCreditNoteStatusActions({ purchaseCreditNote, canPost, c
           disabled={isBusy}
           onClick={() => runTransition(cancelPurchaseCreditNoteAction, "CANCELLED", "Purchase credit note cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

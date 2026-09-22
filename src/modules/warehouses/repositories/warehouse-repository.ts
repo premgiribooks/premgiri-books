@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError, isRetryableTransactionError } from "@/lib/prisma-errors";
@@ -96,6 +97,25 @@ export const warehouseRepository = {
       include: { branch: { select: BRANCH_OPTION_SELECT } },
       orderBy: { name: "asc" },
     });
+  },
+
+  /** Infinite-scroll page for the Warehouses list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: WarehouseListFilters,
+    page: PageParams
+  ): Promise<Page<WarehouseWithBranch>> {
+    return fetchPage(
+      (args) =>
+        prisma.warehouse.findMany({
+          where: buildWhere(companyId, filters),
+          include: { branch: { select: BRANCH_OPTION_SELECT } },
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
   },
 
   async findById(id: string): Promise<Warehouse | null> {

@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { unitRepository, type UnitPersistData } from "@/modules/units/repositories/unit-repository";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
@@ -44,6 +45,13 @@ export const unitService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return unitRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Units list page. */
+  async listUnitsPage(filters: UnitListFilters, page: PageParams): Promise<Page<Unit>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return unitRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A unit belonging to a different company must resolve identically to

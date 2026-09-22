@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import {
   Table,
   TableBody,
@@ -8,15 +11,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { DeliveryChallanStatusBadge } from "@/modules/delivery-challans/components/delivery-challan-status-badge";
 import { formatDeliveryChallanDate } from "@/modules/delivery-challans/utils/format-delivery-challan-date";
+import type { ActionResult } from "@/types/api";
 import type { DeliveryChallanListRow } from "@/types/delivery-challan";
 
 interface DeliveryChallanTableProps {
   deliveryChallans: DeliveryChallanListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<DeliveryChallanListRow>>>;
 }
 
-export function DeliveryChallanTable({ deliveryChallans }: DeliveryChallanTableProps) {
+export function DeliveryChallanTable({
+  deliveryChallans: initialDeliveryChallans,
+  initialHasMore = false,
+  loadMore,
+}: DeliveryChallanTableProps) {
+  const {
+    items: deliveryChallans,
+    hasMore,
+    isLoading,
+    sentinelRef,
+  } = useInfiniteList({ initialItems: initialDeliveryChallans, initialHasMore, loadMore });
+
   if (deliveryChallans.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -26,7 +45,8 @@ export function DeliveryChallanTable({ deliveryChallans }: DeliveryChallanTableP
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Number</TableHead>
@@ -75,6 +95,8 @@ export function DeliveryChallanTable({ deliveryChallans }: DeliveryChallanTableP
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

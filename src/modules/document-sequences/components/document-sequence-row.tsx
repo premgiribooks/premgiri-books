@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -140,6 +141,7 @@ export function DocumentSequenceRow({ sequence, canEdit }: DocumentSequenceRowPr
                   Cancel
                 </Button>
                 <Button type="submit" size="sm" disabled={isSaving}>
+                  {isSaving ? <LoadingBar className="w-6" label="Saving" data-icon="inline-start" /> : null}
                   {isSaving ? "Saving…" : "Save"}
                 </Button>
               </div>

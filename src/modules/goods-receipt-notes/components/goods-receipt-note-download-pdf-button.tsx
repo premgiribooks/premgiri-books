@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { downloadOrPrintDocument } from "@/lib/pdf-client";
 
@@ -41,7 +42,7 @@ export function GoodsReceiptNoteDownloadPdfButton({ goodsReceiptNoteId }: GoodsR
 
   return (
     <Button type="button" variant="outline" onClick={handleDownload} disabled={isPreparing}>
-      <Download size={16} />
+      {isPreparing ? <LoadingBar className="w-8" label="Preparing" /> : <Download size={16} />}
       {isPreparing ? "Preparing…" : "Download PDF"}
     </Button>
   );

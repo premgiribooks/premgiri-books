@@ -5,6 +5,7 @@ import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import type { Page, PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { documentNumberEngine } from "@/engines/document-number/document-number-engine";
@@ -270,6 +271,22 @@ export const goodsReceiptNoteService = {
     }
 
     return goodsReceiptNoteRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Goods Receipt Notes list page. */
+  async listGoodsReceiptNotesPage(
+    filters: GoodsReceiptNoteListFilters,
+    page: PageParams
+  ): Promise<Page<GoodsReceiptNoteListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "purchase", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+
+    return goodsReceiptNoteRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   // Company-scoped only (not FY-scoped) — mirrors deliveryChallanService.getDeliveryChallan.

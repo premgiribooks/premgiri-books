@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreCreditNotesAction } from "@/modules/credit-notes/actions/credit-note-actions";
 import { CreditNoteFilterBar } from "@/modules/credit-notes/components/credit-note-filter-bar";
 import { CreditNoteTable } from "@/modules/credit-notes/components/credit-note-table";
 import { creditNoteService } from "@/modules/credit-notes/services/credit-note-service";
@@ -51,8 +53,8 @@ export default async function CreditNoteListPage({ searchParams }: CreditNoteLis
 
   const filters = parseFilters(await searchParams);
 
-  const [creditNotes, customers, isAdmin, canCreate] = await Promise.all([
-    creditNoteService.listCreditNotes(filters),
+  const [{ items: creditNotes, hasMore }, customers, isAdmin, canCreate] = await Promise.all([
+    creditNoteService.listCreditNotesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     customerService.listSelectableCustomers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
@@ -83,7 +85,12 @@ export default async function CreditNoteListPage({ searchParams }: CreditNoteLis
 
         <CreditNoteFilterBar customers={customers.map((customer) => ({ id: customer.id, name: customer.ledger.name }))} />
 
-        <CreditNoteTable creditNotes={creditNotes} />
+        <CreditNoteTable
+          key={JSON.stringify(filters)}
+          creditNotes={creditNotes}
+          initialHasMore={hasMore}
+          loadMore={loadMoreCreditNotesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

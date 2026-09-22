@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePayrollRunsAction } from "@/modules/payroll/actions/payroll-run-actions";
 import { PayrollRunFilterBar } from "@/modules/payroll/components/payroll-run-filter-bar";
 import { PayrollRunTable } from "@/modules/payroll/components/payroll-run-table";
 import { payrollRunService } from "@/modules/payroll/services/payroll-run-service";
@@ -46,8 +48,8 @@ export default async function PayrollRunListPage({ searchParams }: PayrollRunLis
 
   const filters = parseFilters(await searchParams);
 
-  const [payrollRuns, isAdmin, canCreate] = await Promise.all([
-    payrollRunService.listPayrollRuns(filters),
+  const [{ items: payrollRuns, hasMore }, isAdmin, canCreate] = await Promise.all([
+    payrollRunService.listPayrollRunsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "employees", "create"),
   ]);
@@ -77,7 +79,12 @@ export default async function PayrollRunListPage({ searchParams }: PayrollRunLis
 
         <PayrollRunFilterBar />
 
-        <PayrollRunTable payrollRuns={payrollRuns} />
+        <PayrollRunTable
+          key={JSON.stringify(filters)}
+          payrollRuns={payrollRuns}
+          initialHasMore={hasMore}
+          loadMore={loadMorePayrollRunsAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

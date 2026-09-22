@@ -5,8 +5,10 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { customerService } from "@/modules/customers/services/customer-service";
+import { loadMoreSalesOrdersAction } from "@/modules/sales-orders/actions/sales-order-actions";
 import { SalesOrderFilterBar } from "@/modules/sales-orders/components/sales-order-filter-bar";
 import { SalesOrderTable } from "@/modules/sales-orders/components/sales-order-table";
 import { salesOrderService } from "@/modules/sales-orders/services/sales-order-service";
@@ -54,8 +56,8 @@ export default async function SalesOrderListPage({ searchParams }: SalesOrderLis
 
   const filters = parseFilters(await searchParams);
 
-  const [salesOrders, customers, isAdmin, canCreate] = await Promise.all([
-    salesOrderService.listSalesOrders(filters),
+  const [{ items: salesOrders, hasMore }, customers, isAdmin, canCreate] = await Promise.all([
+    salesOrderService.listSalesOrdersPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     customerService.listSelectableCustomers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
@@ -92,7 +94,12 @@ export default async function SalesOrderListPage({ searchParams }: SalesOrderLis
           }))}
         />
 
-        <SalesOrderTable salesOrders={salesOrders} />
+        <SalesOrderTable
+          key={JSON.stringify(filters)}
+          salesOrders={salesOrders}
+          initialHasMore={hasMore}
+          loadMore={loadMoreSalesOrdersAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

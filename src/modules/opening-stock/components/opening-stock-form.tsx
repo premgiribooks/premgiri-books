@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { FormSection } from "@/components/common/form-section";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Form } from "@/components/ui/form";
 import { recordOpeningStockAction } from "@/modules/opening-stock/actions/opening-stock-actions";
 import { OpeningStockLineEditor } from "@/modules/opening-stock/components/opening-stock-line-editor";
@@ -75,6 +76,7 @@ export function OpeningStockForm({ options }: OpeningStockFormProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSubmitting ? "Saving…" : "Record Opening Stock"}
           </Button>
         </div>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import {
   cancelDeliveryChallanAction,
   dispatchDeliveryChallanAction,
@@ -63,6 +64,7 @@ export function DeliveryChallanStatusActions({ deliveryChallan, canEdit, canCrea
           disabled={isBusy}
           onClick={() => runTransition(dispatchDeliveryChallanAction, "DISPATCHED", "Delivery challan dispatched.")}
         >
+          {pending === "DISPATCHED" ? <LoadingBar className="w-8" label="Dispatching" data-icon="inline-start" /> : null}
           {pending === "DISPATCHED" ? "Dispatching…" : "Dispatch"}
         </Button>
       ) : null}
@@ -74,6 +76,7 @@ export function DeliveryChallanStatusActions({ deliveryChallan, canEdit, canCrea
           disabled={isBusy}
           onClick={() => runTransition(cancelDeliveryChallanAction, "CANCELLED", "Delivery challan cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

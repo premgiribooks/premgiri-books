@@ -14,6 +14,7 @@ import type {
   VoucherListFilters,
 } from "@/engines/voucher/types";
 import { toPaise } from "@/engines/voucher/voucher-validation";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
 
@@ -237,6 +238,26 @@ export const voucherRepository = {
       orderBy: [{ voucherDate: "desc" }, { voucherNumber: "desc" }],
     });
     return rows.map(toPostedVoucher);
+  },
+
+  /** Infinite-scroll page for a voucher list screen — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: VoucherListFilters,
+    page: PageParams
+  ): Promise<Page<PostedVoucher>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.voucher.findMany({
+          where: buildWhere(companyId, filters),
+          include: { entries: true, ...PAYMENT_MODE_INCLUDE },
+          orderBy: [{ voucherDate: "desc" }, { voucherNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPostedVoucher), hasMore: result.hasMore };
   },
 
   /** Company-scoped: returns `null` for a cross-company id (resolves as not-found, never leaks existence). */

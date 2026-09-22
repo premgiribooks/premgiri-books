@@ -1,5 +1,6 @@
 import { Prisma, type PayrollRunStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type {
   EmployeeSalaryHistoryFilters,
@@ -112,6 +113,26 @@ export const payrollRunRepository = {
       orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toPayrollRunListRow);
+  },
+
+  /** Infinite-scroll page for the Payroll Runs list — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: PayrollRunListFilters,
+    page: PageParams
+  ): Promise<Page<PayrollRunListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.payrollRun.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPayrollRunListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<PayrollRunDetail | null> {

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
@@ -128,6 +129,21 @@ export const stockTransferService = {
       return [];
     }
     return stockTransferRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Stock Transfers list page. */
+  async listStockTransfersPage(
+    filters: StockTransferListFilters,
+    page: PageParams
+  ): Promise<Page<StockTransferListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "inventory", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return stockTransferRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   async getStockTransfer(id: string): Promise<StockTransferDetail | null> {

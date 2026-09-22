@@ -1,15 +1,38 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { PurchaseInvoiceStatusBadge } from "@/modules/purchase-invoices/components/purchase-invoice-status-badge";
 import { formatPurchaseInvoiceDate } from "@/modules/purchase-invoices/utils/format-purchase-invoice-date";
+import type { ActionResult } from "@/types/api";
 import type { PurchaseInvoiceListRow } from "@/types/purchase-invoice";
 
 interface PurchaseInvoiceTableProps {
   purchaseInvoices: PurchaseInvoiceListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<PurchaseInvoiceListRow>>>;
 }
 
-export function PurchaseInvoiceTable({ purchaseInvoices }: PurchaseInvoiceTableProps) {
+export function PurchaseInvoiceTable({
+  purchaseInvoices: initialPurchaseInvoices,
+  initialHasMore = false,
+  loadMore,
+}: PurchaseInvoiceTableProps) {
+  const {
+    items: purchaseInvoices,
+    hasMore,
+    isLoading,
+    sentinelRef,
+  } = useInfiniteList({
+    initialItems: initialPurchaseInvoices,
+    initialHasMore,
+    loadMore,
+  });
+
   if (purchaseInvoices.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -19,7 +42,8 @@ export function PurchaseInvoiceTable({ purchaseInvoices }: PurchaseInvoiceTableP
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Number</TableHead>
@@ -56,6 +80,8 @@ export function PurchaseInvoiceTable({ purchaseInvoices }: PurchaseInvoiceTableP
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

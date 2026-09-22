@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Printer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { useMarginOverride } from "@/hooks/use-margin-override";
 
 interface SalesInvoicePrintButtonProps {
@@ -83,7 +84,7 @@ export function SalesInvoicePrintButton({
       onClick={handlePrint}
       disabled={isPreparing}
     >
-      <Printer size={16} />
+      {isPreparing ? <LoadingBar className="w-8" label="Preparing" /> : <Printer size={16} />}
       {isPreparing ? "Preparing…" : "Print"}
     </Button>
   );

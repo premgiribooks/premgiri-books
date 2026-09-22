@@ -2,6 +2,7 @@ import { Prisma, type Role } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
 import { logger } from "@/lib/logger";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { COMPANY_ADMIN_ROLE_NAME } from "@/constants/roles";
@@ -97,6 +98,32 @@ export const userRepository = {
         return [];
       }
     });
+  },
+
+  /** Infinite-scroll page for the Users list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. Mirrors `findMany`'s own
+   * per-row malformed-data isolation. */
+  async findManyPage(companyId: string, filters: UserListFilters, page: PageParams): Promise<Page<UserWithRole>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.user.findMany({
+          where: buildWhere(companyId, filters),
+          include: SAFE_INCLUDE,
+          omit: SAFE_OMIT,
+          orderBy: { fullName: "asc" },
+          ...args,
+        }),
+      page
+    );
+    const items = result.items.flatMap((user) => {
+      try {
+        return [assertHasRole(user)];
+      } catch {
+        logger.error({ userId: user.id }, "Skipping malformed user row missing role or companyId");
+        return [];
+      }
+    });
+    return { items, hasMore: result.hasMore };
   },
 
   // Callers must always treat "found but belongs to a different company" the
@@ -411,6 +438,47 @@ export const userRepository = {
         companyId: user.companyId,
         companyName: user.company.companyName,
       }));
+  },
+
+  /** Infinite-scroll page for the Company Admins list — same filters/select/
+   * ordering as `findAllCompanyAdmins`, just `skip`/`take`-bounded. */
+  async findAllCompanyAdminsPage(page: PageParams): Promise<Page<CompanyAdminSummary>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.user.findMany({
+          where: { userType: "COMPANY", role: { isProtected: true, name: COMPANY_ADMIN_ROLE_NAME } },
+          select: {
+            id: true,
+            username: true,
+            fullName: true,
+            email: true,
+            mobile: true,
+            isActive: true,
+            companyId: true,
+            company: { select: { companyName: true } },
+          },
+          orderBy: { fullName: "asc" },
+          ...args,
+        }),
+      page
+    );
+
+    const items = result.items
+      .filter((user): user is typeof user & { companyId: string; company: { companyName: string } } =>
+        Boolean(user.companyId && user.company)
+      )
+      .map((user) => ({
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        email: user.email,
+        mobile: user.mobile,
+        isActive: user.isActive,
+        companyId: user.companyId,
+        companyName: user.company.companyName,
+      }));
+
+    return { items, hasMore: result.hasMore };
   },
 
   /**

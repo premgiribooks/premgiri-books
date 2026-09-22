@@ -1,5 +1,6 @@
 import { Prisma, type DebitNoteStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -155,6 +156,27 @@ export const debitNoteRepository = {
       orderBy: [{ noteDate: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toDebitNoteListRow);
+  },
+
+  /** Infinite-scroll page for the Debit Notes list — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: DebitNoteListFilters,
+    page: PageParams
+  ): Promise<Page<DebitNoteListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.debitNote.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...CUSTOMER_INCLUDE, ...SALES_INVOICE_INCLUDE },
+          orderBy: [{ noteDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toDebitNoteListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<DebitNoteDetail | null> {

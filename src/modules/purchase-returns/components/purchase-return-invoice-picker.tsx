@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { listReturnablePurchaseInvoicesAction } from "@/modules/purchase-returns/actions/purchase-return-actions";
@@ -39,19 +40,24 @@ export function PurchaseReturnInvoicePicker({ initialInvoices }: PurchaseReturnI
 
   return (
     <div className="flex flex-col gap-4">
-      <Input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search invoice number or supplier…"
-        className="sm:max-w-xs"
-        aria-label="Search posted purchase invoices"
-      />
+      <div className="flex items-center gap-3">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search invoice number or supplier…"
+          className="sm:max-w-xs"
+          aria-label="Search posted purchase invoices"
+        />
+        {isLoading ? <LoadingBar className="w-12" label="Searching" /> : null}
+      </div>
 
       {invoices.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            {isLoading ? "Searching…" : "No posted purchase invoices found."}
-          </p>
+          {isLoading ? (
+            <LoadingBar className="w-32" label="Searching" />
+          ) : (
+            <p className="text-sm text-muted-foreground">No posted purchase invoices found.</p>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border">

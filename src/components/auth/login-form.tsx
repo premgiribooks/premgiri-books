@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -100,6 +101,7 @@ export function LoginForm() {
         />
 
         <Button type="submit" disabled={isSubmitting} className="w-full">
+          {isSubmitting ? <LoadingBar className="w-8" label="Signing in" data-icon="inline-start" /> : null}
           {isSubmitting ? "Signing in…" : "Login"}
         </Button>
       </form>

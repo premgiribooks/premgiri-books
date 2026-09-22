@@ -1,15 +1,26 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { payrollRunService } from "@/modules/payroll/services/payroll-run-service";
-import type { CreatePayrollRunInput } from "@/modules/payroll/validation/payroll-run-schema";
+import type { CreatePayrollRunInput, PayrollRunListFiltersInput } from "@/modules/payroll/validation/payroll-run-schema";
 import type { ActionResult } from "@/types/api";
-import type { PayrollRunDetail, PayrollRunPreview } from "@/types/payroll-run";
+import type { PayrollRunDetail, PayrollRunListRow, PayrollRunPreview } from "@/types/payroll-run";
 
 const LIST_PATH = "/employees/payroll";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Payroll Runs list — a pure read, so
+ * no paths are revalidated. */
+export async function loadMorePayrollRunsAction(
+  filters: PayrollRunListFiltersInput,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PayrollRunListRow>>> {
+  return runAction(() => payrollRunService.listPayrollRunsPage(filters, { skip, take }), []);
 }
 
 // Read-only — no revalidation. The Create Payroll Run screen's live preview.

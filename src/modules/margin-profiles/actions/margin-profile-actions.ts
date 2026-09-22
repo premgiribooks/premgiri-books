@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { marginProfileService } from "@/modules/margin-profiles/services/margin-profile-service";
 import type {
@@ -7,9 +8,19 @@ import type {
   UpdateMarginProfileInput,
 } from "@/modules/margin-profiles/validation/margin-profile-schema";
 import type { ActionResult } from "@/types/api";
-import type { MarginProfile } from "@/types/margin-profile";
+import type { MarginProfile, MarginProfileListFilters } from "@/types/margin-profile";
 
 const LIST_PATH = "/masters/margin-profiles";
+
+/** Infinite-scroll "load more" for the Margin Profiles list — a pure read,
+ * so no paths are revalidated. */
+export async function loadMoreMarginProfilesAction(
+  filters: MarginProfileListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<MarginProfile>>> {
+  return runAction(() => marginProfileService.listMarginProfilesPage(filters, { skip, take }), []);
+}
 
 export async function createMarginProfileAction(
   input: CreateMarginProfileInput

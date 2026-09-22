@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentSuperAdmin } from "@/lib/current-user";
 import { hashPassword } from "@/lib/password";
+import type { Page, PageParams } from "@/lib/pagination";
 import { runInTransaction } from "@/lib/transaction";
 import { COMPANY_ADMIN_ROLE_NAME } from "@/constants/roles";
 import { auditLogService } from "@/modules/administration/services/audit-log-service";
@@ -58,6 +59,12 @@ export const platformUserService = {
   async listCompanyAdmins(): Promise<CompanyAdminSummary[]> {
     await getCurrentSuperAdmin();
     return userRepository.findAllCompanyAdmins();
+  },
+
+  /** Infinite-scroll page for the Company Admins list. */
+  async listCompanyAdminsPage(page: PageParams): Promise<Page<CompanyAdminSummary>> {
+    await getCurrentSuperAdmin();
+    return userRepository.findAllCompanyAdminsPage(page);
   },
 
   async resetCompanyAdminPassword(userId: string, newPassword: string): Promise<void> {

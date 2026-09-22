@@ -1,16 +1,33 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { purchaseReturnService } from "@/modules/purchase-returns/services/purchase-return-service";
 import type { CreatePurchaseReturnInput, UpdatePurchaseReturnInput } from "@/modules/purchase-returns/validation/purchase-return-schema";
 import type { ActionResult } from "@/types/api";
-import type { PurchaseReturnDetail, ReturnablePurchaseInvoiceDetail, ReturnablePurchaseInvoiceOption } from "@/types/purchase-return";
+import type {
+  PurchaseReturnDetail,
+  PurchaseReturnListFilters,
+  PurchaseReturnListRow,
+  ReturnablePurchaseInvoiceDetail,
+  ReturnablePurchaseInvoiceOption,
+} from "@/types/purchase-return";
 
 const LIST_PATH = "/purchase/returns";
 const INVOICE_LIST_PATH = "/purchase/invoices";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Purchase Returns list — a pure
+ * read, so no paths are revalidated. */
+export async function loadMorePurchaseReturnsAction(
+  filters: PurchaseReturnListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PurchaseReturnListRow>>> {
+  return runAction(() => purchaseReturnService.listPurchaseReturnsPage(filters, { skip, take }), []);
 }
 
 export async function createPurchaseReturnDraftAction(

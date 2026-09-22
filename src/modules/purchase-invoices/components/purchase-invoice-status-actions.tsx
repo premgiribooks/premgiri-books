@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import {
   cancelPurchaseInvoiceAction,
   postPurchaseInvoiceAction,
@@ -56,6 +57,7 @@ export function PurchaseInvoiceStatusActions({ purchaseInvoice, canPost, canCanc
           disabled={isBusy}
           onClick={() => runTransition(postPurchaseInvoiceAction, "POSTED", "Purchase invoice posted.")}
         >
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -67,6 +69,7 @@ export function PurchaseInvoiceStatusActions({ purchaseInvoice, canPost, canCanc
           disabled={isBusy}
           onClick={() => runTransition(cancelPurchaseInvoiceAction, "CANCELLED", "Purchase invoice cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

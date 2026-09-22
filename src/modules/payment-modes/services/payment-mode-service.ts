@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import {
@@ -44,6 +45,16 @@ export const paymentModeService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "accounting", "view");
     return paymentModeRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Payment Modes list page. */
+  async listPaymentModesPage(
+    filters: PaymentModeListFilters,
+    page: PageParams
+  ): Promise<Page<PaymentMode>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "accounting", "view");
+    return paymentModeRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A payment mode belonging to a different company must resolve

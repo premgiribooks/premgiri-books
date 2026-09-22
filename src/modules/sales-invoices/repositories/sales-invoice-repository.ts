@@ -1,5 +1,6 @@
 import { Prisma, type SalesInvoiceStatus } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
@@ -348,6 +349,27 @@ export const salesInvoiceRepository = {
       orderBy: [{ invoiceDate: "desc" }, { invoiceNumber: "desc" }],
     });
     return rows.map(toSalesInvoiceListRow);
+  },
+
+  /** Infinite-scroll page for the Sales Invoices list — same filters/ordering
+   * as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: SalesInvoiceListFilters,
+    page: PageParams
+  ): Promise<Page<SalesInvoiceListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.salesInvoice.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: { ...CUSTOMER_INCLUDE, ...SALES_ORDER_INCLUDE, ...DELIVERY_CHALLAN_INCLUDE },
+          orderBy: [{ invoiceDate: "desc" }, { invoiceNumber: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toSalesInvoiceListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma): Promise<SalesInvoiceDetail | null> {

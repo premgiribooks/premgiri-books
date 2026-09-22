@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreOpeningStockEntriesAction } from "@/modules/opening-stock/actions/opening-stock-actions";
 import { OpeningStockFilterBar } from "@/modules/opening-stock/components/opening-stock-filter-bar";
 import { OpeningStockTable } from "@/modules/opening-stock/components/opening-stock-table";
 import { openingStockService } from "@/modules/opening-stock/services/opening-stock-service";
@@ -49,8 +51,8 @@ export default async function OpeningStockListPage({ searchParams }: OpeningStoc
 
   const filters = parseFilters(await searchParams);
 
-  const [entries, options, isAdmin, canCreate] = await Promise.all([
-    openingStockService.listOpeningStockEntries(filters),
+  const [{ items: entries, hasMore }, options, isAdmin, canCreate] = await Promise.all([
+    openingStockService.listOpeningStockEntriesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     openingStockService.listFormOptions(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "inventory", "create"),
@@ -81,7 +83,12 @@ export default async function OpeningStockListPage({ searchParams }: OpeningStoc
 
         <OpeningStockFilterBar products={options.products} warehouses={options.warehouses} />
 
-        <OpeningStockTable entries={entries} />
+        <OpeningStockTable
+          key={JSON.stringify(filters)}
+          entries={entries}
+          initialHasMore={hasMore}
+          loadMore={loadMoreOpeningStockEntriesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

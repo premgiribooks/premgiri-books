@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreStockTransfersAction } from "@/modules/stock-transfers/actions/stock-transfer-actions";
 import { StockTransferFilterBar } from "@/modules/stock-transfers/components/stock-transfer-filter-bar";
 import { StockTransferTable } from "@/modules/stock-transfers/components/stock-transfer-table";
 import { stockTransferService } from "@/modules/stock-transfers/services/stock-transfer-service";
@@ -65,8 +67,8 @@ export default async function StockTransferListPage({ searchParams }: StockTrans
 
   const filters = parseFilters(await searchParams);
 
-  const [stockTransfers, options, isAdmin, canCreate] = await Promise.all([
-    stockTransferService.listStockTransfers(filters),
+  const [{ items: stockTransfers, hasMore }, options, isAdmin, canCreate] = await Promise.all([
+    stockTransferService.listStockTransfersPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     stockTransferService.listFormOptions(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "inventory", "create"),
@@ -95,7 +97,12 @@ export default async function StockTransferListPage({ searchParams }: StockTrans
 
         <StockTransferFilterBar warehouses={options.warehouses} />
 
-        <StockTransferTable stockTransfers={stockTransfers} />
+        <StockTransferTable
+          key={JSON.stringify(filters)}
+          stockTransfers={stockTransfers}
+          initialHasMore={hasMore}
+          loadMore={loadMoreStockTransfersAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

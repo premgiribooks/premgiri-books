@@ -1,15 +1,33 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { DebitNoteStatusBadge } from "@/modules/debit-notes/components/debit-note-status-badge";
 import { formatDebitNoteDate } from "@/modules/debit-notes/utils/format-debit-note-date";
+import type { ActionResult } from "@/types/api";
 import type { DebitNoteListRow } from "@/types/debit-note";
 
 interface DebitNoteTableProps {
   debitNotes: DebitNoteListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<DebitNoteListRow>>>;
 }
 
-export function DebitNoteTable({ debitNotes }: DebitNoteTableProps) {
+export function DebitNoteTable({
+  debitNotes: initialDebitNotes,
+  initialHasMore = false,
+  loadMore,
+}: DebitNoteTableProps) {
+  const { items: debitNotes, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialDebitNotes,
+    initialHasMore,
+    loadMore,
+  });
+
   if (debitNotes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -19,6 +37,7 @@ export function DebitNoteTable({ debitNotes }: DebitNoteTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -55,5 +74,7 @@ export function DebitNoteTable({ debitNotes }: DebitNoteTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

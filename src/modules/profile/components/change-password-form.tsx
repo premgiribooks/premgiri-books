@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -114,6 +115,7 @@ export function ChangePasswordForm() {
 
         <div className="flex justify-end">
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Changing" data-icon="inline-start" /> : null}
             {isSubmitting ? "Changing…" : "Change Password"}
           </Button>
         </div>

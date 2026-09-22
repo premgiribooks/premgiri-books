@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreReceiptVouchersAction } from "@/modules/manual-vouchers/actions/receipt-voucher-actions";
 import { ReceiptVoucherTable } from "@/modules/manual-vouchers/components/receipt-voucher-table";
 import { paymentVoucherService } from "@/modules/manual-vouchers/services/payment-voucher-service";
 import { receiptVoucherService } from "@/modules/manual-vouchers/services/receipt-voucher-service";
@@ -17,8 +19,8 @@ export default async function ReceiptVoucherListPage() {
     redirect("/");
   }
 
-  const [vouchers, ledgerOptions, isAdmin, canCreate] = await Promise.all([
-    receiptVoucherService.listReceiptVouchers(),
+  const [{ items: vouchers, hasMore }, ledgerOptions, isAdmin, canCreate] = await Promise.all([
+    receiptVoucherService.listReceiptVouchersPage({}, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     paymentVoucherService.listLedgerOptions(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "accounting", "create"),
@@ -48,7 +50,12 @@ export default async function ReceiptVoucherListPage() {
           ) : null}
         </div>
 
-        <ReceiptVoucherTable vouchers={vouchers} ledgerNameById={ledgerNameById} />
+        <ReceiptVoucherTable
+          vouchers={vouchers}
+          ledgerNameById={ledgerNameById}
+          initialHasMore={hasMore}
+          loadMore={loadMoreReceiptVouchersAction.bind(null, {})}
+        />
       </div>
     </AppShell>
   );

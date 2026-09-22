@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePhysicalVerificationsAction } from "@/modules/physical-verifications/actions/physical-verification-actions";
 import { PhysicalVerificationFilterBar } from "@/modules/physical-verifications/components/physical-verification-filter-bar";
 import { PhysicalVerificationTable } from "@/modules/physical-verifications/components/physical-verification-table";
 import { physicalVerificationService } from "@/modules/physical-verifications/services/physical-verification-service";
@@ -64,8 +66,8 @@ export default async function PhysicalVerificationListPage({ searchParams }: Phy
 
   const filters = parseFilters(await searchParams);
 
-  const [physicalVerifications, options, isAdmin, canCreate] = await Promise.all([
-    physicalVerificationService.listPhysicalVerifications(filters),
+  const [{ items: physicalVerifications, hasMore }, options, isAdmin, canCreate] = await Promise.all([
+    physicalVerificationService.listPhysicalVerificationsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     physicalVerificationService.listFormOptions(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "inventory", "create"),
@@ -94,7 +96,12 @@ export default async function PhysicalVerificationListPage({ searchParams }: Phy
 
         <PhysicalVerificationFilterBar warehouses={options.warehouses} />
 
-        <PhysicalVerificationTable physicalVerifications={physicalVerifications} />
+        <PhysicalVerificationTable
+          key={JSON.stringify(filters)}
+          physicalVerifications={physicalVerifications}
+          initialHasMore={hasMore}
+          loadMore={loadMorePhysicalVerificationsAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

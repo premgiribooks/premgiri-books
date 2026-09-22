@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { cancelSalesReturnAction, postSalesReturnAction } from "@/modules/sales-returns/actions/sales-return-actions";
 import type { ActionResult } from "@/types/api";
 import type { SalesReturnDetail, SalesReturnStatus } from "@/types/sales-return";
@@ -50,6 +51,7 @@ export function SalesReturnStatusActions({ salesReturn, canPost, canCancel }: Sa
     <div className="flex flex-wrap gap-2">
       {canPost && salesReturn.status === "DRAFT" ? (
         <Button size="sm" disabled={isBusy} onClick={() => runTransition(postSalesReturnAction, "POSTED", "Sales return posted.")}>
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -61,6 +63,7 @@ export function SalesReturnStatusActions({ salesReturn, canPost, canCancel }: Sa
           disabled={isBusy}
           onClick={() => runTransition(cancelSalesReturnAction, "CANCELLED", "Sales return cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

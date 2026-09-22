@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreSuppliersAction } from "@/modules/suppliers/actions/supplier-actions";
 import { SupplierFilterBar } from "@/modules/suppliers/components/supplier-filter-bar";
 import { SupplierTable } from "@/modules/suppliers/components/supplier-table";
 import { supplierService } from "@/modules/suppliers/services/supplier-service";
@@ -47,13 +49,14 @@ export default async function SupplierListPage({ searchParams }: SupplierListPag
 
   const filters = parseFilters(await searchParams);
 
-  const [suppliers, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    supplierService.listSuppliers(filters),
-    isCurrentUserCompanyAdmin(),
-    hasPermission(user, "masters", "create"),
-    hasPermission(user, "masters", "edit"),
-    hasPermission(user, "masters", "delete"),
-  ]);
+  const [{ items: suppliers, hasMore }, isAdmin, canCreate, canEdit, canManage] =
+    await Promise.all([
+      supplierService.listSuppliersPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
+      isCurrentUserCompanyAdmin(),
+      hasPermission(user, "masters", "create"),
+      hasPermission(user, "masters", "edit"),
+      hasPermission(user, "masters", "delete"),
+    ]);
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -87,7 +90,14 @@ export default async function SupplierListPage({ searchParams }: SupplierListPag
 
         <SupplierFilterBar />
 
-        <SupplierTable suppliers={suppliers} canEdit={canEdit} canManage={canManage} />
+        <SupplierTable
+          key={JSON.stringify(filters)}
+          suppliers={suppliers}
+          initialHasMore={hasMore}
+          loadMore={loadMoreSuppliersAction.bind(null, filters)}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

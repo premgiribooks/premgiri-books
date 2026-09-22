@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
@@ -121,6 +122,21 @@ export const stockAdjustmentService = {
       return [];
     }
     return stockAdjustmentRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Stock Adjustments list page. */
+  async listStockAdjustmentsPage(
+    filters: StockAdjustmentListFilters,
+    page: PageParams
+  ): Promise<Page<StockAdjustmentListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "inventory", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return stockAdjustmentRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   async getStockAdjustment(id: string): Promise<StockAdjustmentDetail | null> {

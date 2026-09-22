@@ -7,6 +7,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -190,7 +191,7 @@ export function PriceListAddItemForm({ priceListId, products }: PriceListAddItem
           )}
         />
         <Button type="submit" size="sm" disabled={isSubmitting} className="mb-[2px]">
-          <Plus size={16} />
+          {isSubmitting ? <LoadingBar className="w-8" label="Adding" /> : <Plus size={16} />}
           {isSubmitting ? "Adding…" : "Add Row"}
         </Button>
       </form>

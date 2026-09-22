@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 import { runInTransaction } from "@/lib/transaction";
@@ -122,6 +123,16 @@ export const customerService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return customerRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Customers list page. */
+  async listCustomersPage(
+    filters: CustomerListFilters,
+    page: PageParams
+  ): Promise<Page<CustomerWithLedger>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return customerRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A customer belonging to a different company must resolve identically to

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { activateLedgerAction, deactivateLedgerAction } from "@/modules/ledgers/actions/ledger-actions";
 import { LedgerStatusBadge } from "@/modules/ledgers/components/ledger-status-badge";
 import type { ActionResult } from "@/types/api";
@@ -22,6 +25,8 @@ import type { Ledger, LedgerWithGroup } from "@/types/ledger";
 
 interface LedgerTableProps {
   ledgers: LedgerWithGroup[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<LedgerWithGroup>>>;
   canEdit?: boolean;
   canManage?: boolean;
   /** Route prefix the Edit link points at; defaults to the generic Ledger screens. */
@@ -46,7 +51,9 @@ const DETAIL_MANAGED_HINTS: Record<"bankAccount" | "customer" | "supplier", stri
 };
 
 export function LedgerTable({
-  ledgers,
+  ledgers: initialLedgers,
+  initialHasMore = false,
+  loadMore,
   canEdit = false,
   canManage = false,
   editBasePath = "/accounting/ledgers",
@@ -55,6 +62,11 @@ export function LedgerTable({
   deactivateAction = deactivateLedgerAction,
   detailManaged,
 }: LedgerTableProps) {
+  const { items: ledgers, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialLedgers,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
   const entityLower = entityLabel.toLowerCase();
   const managedLinks = React.useMemo(
@@ -89,7 +101,8 @@ export function LedgerTable({
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -155,6 +168,8 @@ export function LedgerTable({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

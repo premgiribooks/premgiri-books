@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser, getCurrentSuperAdmin, getCurrentUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { hashPassword } from "@/lib/password";
 import { runInTransaction } from "@/lib/transaction";
@@ -54,6 +55,34 @@ export const companyService = {
     }
 
     return [company];
+  },
+
+  /** Infinite-scroll page for the Companies list — same PLATFORM/COMPANY
+   * branching as `listCompanies`, just `skip`/`take`-bounded for the
+   * PLATFORM (every-company) branch. */
+  async listCompaniesPage(
+    filters: CompanyListFilters,
+    page: PageParams
+  ): Promise<Page<CompanyWithSettings>> {
+    const user = await getCurrentUser();
+    if (user.userType === "PLATFORM") {
+      return companyRepository.findManyPage(filters, page);
+    }
+
+    const company = await companyRepository.findById(user.companyId);
+    if (!company) {
+      return { items: [], hasMore: false };
+    }
+
+    if (filters.status === "active" && !company.isActive) {
+      return { items: [], hasMore: false };
+    }
+
+    if (filters.status === "inactive" && company.isActive) {
+      return { items: [], hasMore: false };
+    }
+
+    return { items: [company], hasMore: false };
   },
 
   async getCompany(id: string): Promise<CompanyWithSettings | null> {

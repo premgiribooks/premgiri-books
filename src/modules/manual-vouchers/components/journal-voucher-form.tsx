@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { numericFieldWidth } from "@/lib/utils";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { createJournalVoucherAction } from "@/modules/manual-vouchers/actions/journal-voucher-actions";
 import { ProductOptionSelector, type ProductOptionItem } from "@/modules/products/components/product-option-selector";
 import {
@@ -246,6 +247,7 @@ export function JournalVoucherForm({ ledgerOptions }: JournalVoucherFormProps) {
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
             {isSubmitting ? "Posting…" : "Post Journal Voucher"}
           </Button>
         </div>

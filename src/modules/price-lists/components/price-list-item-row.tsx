@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -245,6 +246,7 @@ export function PriceListItemRow({ priceListId, item, products, canEdit }: Price
                   Cancel
                 </Button>
                 <Button type="submit" size="sm" disabled={isSaving}>
+                  {isSaving ? <LoadingBar className="w-6" label="Saving" data-icon="inline-start" /> : null}
                   {isSaving ? "Saving…" : "Save"}
                 </Button>
               </div>
@@ -290,6 +292,7 @@ export function PriceListItemRow({ priceListId, item, products, canEdit }: Price
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction onClick={handleRemove} disabled={isRemoving}>
+                    {isRemoving ? <LoadingBar className="w-6" label="Removing" data-icon="inline-start" /> : null}
                     {isRemoving ? "Removing…" : "Remove"}
                   </AlertDialogAction>
                 </AlertDialogFooter>

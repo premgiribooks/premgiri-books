@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { cancelStockAdjustmentAction, postStockAdjustmentAction } from "@/modules/stock-adjustments/actions/stock-adjustment-actions";
 import type { ActionResult } from "@/types/api";
 import type { StockAdjustmentDetail, StockAdjustmentStatus } from "@/types/stock-adjustment";
@@ -53,6 +54,7 @@ export function StockAdjustmentStatusActions({ stockAdjustment, canPost, canCanc
           disabled={isBusy}
           onClick={() => runTransition(postStockAdjustmentAction, "POSTED", "Stock adjustment posted.")}
         >
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -64,6 +66,7 @@ export function StockAdjustmentStatusActions({ stockAdjustment, canPost, canCanc
           disabled={isBusy}
           onClick={() => runTransition(cancelStockAdjustmentAction, "CANCELLED", "Stock adjustment cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

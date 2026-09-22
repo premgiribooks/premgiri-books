@@ -1,12 +1,20 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { SalesInvoiceStatusBadge } from "@/modules/sales-invoices/components/sales-invoice-status-badge";
 import { formatSalesInvoiceDate } from "@/modules/sales-invoices/utils/format-sales-invoice-date";
+import type { ActionResult } from "@/types/api";
 import type { SalesInvoiceListRow } from "@/types/sales-invoice";
 
 interface SalesInvoiceTableProps {
   salesInvoices: SalesInvoiceListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<SalesInvoiceListRow>>>;
 }
 
 function customerLabel(invoice: SalesInvoiceListRow): string {
@@ -19,7 +27,17 @@ function customerLabel(invoice: SalesInvoiceListRow): string {
   return invoice.quickCustomerName ? `Walk-in — ${invoice.quickCustomerName}` : "Walk-in";
 }
 
-export function SalesInvoiceTable({ salesInvoices }: SalesInvoiceTableProps) {
+export function SalesInvoiceTable({
+  salesInvoices: initialSalesInvoices,
+  initialHasMore = false,
+  loadMore,
+}: SalesInvoiceTableProps) {
+  const { items: salesInvoices, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialSalesInvoices,
+    initialHasMore,
+    loadMore,
+  });
+
   if (salesInvoices.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -29,6 +47,7 @@ export function SalesInvoiceTable({ salesInvoices }: SalesInvoiceTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -65,5 +84,7 @@ export function SalesInvoiceTable({ salesInvoices }: SalesInvoiceTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

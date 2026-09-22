@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
 import { toLedgerWithGroup } from "@/modules/ledgers/repositories/ledger-repository";
@@ -169,6 +170,26 @@ export const customerRepository = {
       orderBy: { ledger: { name: "asc" } },
     });
     return rows.map(toCustomerWithLedger);
+  },
+
+  /** Infinite-scroll page for the Customers list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: CustomerListFilters,
+    page: PageParams
+  ): Promise<Page<CustomerWithLedger>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.customer.findMany({
+          where: buildWhere(companyId, filters),
+          include: CUSTOMER_INCLUDE,
+          orderBy: { ledger: { name: "asc" } },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toCustomerWithLedger), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<CustomerWithLedger | null> {

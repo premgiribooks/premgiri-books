@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { salesOrderService } from "@/modules/sales-orders/services/sales-order-service";
 import type {
@@ -8,13 +9,29 @@ import type {
   UpdateSalesOrderInput,
 } from "@/modules/sales-orders/validation/sales-order-schema";
 import type { ActionResult } from "@/types/api";
-import type { ResolvedSalesOrderLinePrice, SalesOrderDetail, SalesOrderPreview } from "@/types/sales-order";
+import type {
+  ResolvedSalesOrderLinePrice,
+  SalesOrderDetail,
+  SalesOrderListFilters,
+  SalesOrderListRow,
+  SalesOrderPreview,
+} from "@/types/sales-order";
 
 const LIST_PATH = "/sales/orders";
 const QUOTATION_LIST_PATH = "/sales/quotations";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Sales Orders list — a pure read, so
+ * no paths are revalidated. */
+export async function loadMoreSalesOrdersAction(
+  filters: SalesOrderListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<SalesOrderListRow>>> {
+  return runAction(() => salesOrderService.listSalesOrdersPage(filters, { skip, take }), []);
 }
 
 export async function createSalesOrderAction(

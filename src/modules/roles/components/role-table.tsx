@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,15 +15,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { activateRoleAction, deactivateRoleAction } from "@/modules/roles/actions/role-actions";
 import { RoleStatusBadge } from "@/modules/roles/components/role-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { RoleWithPermissionCount } from "@/types/role";
 
 interface RoleTableProps {
   roles: RoleWithPermissionCount[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<RoleWithPermissionCount>>>;
 }
 
-export function RoleTable({ roles }: RoleTableProps) {
+export function RoleTable({
+  roles: initialRoles,
+  initialHasMore = false,
+  loadMore,
+}: RoleTableProps) {
+  const { items: roles, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialRoles,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(role: RoleWithPermissionCount) {
@@ -58,6 +73,7 @@ export function RoleTable({ roles }: RoleTableProps) {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -102,5 +118,7 @@ export function RoleTable({ roles }: RoleTableProps) {
         ))}
       </TableBody>
     </Table>
+    <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

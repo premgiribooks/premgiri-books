@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreDebitNotesAction } from "@/modules/debit-notes/actions/debit-note-actions";
 import { DebitNoteFilterBar } from "@/modules/debit-notes/components/debit-note-filter-bar";
 import { DebitNoteTable } from "@/modules/debit-notes/components/debit-note-table";
 import { debitNoteService } from "@/modules/debit-notes/services/debit-note-service";
@@ -51,8 +53,8 @@ export default async function DebitNoteListPage({ searchParams }: DebitNoteListP
 
   const filters = parseFilters(await searchParams);
 
-  const [debitNotes, customers, isAdmin, canCreate] = await Promise.all([
-    debitNoteService.listDebitNotes(filters),
+  const [{ items: debitNotes, hasMore }, customers, isAdmin, canCreate] = await Promise.all([
+    debitNoteService.listDebitNotesPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
     customerService.listSelectableCustomers(),
     isCurrentUserCompanyAdmin(),
     hasPermission(user, "sales", "create"),
@@ -83,7 +85,12 @@ export default async function DebitNoteListPage({ searchParams }: DebitNoteListP
 
         <DebitNoteFilterBar customers={customers.map((customer) => ({ id: customer.id, name: customer.ledger.name }))} />
 
-        <DebitNoteTable debitNotes={debitNotes} />
+        <DebitNoteTable
+          key={JSON.stringify(filters)}
+          debitNotes={debitNotes}
+          initialHasMore={hasMore}
+          loadMore={loadMoreDebitNotesAction.bind(null, filters)}
+        />
       </div>
     </AppShell>
   );

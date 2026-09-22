@@ -4,7 +4,9 @@ import { Plus } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMoreRolesAction } from "@/modules/roles/actions/role-actions";
 import { roleService } from "@/modules/roles/services/role-service";
 import { RoleTable } from "@/modules/roles/components/role-table";
 
@@ -14,7 +16,7 @@ export default async function RoleListPage() {
     redirect("/");
   }
 
-  const roles = await roleService.listRoles();
+  const { items: roles, hasMore } = await roleService.listRolesPage({ skip: 0, take: DEFAULT_PAGE_SIZE });
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -37,7 +39,7 @@ export default async function RoleListPage() {
           />
         </div>
 
-        <RoleTable roles={roles} />
+        <RoleTable roles={roles} initialHasMore={hasMore} loadMore={loadMoreRolesAction} />
       </div>
     </AppShell>
   );

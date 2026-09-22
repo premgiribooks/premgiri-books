@@ -4,10 +4,12 @@ import { Plus } from "lucide-react";
 import { PlatformShell } from "@/components/layout/platform-shell";
 import { Button } from "@/components/ui/button";
 import { requireSuperAdmin } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { loadMoreCompaniesAction } from "@/modules/administration/actions/company-admin-actions";
 import { companyService } from "@/modules/company/services/company-service";
 import { CompanySearchForm } from "@/modules/company/components/company-search-form";
 import { CompanyTable } from "@/modules/company/components/company-table";
-import type { CompanyStatusFilter } from "@/types/company";
+import type { CompanyListFilters, CompanyStatusFilter } from "@/types/company";
 
 function normalizeStatus(value: string | undefined): CompanyStatusFilter {
   return value === "active" || value === "inactive" ? value : "all";
@@ -26,9 +28,10 @@ export default async function AdministrationCompaniesPage({
   const search = params.search ?? "";
   const status = normalizeStatus(params.status);
 
-  const companies = await companyService.listCompanies({
-    search: search || undefined,
-    status,
+  const filters: CompanyListFilters = { search: search || undefined, status };
+  const { items: companies, hasMore } = await companyService.listCompaniesPage(filters, {
+    skip: 0,
+    take: DEFAULT_PAGE_SIZE,
   });
 
   return (
@@ -57,7 +60,10 @@ export default async function AdministrationCompaniesPage({
         />
 
         <CompanyTable
+          key={JSON.stringify(filters)}
           companies={companies}
+          initialHasMore={hasMore}
+          loadMore={loadMoreCompaniesAction.bind(null, filters)}
           canManageStatus
           canEdit
           editBasePath="/administration/companies"

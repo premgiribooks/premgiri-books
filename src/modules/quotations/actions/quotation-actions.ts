@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { quotationService } from "@/modules/quotations/services/quotation-service";
 import type {
@@ -8,12 +9,28 @@ import type {
   UpdateQuotationInput,
 } from "@/modules/quotations/validation/quotation-schema";
 import type { ActionResult } from "@/types/api";
-import type { QuotationDetail, QuotationPreview, ResolvedLinePrice } from "@/types/quotation";
+import type {
+  QuotationDetail,
+  QuotationListFilters,
+  QuotationListRow,
+  QuotationPreview,
+  ResolvedLinePrice,
+} from "@/types/quotation";
 
 const LIST_PATH = "/sales/quotations";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Quotations list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreQuotationsAction(
+  filters: QuotationListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<QuotationListRow>>> {
+  return runAction(() => quotationService.listQuotationsPage(filters, { skip, take }), []);
 }
 
 export async function createQuotationAction(

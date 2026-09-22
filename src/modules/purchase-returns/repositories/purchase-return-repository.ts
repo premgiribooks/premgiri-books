@@ -1,6 +1,7 @@
 import { Prisma, type PurchaseReturnStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import type { GeneratedNumber } from "@/engines/document-number/types";
 import type {
   PurchaseReturnDetail,
@@ -273,6 +274,27 @@ export const purchaseReturnRepository = {
       orderBy: [{ returnDate: "desc" }, { createdAt: "desc" }],
     });
     return rows.map(toPurchaseReturnListRow);
+  },
+
+  /** Infinite-scroll page for the Purchase Returns list — same filters/
+   * ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    financialYearId: string,
+    filters: PurchaseReturnListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseReturnListRow>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.purchaseReturn.findMany({
+          where: buildWhere(companyId, financialYearId, filters),
+          include: PURCHASE_INVOICE_INCLUDE,
+          orderBy: [{ returnDate: "desc" }, { createdAt: "desc" }],
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toPurchaseReturnListRow), hasMore: result.hasMore };
   },
 
   async findById(id: string, client: PrismaClientOrTransaction = prisma) {

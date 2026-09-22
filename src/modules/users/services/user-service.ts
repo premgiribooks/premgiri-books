@@ -2,6 +2,7 @@ import type { Role } from "@prisma/client";
 
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { logger } from "@/lib/logger";
 import { hashPassword } from "@/lib/password";
@@ -42,6 +43,13 @@ export const userService = {
     const currentUser = await getCurrentCompanyUser();
     await assertPermission(currentUser, "users", "view");
     return userRepository.findMany(currentUser.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the Users list page. */
+  async listUsersPage(filters: UserListFilters, page: PageParams): Promise<Page<UserWithRole>> {
+    const currentUser = await getCurrentCompanyUser();
+    await assertPermission(currentUser, "users", "view");
+    return userRepository.findManyPage(currentUser.companyId, filters, page);
   },
 
   // A user belonging to a different company must resolve identically to "not

@@ -1,5 +1,6 @@
 import type { GstRate as PrismaGstRate, Prisma } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -53,6 +54,25 @@ export const gstRateRepository = {
       orderBy: { name: "asc" },
     });
     return rows.map(toGstRate);
+  },
+
+  /** Infinite-scroll page for the GST Rates list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: GstRateListFilters,
+    page: PageParams
+  ): Promise<Page<GstRate>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.gstRate.findMany({
+          where: buildWhere(companyId, filters),
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toGstRate), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<GstRate | null> {

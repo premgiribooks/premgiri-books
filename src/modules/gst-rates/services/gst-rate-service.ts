@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import {
   gstRateRepository,
@@ -47,6 +48,16 @@ export const gstRateService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "masters", "view");
     return gstRateRepository.findMany(user.companyId, filters);
+  },
+
+  /** Infinite-scroll page for the GST Rates list page. */
+  async listGstRatesPage(
+    filters: GstRateListFilters,
+    page: PageParams
+  ): Promise<Page<GstRate>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "masters", "view");
+    return gstRateRepository.findManyPage(user.companyId, filters, page);
   },
 
   // A rate belonging to a different company must resolve identically to

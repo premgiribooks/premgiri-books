@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,24 +15,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activateSupplierAction,
   deactivateSupplierAction,
 } from "@/modules/suppliers/actions/supplier-actions";
 import { SupplierStatusBadge } from "@/modules/suppliers/components/supplier-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { SupplierWithLedger } from "@/types/supplier";
 
 interface SupplierTableProps {
   suppliers: SupplierWithLedger[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<SupplierWithLedger>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
 export function SupplierTable({
-  suppliers,
+  suppliers: initialSuppliers,
+  initialHasMore = false,
+  loadMore,
   canEdit = false,
   canManage = false,
 }: SupplierTableProps) {
+  const { items: suppliers, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialSuppliers,
+    initialHasMore,
+    loadMore,
+  });
   // Tracked per row (not a single pending id) so two rows toggled
   // concurrently each keep their own disabled state — the
   // hsn-code-table.tsx review-fix pattern, mirrored from customer-table.tsx.
@@ -68,7 +81,8 @@ export function SupplierTable({
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -129,6 +143,8 @@ export function SupplierTable({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

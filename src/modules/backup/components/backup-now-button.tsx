@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DatabaseBackup } from "lucide-react";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { runBackupNowAction } from "@/modules/backup/actions/backup-actions";
 
@@ -36,7 +37,11 @@ export function BackupNowButton({ disabled = false }: BackupNowButtonProps) {
 
   return (
     <Button onClick={handleClick} disabled={disabled || isPending}>
-      <DatabaseBackup size={16} data-icon="inline-start" />
+      {isPending ? (
+        <LoadingBar className="w-8" label="Backing up" data-icon="inline-start" />
+      ) : (
+        <DatabaseBackup size={16} data-icon="inline-start" />
+      )}
       {isPending ? "Backing up…" : "Backup Now"}
     </Button>
   );

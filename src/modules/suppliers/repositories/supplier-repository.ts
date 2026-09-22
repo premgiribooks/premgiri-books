@@ -5,6 +5,7 @@ import {
   type LedgerGroup,
 } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
 import { toLedgerWithGroup } from "@/modules/ledgers/repositories/ledger-repository";
@@ -103,6 +104,26 @@ export const supplierRepository = {
       orderBy: { ledger: { name: "asc" } },
     });
     return rows.map(toSupplierWithLedger);
+  },
+
+  /** Infinite-scroll page for the Suppliers list — same filters/ordering as
+   * `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: SupplierListFilters,
+    page: PageParams
+  ): Promise<Page<SupplierWithLedger>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.supplier.findMany({
+          where: buildWhere(companyId, filters),
+          include: LEDGER_WITH_GROUP_INCLUDE,
+          orderBy: { ledger: { name: "asc" } },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toSupplierWithLedger), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<SupplierWithLedger | null> {

@@ -5,7 +5,9 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
+import { loadMorePriceListsAction } from "@/modules/price-lists/actions/price-list-actions";
 import { PriceListFilterBar } from "@/modules/price-lists/components/price-list-filter-bar";
 import { PriceListTable } from "@/modules/price-lists/components/price-list-table";
 import { priceListService } from "@/modules/price-lists/services/price-list-service";
@@ -49,13 +51,14 @@ export default async function PriceListListPage({ searchParams }: PriceListListP
 
   const filters = parseFilters(await searchParams);
 
-  const [priceLists, isAdmin, canCreate, canEdit, canManage] = await Promise.all([
-    priceListService.listPriceLists(filters),
-    isCurrentUserCompanyAdmin(),
-    hasPermission(user, "masters", "create"),
-    hasPermission(user, "masters", "edit"),
-    hasPermission(user, "masters", "delete"),
-  ]);
+  const [{ items: priceLists, hasMore }, isAdmin, canCreate, canEdit, canManage] =
+    await Promise.all([
+      priceListService.listPriceListsPage(filters, { skip: 0, take: DEFAULT_PAGE_SIZE }),
+      isCurrentUserCompanyAdmin(),
+      hasPermission(user, "masters", "create"),
+      hasPermission(user, "masters", "edit"),
+      hasPermission(user, "masters", "delete"),
+    ]);
 
   return (
     <AppShell isAdmin={isAdmin}>
@@ -90,7 +93,14 @@ export default async function PriceListListPage({ searchParams }: PriceListListP
 
         <PriceListFilterBar />
 
-        <PriceListTable priceLists={priceLists} canEdit={canEdit} canManage={canManage} />
+        <PriceListTable
+          key={JSON.stringify(filters)}
+          priceLists={priceLists}
+          initialHasMore={hasMore}
+          loadMore={loadMorePriceListsAction.bind(null, filters)}
+          canEdit={canEdit}
+          canManage={canManage}
+        />
       </div>
     </AppShell>
   );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,25 +16,37 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import {
   activatePaymentModeAction,
   deactivatePaymentModeAction,
 } from "@/modules/payment-modes/actions/payment-mode-actions";
 import { LedgerClassBadge } from "@/modules/payment-modes/components/ledger-class-badge";
 import { PaymentModeStatusBadge } from "@/modules/payment-modes/components/payment-mode-status-badge";
+import type { ActionResult } from "@/types/api";
 import type { PaymentMode } from "@/types/payment-mode";
 
 interface PaymentModeTableProps {
   paymentModes: PaymentMode[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<PaymentMode>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
 export function PaymentModeTable({
-  paymentModes,
+  paymentModes: initialPaymentModes,
+  initialHasMore = false,
+  loadMore,
   canEdit = false,
   canManage = false,
 }: PaymentModeTableProps) {
+  const { items: paymentModes, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialPaymentModes,
+    initialHasMore,
+    loadMore,
+  });
   const [pendingId, setPendingId] = React.useState<string | null>(null);
 
   async function handleToggleActive(paymentMode: PaymentMode) {
@@ -63,7 +76,8 @@ export function PaymentModeTable({
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -119,6 +133,8 @@ export function PaymentModeTable({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

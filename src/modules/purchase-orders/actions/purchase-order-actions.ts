@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { purchaseOrderService } from "@/modules/purchase-orders/services/purchase-order-service";
 import type {
@@ -8,12 +9,27 @@ import type {
   UpdatePurchaseOrderInput,
 } from "@/modules/purchase-orders/validation/purchase-order-schema";
 import type { ActionResult } from "@/types/api";
-import type { PurchaseOrderDetail, PurchaseOrderPreview } from "@/types/purchase-order";
+import type {
+  PurchaseOrderDetail,
+  PurchaseOrderListFilters,
+  PurchaseOrderListRow,
+  PurchaseOrderPreview,
+} from "@/types/purchase-order";
 
 const LIST_PATH = "/purchase/orders";
 
 function detailPath(id: string): string {
   return `${LIST_PATH}/${id}`;
+}
+
+/** Infinite-scroll "load more" for the Purchase Orders list — a pure
+ * read, so no paths are revalidated. */
+export async function loadMorePurchaseOrdersAction(
+  filters: PurchaseOrderListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<PurchaseOrderListRow>>> {
+  return runAction(() => purchaseOrderService.listPurchaseOrdersPage(filters, { skip, take }), []);
 }
 
 export async function createPurchaseOrderAction(

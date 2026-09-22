@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { cancelStockTransferAction, postStockTransferAction } from "@/modules/stock-transfers/actions/stock-transfer-actions";
 import type { ActionResult } from "@/types/api";
 import type { StockTransferDetail, StockTransferStatus } from "@/types/stock-transfer";
@@ -53,6 +54,7 @@ export function StockTransferStatusActions({ stockTransfer, canPost, canCancel }
           disabled={isBusy}
           onClick={() => runTransition(postStockTransferAction, "POSTED", "Stock transfer posted.")}
         >
+          {pending === "POSTED" ? <LoadingBar className="w-8" label="Posting" data-icon="inline-start" /> : null}
           {pending === "POSTED" ? "Posting…" : "Post"}
         </Button>
       ) : null}
@@ -64,6 +66,7 @@ export function StockTransferStatusActions({ stockTransfer, canPost, canCancel }
           disabled={isBusy}
           onClick={() => runTransition(cancelStockTransferAction, "CANCELLED", "Stock transfer cancelled.")}
         >
+          {pending === "CANCELLED" ? <LoadingBar className="w-8" label="Cancelling" data-icon="inline-start" /> : null}
           {pending === "CANCELLED" ? "Cancelling…" : "Cancel"}
         </Button>
       ) : null}

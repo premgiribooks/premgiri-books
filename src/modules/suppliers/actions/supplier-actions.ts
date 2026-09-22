@@ -1,5 +1,6 @@
 "use server";
 
+import type { Page } from "@/lib/pagination";
 import { runAction } from "@/lib/run-action";
 import { supplierService } from "@/modules/suppliers/services/supplier-service";
 import type {
@@ -7,7 +8,7 @@ import type {
   UpdateSupplierInput,
 } from "@/modules/suppliers/validation/supplier-schema";
 import type { ActionResult } from "@/types/api";
-import type { SupplierWithLedger } from "@/types/supplier";
+import type { SupplierListFilters, SupplierWithLedger } from "@/types/supplier";
 
 const LIST_PATH = "/masters/suppliers";
 
@@ -15,6 +16,16 @@ const LIST_PATH = "/masters/suppliers";
 // Ledgers screen is revalidated alongside the supplier list (the
 // customer-actions.ts/bank-account-actions.ts convention).
 const LEDGERS_PATH = "/accounting/ledgers";
+
+/** Infinite-scroll "load more" for the Suppliers list — a pure read, so no
+ * paths are revalidated. */
+export async function loadMoreSuppliersAction(
+  filters: SupplierListFilters,
+  skip: number,
+  take: number
+): Promise<ActionResult<Page<SupplierWithLedger>>> {
+  return runAction(() => supplierService.listSuppliersPage(filters, { skip, take }), []);
+}
 
 export async function createSupplierAction(
   input: CreateSupplierInput

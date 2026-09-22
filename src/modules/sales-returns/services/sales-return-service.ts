@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getLedgerPaymentClassMap } from "@/lib/ledger-class";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError } from "@/lib/prisma-errors";
@@ -368,6 +369,18 @@ export const salesReturnService = {
       return [];
     }
     return salesReturnRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Sales Returns list page. */
+  async listSalesReturnsPage(filters: SalesReturnListFilters, page: PageParams): Promise<Page<SalesReturnListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "sales", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return salesReturnRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   /**

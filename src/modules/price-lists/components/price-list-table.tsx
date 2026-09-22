@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -14,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { CUSTOMER_TYPE_LABELS } from "@/modules/customers/components/customer-type-badge";
 import {
   activatePriceListAction,
@@ -21,19 +24,29 @@ import {
 } from "@/modules/price-lists/actions/price-list-actions";
 import { PriceListStatusBadge } from "@/modules/price-lists/components/price-list-status-badge";
 import { formatEffectiveWindow } from "@/modules/price-lists/utils/format-price-list-date";
+import type { ActionResult } from "@/types/api";
 import type { PriceListWithItemCount } from "@/types/price-list";
 
 interface PriceListTableProps {
   priceLists: PriceListWithItemCount[];
+  initialHasMore?: boolean;
+  loadMore?: (skip: number, take: number) => Promise<ActionResult<Page<PriceListWithItemCount>>>;
   canEdit?: boolean;
   canManage?: boolean;
 }
 
 export function PriceListTable({
-  priceLists,
+  priceLists: initialPriceLists,
+  initialHasMore = false,
+  loadMore,
   canEdit = false,
   canManage = false,
 }: PriceListTableProps) {
+  const { items: priceLists, hasMore, isLoading, sentinelRef } = useInfiniteList({
+    initialItems: initialPriceLists,
+    initialHasMore,
+    loadMore,
+  });
   // Tracked per row (not a single pending id) so two rows toggled
   // concurrently each keep their own disabled state — the
   // margin-profile-table.tsx convention.
@@ -70,7 +83,8 @@ export function PriceListTable({
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -129,6 +143,8 @@ export function PriceListTable({
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import type { MarginProfile as PrismaMarginProfile, Prisma } from "@prisma/client";
 
+import { fetchPage, type Page, type PageParams } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import { runInTransaction } from "@/lib/transaction";
 import { isRecordNotFoundError } from "@/lib/prisma-errors";
@@ -64,6 +65,25 @@ export const marginProfileRepository = {
       orderBy: { name: "asc" },
     });
     return rows.map(toMarginProfile);
+  },
+
+  /** Infinite-scroll page for the Margin Profiles list — same
+   * filters/ordering as `findMany`, just `skip`/`take`-bounded. */
+  async findManyPage(
+    companyId: string,
+    filters: MarginProfileListFilters,
+    page: PageParams
+  ): Promise<Page<MarginProfile>> {
+    const result = await fetchPage(
+      (args) =>
+        prisma.marginProfile.findMany({
+          where: buildWhere(companyId, filters),
+          orderBy: { name: "asc" },
+          ...args,
+        }),
+      page
+    );
+    return { items: result.items.map(toMarginProfile), hasMore: result.hasMore };
   },
 
   async findById(id: string): Promise<MarginProfile | null> {

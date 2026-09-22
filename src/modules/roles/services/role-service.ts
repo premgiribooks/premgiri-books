@@ -3,6 +3,7 @@ import type { Prisma, Role } from "@prisma/client";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPermission } from "@/lib/permissions";
 import { COMPANY_ADMIN_ROLE_NAME } from "@/constants/roles";
 import { DEFAULT_ROLE_PERMISSIONS } from "@/constants/permissions";
@@ -29,6 +30,13 @@ export const roleService = {
     const user = await getCurrentCompanyUser();
     await assertPermission(user, "roles", "view");
     return roleRepository.findMany(user.companyId);
+  },
+
+  /** Infinite-scroll page for the Roles list page. */
+  async listRolesPage(page: PageParams): Promise<Page<RoleWithPermissionCount>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "roles", "view");
+    return roleRepository.findManyPage(user.companyId, page);
   },
 
   async getRole(id: string): Promise<Role | null> {

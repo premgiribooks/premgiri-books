@@ -1,15 +1,41 @@
+"use client";
+
 import Link from "next/link";
 
+import { InfiniteScrollSentinel } from "@/components/common/infinite-scroll-sentinel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useInfiniteList } from "@/hooks/use-infinite-list";
+import type { Page } from "@/lib/pagination";
 import { PurchaseCreditNoteStatusBadge } from "@/modules/purchase-credit-notes/components/purchase-credit-note-status-badge";
 import { formatPurchaseCreditNoteDate } from "@/modules/purchase-credit-notes/utils/format-purchase-credit-note-date";
+import type { ActionResult } from "@/types/api";
 import type { PurchaseCreditNoteListRow } from "@/types/purchase-credit-note";
 
 interface PurchaseCreditNoteTableProps {
   purchaseCreditNotes: PurchaseCreditNoteListRow[];
+  initialHasMore?: boolean;
+  loadMore?: (
+    skip: number,
+    take: number
+  ) => Promise<ActionResult<Page<PurchaseCreditNoteListRow>>>;
 }
 
-export function PurchaseCreditNoteTable({ purchaseCreditNotes }: PurchaseCreditNoteTableProps) {
+export function PurchaseCreditNoteTable({
+  purchaseCreditNotes: initialPurchaseCreditNotes,
+  initialHasMore = false,
+  loadMore,
+}: PurchaseCreditNoteTableProps) {
+  const {
+    items: purchaseCreditNotes,
+    hasMore,
+    isLoading,
+    sentinelRef,
+  } = useInfiniteList({
+    initialItems: initialPurchaseCreditNotes,
+    initialHasMore,
+    loadMore,
+  });
+
   if (purchaseCreditNotes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-16 text-center">
@@ -19,7 +45,8 @@ export function PurchaseCreditNoteTable({ purchaseCreditNotes }: PurchaseCreditN
   }
 
   return (
-    <Table>
+    <>
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Number</TableHead>
@@ -54,6 +81,8 @@ export function PurchaseCreditNoteTable({ purchaseCreditNotes }: PurchaseCreditN
           </TableRow>
         ))}
       </TableBody>
-    </Table>
+      </Table>
+      <InfiniteScrollSentinel hasMore={hasMore} isLoading={isLoading} sentinelRef={sentinelRef} />
+    </>
   );
 }

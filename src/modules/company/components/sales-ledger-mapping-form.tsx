@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { updateSalesLedgerMappingAction } from "@/modules/company/actions/company-actions";
@@ -95,6 +96,7 @@ export function SalesLedgerMappingForm({ companyId, ledgers, defaultValues, disa
         {!disabled ? (
           <div className="flex justify-end">
             <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
               {isSubmitting ? "Saving…" : "Save Mapping"}
             </Button>
           </div>

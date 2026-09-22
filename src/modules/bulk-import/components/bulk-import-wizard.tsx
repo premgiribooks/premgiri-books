@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Button } from "@/components/ui/button";
 import {
   commitImportAction,
@@ -140,6 +141,7 @@ export function BulkImportWizard({ target, targetLabel, listHref }: BulkImportWi
               Cancel
             </Button>
             <Button type="button" disabled={isSubmitting || preview.validCount === 0} onClick={handleCommit}>
+              {isSubmitting ? <LoadingBar className="w-8" label="Importing" data-icon="inline-start" /> : null}
               {isSubmitting ? "Importing…" : `Import ${preview.validCount} Valid Row${preview.validCount === 1 ? "" : "s"}`}
             </Button>
           </div>

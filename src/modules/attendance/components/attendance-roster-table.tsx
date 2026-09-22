@@ -4,6 +4,7 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingBar } from "@/components/common/loading-bar";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -181,6 +182,7 @@ export function AttendanceRosterTable({
       {canEdit ? (
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <LoadingBar className="w-8" label="Saving" data-icon="inline-start" /> : null}
             {isSaving ? "Saving…" : "Save Roster"}
           </Button>
         </div>

@@ -4,6 +4,7 @@ import { AppError } from "@/lib/app-error";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { assertLedgersAreCashOrBank } from "@/lib/ledger-class";
+import type { Page, PageParams } from "@/lib/pagination";
 import { assertPaymentModeMatchesLedger } from "@/lib/payment-mode-validation";
 import { assertPermission } from "@/lib/permissions";
 import { isRetryableTransactionError, isUniqueConstraintError } from "@/lib/prisma-errors";
@@ -641,6 +642,21 @@ export const purchaseInvoiceService = {
       return [];
     }
     return purchaseInvoiceRepository.findMany(user.companyId, financialYear.id, filters);
+  },
+
+  /** Infinite-scroll page for the Purchase Invoices list page. */
+  async listPurchaseInvoicesPage(
+    filters: PurchaseInvoiceListFilters,
+    page: PageParams
+  ): Promise<Page<PurchaseInvoiceListRow>> {
+    const user = await getCurrentCompanyUser();
+    await assertPermission(user, "purchase", "view");
+
+    const financialYear = await getCurrentFinancialYear();
+    if (!financialYear) {
+      return { items: [], hasMore: false };
+    }
+    return purchaseInvoiceRepository.findManyPage(user.companyId, financialYear.id, filters, page);
   },
 
   /**
