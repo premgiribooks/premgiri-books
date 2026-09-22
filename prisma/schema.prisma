@@ -83,50 +83,51 @@ model Company {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  settings              CompanySettings?
-  financialYears        FinancialYear[]
-  branches              Branch[]
-  users                 User[]
-  roles                 Role[]
-  ledgerGroups          LedgerGroup[]
-  ledgers               Ledger[]
-  bankAccounts          BankAccount[]
-  paymentModes          PaymentMode[]
-  units                 Unit[]
-  categories            Category[]
-  brands                Brand[]
-  hsnCodes              HsnCode[]
-  gstRates              GstRate[]
-  warehouses            Warehouse[]
-  products              Product[]
-  productBatches        ProductBatch[]
-  serialNumbers         SerialNumber[]
-  marginProfiles        MarginProfile[]
-  priceLists            PriceList[]
-  customers             Customer[]
-  suppliers             Supplier[]
-  purchaseOrders        PurchaseOrder[]
-  goodsReceiptNotes     GoodsReceiptNote[]
-  purchaseInvoices      PurchaseInvoice[]
-  purchaseReturns       PurchaseReturn[]
-  stockAdjustments      StockAdjustment[]
-  stockTransfers        StockTransfer[]
-  physicalVerifications PhysicalVerification[]
-  auditLogs             AuditLog[]
-  documentSequences     DocumentSequence[]
-  vouchers              Voucher[]
-  stockTransactions     StockTransaction[]
-  quotations            Quotation[]
-  salesOrders           SalesOrder[]
-  deliveryChallans      DeliveryChallan[]
-  salesInvoices         SalesInvoice[]
-  salesReturns          SalesReturn[]
-  creditNotes           CreditNote[]
-  debitNotes            DebitNote[]
-  gstFilingRecords      GstFilingRecord[]
-  employees             Employee[]
-  attendanceRecords     Attendance[]
-  payrollRuns           PayrollRun[]
+  settings                    CompanySettings?
+  financialYears              FinancialYear[]
+  branches                    Branch[]
+  users                       User[]
+  roles                       Role[]
+  ledgerGroups                LedgerGroup[]
+  ledgers                     Ledger[]
+  bankAccounts                BankAccount[]
+  paymentModes                PaymentMode[]
+  units                       Unit[]
+  categories                  Category[]
+  brands                      Brand[]
+  hsnCodes                    HsnCode[]
+  gstRates                    GstRate[]
+  warehouses                  Warehouse[]
+  products                    Product[]
+  productBatches              ProductBatch[]
+  serialNumbers               SerialNumber[]
+  productPurchasePriceHistory ProductPurchasePriceHistory[]
+  marginProfiles              MarginProfile[]
+  priceLists                  PriceList[]
+  customers                   Customer[]
+  suppliers                   Supplier[]
+  purchaseOrders              PurchaseOrder[]
+  goodsReceiptNotes           GoodsReceiptNote[]
+  purchaseInvoices            PurchaseInvoice[]
+  purchaseReturns             PurchaseReturn[]
+  stockAdjustments            StockAdjustment[]
+  stockTransfers              StockTransfer[]
+  physicalVerifications       PhysicalVerification[]
+  auditLogs                   AuditLog[]
+  documentSequences           DocumentSequence[]
+  vouchers                    Voucher[]
+  stockTransactions           StockTransaction[]
+  quotations                  Quotation[]
+  salesOrders                 SalesOrder[]
+  deliveryChallans            DeliveryChallan[]
+  salesInvoices               SalesInvoice[]
+  salesReturns                SalesReturn[]
+  creditNotes                 CreditNote[]
+  debitNotes                  DebitNote[]
+  gstFilingRecords            GstFilingRecord[]
+  employees                   Employee[]
+  attendanceRecords           Attendance[]
+  payrollRuns                 PayrollRun[]
 
   @@index([companyName])
 }
@@ -286,8 +287,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company                      Company?               @relation(fields: [companyId], references: [id])
-  role                         Role?                  @relation(fields: [roleId], references: [id])
+  company                      Company?                      @relation(fields: [companyId], references: [id])
+  role                         Role?                         @relation(fields: [roleId], references: [id])
   sessions                     Session[]
   vouchers                     Voucher[]
   quotations                   Quotation[]
@@ -309,6 +310,7 @@ model User {
   gstFilingRecords             GstFilingRecord[]
   payrollRuns                  PayrollRun[]
   backupJobs                   BackupJob[]
+  productPurchasePriceChanges  ProductPurchasePriceHistory[]
   // Nullable, unique — see Employee.userId's own comment (61-employee-master.md)
   // for why User and Employee are kept as two separate, optionally-linked
   // entities rather than merged.
@@ -1020,6 +1022,7 @@ model Product {
   physicalVerificationItems PhysicalVerificationItem[]
   batches                   ProductBatch[]
   serialNumbers             SerialNumber[]
+  purchasePriceHistory      ProductPurchasePriceHistory[]
 
   @@unique([companyId, name])
   @@unique([companyId, productCode])
@@ -1060,6 +1063,47 @@ model ProductBatch {
 
   @@unique([companyId, productId, batchNumber])
   @@index([companyId, productId])
+}
+
+// Discriminates which document committed a purchase cost (95-purchase-price-sync.md).
+// Only the two documents that commit a negotiated purchase rate appear here; adding a
+// future value is a small additive migration (mirrors ProductType's own comment above).
+enum PurchasePriceSourceType {
+  PURCHASE_INVOICE
+  PURCHASE_ORDER
+}
+
+// Append-only audit trail of every automatic change to Product.purchasePrice (the
+// "Latest Purchase Cost" cost basis the Pricing Engine reads live — pricing-engine.ts).
+// One row per (product, source document), written inside the source document's own
+// posting/confirmation transaction; never updated, never deleted, never user-editable
+// (mirrors StockTransaction's immutability invariant). Deliberately NOT written onto
+// the existing AuditLog model: that model is scoped narrowly to Administration-side
+// tenant-lifecycle events and is explicitly not a general-purpose audit retrofit; its
+// untyped `metadata Json?` also cannot express a queryable per-product price series.
+// sourceDocumentType/sourceDocumentId is a polymorphic link with no FK, matching
+// StockTransaction.referenceType/referenceId. sourceDocumentNumber is a snapshot of the
+// human-readable number at write time. oldPurchasePrice is nullable — a product whose
+// purchasePrice was never set has no old value, and that distinction must survive here.
+model ProductPurchasePriceHistory {
+  id                   String                  @id @default(uuid())
+  companyId            String
+  company              Company                 @relation(fields: [companyId], references: [id])
+  productId            String
+  product              Product                 @relation(fields: [productId], references: [id])
+  oldPurchasePrice     Decimal?                @db.Decimal(14, 2)
+  newPurchasePrice     Decimal                 @db.Decimal(14, 2)
+  sourceDocumentType   PurchasePriceSourceType
+  sourceDocumentId     String
+  sourceDocumentNumber String?
+  sourceDocumentDate   DateTime                @db.Date
+  changedByUserId      String?
+  changedBy            User?                   @relation(fields: [changedByUserId], references: [id])
+  createdAt            DateTime                @default(now())
+
+  @@index([companyId, productId, createdAt])
+  @@index([sourceDocumentType, sourceDocumentId])
+  @@index([companyId])
 }
 
 // Serial identity catalog for a serial-tracked product

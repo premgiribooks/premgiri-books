@@ -31,6 +31,7 @@ const {
   cancelVoucherMock,
   recordMovementsMock,
   assertPaymentModeMatchesLedgerMock,
+  syncFromPurchaseDocumentMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -57,6 +58,7 @@ const {
   cancelVoucherMock: vi.fn(),
   recordMovementsMock: vi.fn(),
   assertPaymentModeMatchesLedgerMock: vi.fn(),
+  syncFromPurchaseDocumentMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -102,6 +104,14 @@ vi.mock("@/modules/ledgers/repositories/ledger-repository", () => ({
 
 vi.mock("@/modules/company/services/company-settings-service", () => ({
   companySettingsService: { getSettings: getSettingsMock },
+}));
+// 95-purchase-price-sync.md §1.2: Purchase Return must NEVER call this — a
+// return reverses a prior purchase, it does not renegotiate cost. Mocked
+// here (even though purchase-return-service.ts imports nothing from this
+// module today) so the "never called" assertion below pins that exclusion
+// as a tested business rule, not an accident of omission.
+vi.mock("@/modules/product-purchase-price-history/services/product-purchase-price-history-service", () => ({
+  productPurchasePriceHistoryService: { syncFromPurchaseDocument: syncFromPurchaseDocumentMock },
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -330,6 +340,7 @@ beforeEach(() => {
   cancelVoucherMock.mockReset();
   recordMovementsMock.mockReset();
   assertPaymentModeMatchesLedgerMock.mockReset();
+  syncFromPurchaseDocumentMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
@@ -578,6 +589,10 @@ describe("postPurchaseReturn — orchestration and ledger entries", () => {
       { documentSequenceId: "seq-1", number: 1, formatted: "PRET-0001" },
       VOUCHER_ID
     );
+
+    // 95-purchase-price-sync.md §1.2: a return is a reversal, not a new
+    // negotiated cost — it must never touch Product.purchasePrice.
+    expect(syncFromPurchaseDocumentMock).not.toHaveBeenCalled();
   });
 
   it("CASH_REFUND debits the refund ledger instead of the supplier ledger", async () => {

@@ -25,6 +25,7 @@ const {
   generateNumberMock,
   previewNextNumberMock,
   listSelectableSuppliersMock,
+  syncFromPurchaseDocumentMock,
   FAKE_TX,
 } = vi.hoisted(() => ({
   findManyMock: vi.fn(),
@@ -45,6 +46,7 @@ const {
   generateNumberMock: vi.fn(),
   previewNextNumberMock: vi.fn(),
   listSelectableSuppliersMock: vi.fn(),
+  syncFromPurchaseDocumentMock: vi.fn(),
   FAKE_TX: { marker: "fake-tx" },
 }));
 
@@ -86,6 +88,10 @@ vi.mock("@/engines/document-number/document-number-engine", () => ({
 
 vi.mock("@/modules/suppliers/services/supplier-service", () => ({
   supplierService: { listSelectableSuppliers: listSelectableSuppliersMock },
+}));
+
+vi.mock("@/modules/product-purchase-price-history/services/product-purchase-price-history-service", () => ({
+  productPurchasePriceHistoryService: { syncFromPurchaseDocument: syncFromPurchaseDocumentMock },
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -207,6 +213,7 @@ beforeEach(() => {
   generateNumberMock.mockReset();
   previewNextNumberMock.mockReset();
   listSelectableSuppliersMock.mockReset();
+  syncFromPurchaseDocumentMock.mockReset();
 
   getCurrentCompanyUserMock.mockResolvedValue(CURRENT_USER);
   getCurrentFinancialYearMock.mockResolvedValue(CURRENT_FY);
@@ -349,18 +356,50 @@ describe("createPurchaseOrder — validation and scoping", () => {
 
 describe("status transition matrix", () => {
   it("confirmPurchaseOrder: DRAFT -> CONFIRMED succeeds", async () => {
+    findByIdMock
+      .mockResolvedValueOnce(
+        purchaseOrderRow({
+          status: "DRAFT",
+          orderDate: new Date("2026-09-10T00:00:00.000Z"),
+          items: [{ productId: PRODUCT_A_ID, lineNumber: 1, quantity: 2, taxableAmount: 200 }],
+        })
+      )
+      .mockResolvedValueOnce(purchaseOrderRow({ status: "CONFIRMED" }));
     updateStatusMock.mockResolvedValueOnce(1);
-    findByIdMock.mockResolvedValueOnce(purchaseOrderRow({ status: "CONFIRMED" }));
+
     const result = await purchaseOrderService.confirmPurchaseOrder("po-1");
+
     expect(updateStatusMock).toHaveBeenCalledWith(expect.anything(), "po-1", COMPANY_ID, ["DRAFT"], "CONFIRMED");
     expect(result.status).toBe("CONFIRMED");
+    expect(syncFromPurchaseDocumentMock).toHaveBeenCalledTimes(1);
+    expect(syncFromPurchaseDocumentMock).toHaveBeenCalledWith(
+      expect.anything(),
+      COMPANY_ID,
+      expect.objectContaining({
+        sourceDocumentType: "PURCHASE_ORDER",
+        sourceDocumentId: "po-1",
+        sourceDocumentNumber: "PO-0001",
+        lines: [{ productId: PRODUCT_A_ID, lineNumber: 1, netUnitCost: 100 }],
+      })
+    );
   });
 
   it("confirmPurchaseOrder: rejects when the order is not currently DRAFT", async () => {
+    findByIdMock.mockResolvedValueOnce(purchaseOrderRow({ status: "CONFIRMED" }));
     updateStatusMock.mockResolvedValueOnce(0);
+
     await expect(purchaseOrderService.confirmPurchaseOrder("po-1")).rejects.toThrow(
       "This purchase order can no longer be changed"
     );
+    expect(syncFromPurchaseDocumentMock).not.toHaveBeenCalled();
+  });
+
+  it("confirmPurchaseOrder: rejects an order belonging to another company and does not sync", async () => {
+    findByIdMock.mockResolvedValueOnce(purchaseOrderRow({ companyId: OTHER_COMPANY_ID }));
+
+    await expect(purchaseOrderService.confirmPurchaseOrder("po-1")).rejects.toThrow("Purchase order not found.");
+    expect(updateStatusMock).not.toHaveBeenCalled();
+    expect(syncFromPurchaseDocumentMock).not.toHaveBeenCalled();
   });
 
   it("closePurchaseOrder: RECEIVED -> CLOSED succeeds", async () => {
@@ -390,6 +429,8 @@ describe("status transition matrix", () => {
       ["DRAFT", "CONFIRMED"],
       "CANCELLED"
     );
+    // 95-purchase-price-sync.md §1.7: cancellation never syncs.
+    expect(syncFromPurchaseDocumentMock).not.toHaveBeenCalled();
   });
 
   it("cancelPurchaseOrder: CONFIRMED -> CANCELLED requires 'approve'", async () => {

@@ -201,6 +201,7 @@ Phase Status
 | 41  | Goods Receipt Note | Purchase Order            | ✅     |
 | 42  | Purchase Invoice   | Voucher + Inventory + GST | ✅     |
 | 43  | Purchase Return    | Purchase Invoice          | ✅     |
+| 88  | Purchase Price Sync to Product Master | Purchase Orders (#40); Purchase Invoice (#42); Product Management (#23); Product Detail Page (#50) | ✅ |
 
 Phase Status
 
@@ -243,6 +244,24 @@ the company's warehouse back to the supplier) and `VoucherType.PURCHASE_RETURN`
 (Credit Purchase Account + Input Tax, Debit Supplier/refund ledger — the reversal of
 Purchase Invoice's own posting). **This closes Phase 4 — Purchase Management in full
 (all four documents, tracker #40–#43).**
+
+**Item #88 (Purchase Price Sync to Product Master, feature-spec 95) added 2026-09-22**,
+reopening this already-closed phase for one post-closure amendment — the same pattern
+Phase 8 used for GSTR-2/ITC Register (#80/#81) and Phase 11 used for Liability
+Settlement (#87): tracker numbers continue from the highest existing number (87) rather
+than renumbering anything. Implemented 2026-09-22 on branch
+`feature/purchase-price-sync`. Closes the gap `30-pricing-engine.md`/`42-purchase-orders.md`
+left open since Phase 4 originally shipped: `Product.purchasePrice` ("Latest Purchase
+Cost") is now automatically updated whenever a Purchase Invoice posts or a Purchase
+Order is confirmed (whichever happens most recently wins — a deliberate reversal of
+those two specs' original "read-only, never written back" posture, per explicit user
+instruction), with every change recorded in a new append-only
+`ProductPurchasePriceHistory` trail. New unconditional "Purchase Price History" tab on
+the Product detail page. Selling-price calculation is unaffected — the Pricing Engine
+already read `purchasePrice` live, so no engine change was needed there. Prospective
+only: no backfill for documents already posted/confirmed before this shipped. Full
+record in `context/progress-tracker.md`'s dated 2026-09-22 entry and
+`context/feature-specs/95-purchase-price-sync.md`.
 
 ---
 
