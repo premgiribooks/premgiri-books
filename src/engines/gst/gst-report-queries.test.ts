@@ -25,6 +25,7 @@ interface FakeClientOverrides {
   debitNoteItemFindMany?: unknown[];
   purchaseInvoiceItemFindMany?: unknown[];
   purchaseReturnItemFindMany?: unknown[];
+  purchaseCreditNoteItemFindMany?: unknown[];
 }
 
 function fakeClient(overrides: FakeClientOverrides) {
@@ -35,6 +36,7 @@ function fakeClient(overrides: FakeClientOverrides) {
     debitNoteItem: { findMany: vi.fn().mockResolvedValue(overrides.debitNoteItemFindMany ?? []) },
     purchaseInvoiceItem: { findMany: vi.fn().mockResolvedValue(overrides.purchaseInvoiceItemFindMany ?? []) },
     purchaseReturnItem: { findMany: vi.fn().mockResolvedValue(overrides.purchaseReturnItemFindMany ?? []) },
+    purchaseCreditNoteItem: { findMany: vi.fn().mockResolvedValue(overrides.purchaseCreditNoteItemFindMany ?? []) },
   } as unknown as Prisma.TransactionClient;
 }
 
@@ -401,6 +403,11 @@ describe("getInwardSupplyLines", () => {
         where: { purchaseReturn: { companyId: COMPANY_ID, status: "POSTED", returnDate: { gte: FROM, lte: TO } } },
       })
     );
+    expect(client.purchaseCreditNoteItem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { purchaseCreditNote: { companyId: COMPANY_ID, status: "POSTED", noteDate: { gte: FROM, lte: TO } } },
+      })
+    );
   });
 
   it("maps a Purchase Invoice line positive, preferring overridden tax, resolving the Supplier's ledger name", async () => {
@@ -523,5 +530,42 @@ describe("getInwardSupplyLines", () => {
     expect(line.quantity).toBe(-1);
     expect(line.taxableAmount).toBe(-100);
     expect(line.totalAmount).toBe(-112);
+  });
+
+  it("maps a Purchase Credit Note line negative, no HSN/product/quantity (freeform)", async () => {
+    const client = fakeClient({
+      purchaseCreditNoteItemFindMany: [
+        {
+          ratePercent: decimal(18),
+          cessPercent: decimal(0),
+          taxableAmount: decimal(100),
+          cgst: decimal(9),
+          sgst: decimal(9),
+          igst: decimal(0),
+          cess: decimal(0),
+          totalAmount: decimal(118),
+          purchaseCreditNote: {
+            id: "pcn-1",
+            noteNumber: "PCN-0001",
+            noteDate: new Date("2026-04-20T00:00:00.000Z"),
+            placeOfSupplyStateCode: "27",
+            supplier: SUPPLIER_A,
+          },
+        },
+      ],
+    });
+
+    const [line] = await getInwardSupplyLines(COMPANY_ID, FROM, TO, client);
+
+    expect(line.documentType).toBe("PURCHASE_CREDIT_NOTE");
+    expect(line.partyId).toBe("supp-1");
+    expect(line.partyName).toBe("Acme Wholesale");
+    expect(line.hsnCode).toBeNull();
+    expect(line.productId).toBeNull();
+    expect(line.quantity).toBeNull();
+    expect(line.taxableAmount).toBe(-100);
+    expect(line.cgst).toBe(-9);
+    expect(line.sgst).toBe(-9);
+    expect(line.totalAmount).toBe(-118);
   });
 });

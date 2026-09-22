@@ -110,6 +110,7 @@ model Company {
   goodsReceiptNotes           GoodsReceiptNote[]
   purchaseInvoices            PurchaseInvoice[]
   purchaseReturns             PurchaseReturn[]
+  purchaseCreditNotes         PurchaseCreditNote[]
   stockAdjustments            StockAdjustment[]
   stockTransfers              StockTransfer[]
   physicalVerifications       PhysicalVerification[]
@@ -226,6 +227,7 @@ model FinancialYear {
   goodsReceiptNotes     GoodsReceiptNote[]
   purchaseInvoices      PurchaseInvoice[]
   purchaseReturns       PurchaseReturn[]
+  purchaseCreditNotes   PurchaseCreditNote[]
   stockAdjustments      StockAdjustment[]
   stockTransfers        StockTransfer[]
   physicalVerifications PhysicalVerification[]
@@ -304,6 +306,7 @@ model User {
   purchaseInvoices             PurchaseInvoice[]
   purchaseInvoiceItemOverrides PurchaseInvoiceItem[]
   purchaseReturns              PurchaseReturn[]
+  purchaseCreditNotes          PurchaseCreditNote[]
   stockAdjustments             StockAdjustment[]
   stockTransfers               StockTransfer[]
   physicalVerifications        PhysicalVerification[]
@@ -1351,9 +1354,10 @@ model Supplier {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  purchaseOrders    PurchaseOrder[]
-  goodsReceiptNotes GoodsReceiptNote[]
-  purchaseInvoices  PurchaseInvoice[]
+  purchaseOrders      PurchaseOrder[]
+  goodsReceiptNotes   GoodsReceiptNote[]
+  purchaseInvoices    PurchaseInvoice[]
+  purchaseCreditNotes PurchaseCreditNote[]
 
   @@index([companyId])
 }
@@ -1424,6 +1428,7 @@ enum DocumentType {
   GOODS_RECEIPT_NOTE
   PURCHASE_INVOICE
   PURCHASE_RETURN
+  PURCHASE_CREDIT_NOTE
   PAYMENT_VOUCHER
   RECEIPT_VOUCHER
   CONTRA_VOUCHER
@@ -1434,6 +1439,7 @@ enum DocumentType {
   DEBIT_NOTE_VOUCHER
   SALES_RETURN_VOUCHER
   PURCHASE_RETURN_VOUCHER
+  PURCHASE_CREDIT_NOTE_VOUCHER
   STOCK_ADJUSTMENT
   STOCK_TRANSFER
   PHYSICAL_VERIFICATION
@@ -1475,6 +1481,13 @@ enum VoucherType {
   DEBIT_NOTE
   SALES_RETURN
   PURCHASE_RETURN
+  // Purchase Credit Note (no context/feature-specs number assigned — an ad
+  // hoc plan, not a numbered spec) — the purchase-side mirror of CREDIT_NOTE: a
+  // pure financial adjustment reducing a supplier's payable, no stock
+  // movement. Its own VoucherType (not reusing CREDIT_NOTE) so its numbering
+  // sequence and GST/reporting classification stay independent of the
+  // sales-side module.
+  PURCHASE_CREDIT_NOTE
   SALARY // 63-payroll.md's VoucherType Decision — own type, not JOURNAL/PAYMENT
 }
 
@@ -1528,14 +1541,15 @@ model Voucher {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  entries         VoucherEntry[]
-  salesInvoice    SalesInvoice?
-  salesReturn     SalesReturn?
-  creditNote      CreditNote?
-  debitNote       DebitNote?
-  purchaseInvoice PurchaseInvoice?
-  purchaseReturn  PurchaseReturn?
-  payrollRun      PayrollRun?
+  entries            VoucherEntry[]
+  salesInvoice       SalesInvoice?
+  salesReturn        SalesReturn?
+  creditNote         CreditNote?
+  debitNote          DebitNote?
+  purchaseInvoice    PurchaseInvoice?
+  purchaseReturn     PurchaseReturn?
+  purchaseCreditNote PurchaseCreditNote?
+  payrollRun         PayrollRun?
 
   @@unique([companyId, financialYearId, voucherType, voucherNumber])
   @@index([companyId, voucherDate])
@@ -2151,9 +2165,10 @@ model PurchaseInvoice {
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
-  items    PurchaseInvoiceItem[]
-  payments PurchaseInvoicePayment[]
-  returns  PurchaseReturn[]
+  items       PurchaseInvoiceItem[]
+  payments    PurchaseInvoicePayment[]
+  returns     PurchaseReturn[]
+  creditNotes PurchaseCreditNote[]
 
   @@unique([companyId, financialYearId, invoiceNumber])
   @@unique([companyId, supplierId, supplierInvoiceNumber])
@@ -2300,6 +2315,78 @@ model PurchaseReturnItem {
   @@unique([purchaseReturnId, lineNumber])
   @@unique([purchaseReturnId, purchaseInvoiceItemId])
   @@index([purchaseInvoiceItemId])
+}
+
+// Purchase Credit Note (no context/feature-specs number assigned — an ad hoc
+// plan, not a numbered spec) — the purchase-side mirror of CreditNote: a PURE
+// FINANCIAL adjustment reducing a supplier's payable, with NO stock
+// movement. Unlike PurchaseReturn (a physical, quantity-based reversal of one
+// specific invoice line), this is freeform (description + taxableAmount +
+// ratePercent/cessPercent, not tied to invoice line items) and its optional
+// `purchaseInvoiceId` link is context/audit-trail only — posting never
+// writes back to PurchaseInvoice.amountPaid/status. Reuses CreditNoteStatus
+// (DRAFT/POSTED/CANCELLED is an identical lifecycle) rather than declaring a
+// new enum. No RefundMode/refundLedgerId/paymentModeId — a Purchase Credit
+// Note only ever reduces the supplier's ledger balance, no cash-refund path.
+model PurchaseCreditNote {
+  id                     String           @id @default(uuid())
+  companyId              String
+  company                Company          @relation(fields: [companyId], references: [id])
+  financialYearId        String
+  financialYear          FinancialYear    @relation(fields: [financialYearId], references: [id])
+  // Nullable, assigned only at postPurchaseCreditNote — mirrors CreditNote's
+  // identical nullable-until-posted convention.
+  noteNumber             String?
+  noteDate               DateTime         @db.Date
+  // Always required — a Purchase Credit Note always adjusts a specific
+  // supplier's payable, unlike purchaseInvoiceId (optional: a rebate can
+  // cover a supplier's overall history, not one particular invoice).
+  supplierId             String
+  supplier               Supplier         @relation(fields: [supplierId], references: [id])
+  purchaseInvoiceId      String?
+  purchaseInvoice        PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+  placeOfSupplyStateCode String
+  status                 CreditNoteStatus @default(DRAFT)
+  // Required (mirrors CreditNote.reason) — a note with no linked invoice has
+  // no other context explaining why it exists.
+  reason                 String
+  taxableAmount          Decimal          @db.Decimal(14, 2)
+  totalCgst              Decimal          @db.Decimal(14, 2)
+  totalSgst              Decimal          @db.Decimal(14, 2)
+  totalIgst              Decimal          @db.Decimal(14, 2)
+  totalCess              Decimal          @db.Decimal(14, 2)
+  grandTotal             Decimal          @db.Decimal(14, 2)
+  voucherId              String?          @unique
+  voucher                Voucher?         @relation(fields: [voucherId], references: [id])
+  createdByUserId        String?
+  createdBy              User?            @relation(fields: [createdByUserId], references: [id])
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  items PurchaseCreditNoteItem[]
+
+  @@unique([companyId, financialYearId, noteNumber])
+  @@index([companyId, supplierId])
+  @@index([companyId, status])
+  @@index([purchaseInvoiceId])
+}
+
+model PurchaseCreditNoteItem {
+  id                   String             @id @default(uuid())
+  purchaseCreditNoteId String
+  purchaseCreditNote   PurchaseCreditNote @relation(fields: [purchaseCreditNoteId], references: [id])
+  lineNumber           Int
+  description          String
+  taxableAmount        Decimal            @db.Decimal(14, 2)
+  ratePercent          Decimal            @db.Decimal(5, 2)
+  cessPercent          Decimal            @default(0) @db.Decimal(5, 2)
+  cgst                 Decimal            @db.Decimal(14, 2)
+  sgst                 Decimal            @db.Decimal(14, 2)
+  igst                 Decimal            @db.Decimal(14, 2)
+  cess                 Decimal            @db.Decimal(14, 2)
+  totalAmount          Decimal            @db.Decimal(14, 2)
+
+  @@unique([purchaseCreditNoteId, lineNumber])
 }
 
 model SalesOrder {

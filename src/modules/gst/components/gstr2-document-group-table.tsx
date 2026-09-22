@@ -7,6 +7,7 @@ import type { Gstr2DocumentGroup } from "@/types/gstr2";
 const DOCUMENT_DETAIL_HREF: Record<Gstr2DocumentGroup["documentType"], (id: string) => string> = {
   PURCHASE_INVOICE: (id) => `/purchase/invoices/${id}`,
   PURCHASE_RETURN: (id) => `/purchase/returns/${id}`,
+  PURCHASE_CREDIT_NOTE: (id) => `/purchase/credit-notes/${id}`,
 };
 
 function formatDate(date: Date): string {

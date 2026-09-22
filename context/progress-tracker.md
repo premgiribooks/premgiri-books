@@ -103,6 +103,7 @@ Mapping so far:
 | 86           | Payment Mode Master (`86-payment-mode-master.md`)                             | `context/Phases/phase-tracker.md` **Phase 11 — Payment & Collections Management** (#83) — **implemented 2026-09-13** on branch `feature/payment-mode-master`; first item of the newly-inserted Phase 11 — a company-scoped Payment Mode lookup (Cash/Bank Transfer/UPI/Card/Cheque), each row carrying a `ledgerClass` (CASH/BANK/ANY) that specs 88–90 (#84–#86, not yet drafted) will validate a payment line's chosen ledger against; no cross-module validation helper built yet, per YAGNI — deferred to the first real consumer |
 | 87           | Liability Settlement (`87-liability-settlement.md`)                          | `context/Phases/phase-tracker.md` Phase 11 — Payment & Collections Management (#87) — **spec drafted 2026-09-13, not implemented**; added to the phase after its initial reservation, per explicit user request — a read+navigate wrapper over `64-trial-balance.md`'s `getTrialBalance` (lists every `LIABILITY`-nature ledger with an outstanding balance) and `52-payment-voucher.md`'s existing New-voucher screen (pre-filled "Settle" action), no new Prisma model, no invoice-wise/bill-wise allocation |
 | 95           | Purchase Price Sync to Product Master (`95-purchase-price-sync.md`)          | `context/Phases/phase-tracker.md` Phase 4 — Purchase Management (#88) — **implemented 2026-09-22** on branch `feature/purchase-price-sync`; post-closure amendment reopening Phase 4 (closed in full by spec 45). Rows 88–94 are not recorded in this table — gap noted, not backfilled. |
+| 96           | Purchase Credit Note (no `context/feature-specs/` file — ad hoc implementation plan, not a numbered spec) | `context/Phases/phase-tracker.md` Phase 4 — Purchase Management (#89) — **implemented 2026-09-22**; another post-closure amendment reopening Phase 4 (see spec 95's identical note); a straight port of spec 40 (Credit Note) to the purchase side — financial-only, no stock movement, optional context-only `purchaseInvoiceId` link, no `RefundMode`/cash-refund path |
 
 **A third numbering scheme now exists alongside the two above, introduced 2026-07-13**: `context/Phases/phase-tracker.md`, a more granular live tracker (added 2026-07-13) that groups Phase 2 into named sub-groups (Accounting Foundation, Inventory Masters, Business Parties, Pricing, Shared ERP Engines) with its own `#` column (00–78) that does **not** match either `phases.md`'s business-domain Phase numbers or this file's own sequential feature-spec numbers. Feature-specs 13–17 (this table) correspond to `phase-tracker.md`'s items #12–#16 ("Accounting Foundation" group) — a coincidental near-alignment for this one group only (off by exactly one, the same off-by-one every earlier spec file number carries versus its 0-indexed tracker slot); do not assume this alignment holds for later groups. Going forward, `context/Phases/phase-tracker.md` is the authoritative day-to-day status board (its own Progress Legend/status column), `phases.md` remains the static business-domain roadmap reference, and this file's mapping table remains the sequential-implementation-order index — three different axes, not three competing sources of truth.
 
@@ -6339,3 +6340,122 @@ shortfall is visible while building the invoice rather than only surfacing as a 
 
 **Verified**: `npx tsc --noEmit` (0 errors). Not yet manually exercised in a running app by the
 user (no browser tool available in this session, stated explicitly rather than claimed).
+
+---
+
+## Purchase Credit Note implemented (no numbered spec — ad hoc plan; table row 96) (2026-09-22)
+
+A straight port of `40-credit-note.md`'s Credit Note module to the purchase side, per an
+implementation plan supplied directly by the user (not a `context/feature-specs/` file): a
+financial-only document, no stock movement, that reduces a supplier's payable — optionally linked
+to a specific POSTED Purchase Invoice for context/audit-trail only (no write-back to
+`PurchaseInvoice.amountPaid`/status, mirroring Credit Note's identical `salesInvoiceId` rule).
+Closes the gap `45-purchase-return.md` explicitly called out ("no Purchase-side Credit Note/Debit
+Note pair").
+
+**Data model**: `PurchaseCreditNote`/`PurchaseCreditNoteItem` added to `prisma/schema.prisma`,
+reusing the existing `CreditNoteStatus` enum (`DRAFT`/`POSTED`/`CANCELLED` — no new enum). `supplierId`
+required, `purchaseInvoiceId` optional; freeform lines (`description`+`taxableAmount`+
+`ratePercent`/`cessPercent`), not tied to invoice line items — unlike Purchase Return's
+quantity-based, invoice-line-derived lines. Deliberately **no** `refundMode`/`refundLedgerId`/
+`paymentModeId` (simpler than Credit Note — ledger-adjustment only, no cash-refund path) and **no**
+`roundOff` column (every line's tax comes from `gstEngine.calculateLine` already paise-exact, so
+the header sum is exact by construction — mirrors Credit Note's identical no-round-off posture,
+not Purchase Invoice's). New enum members: `PURCHASE_CREDIT_NOTE` on `VoucherType`;
+`PURCHASE_CREDIT_NOTE`/`PURCHASE_CREDIT_NOTE_VOUCHER` on `DocumentType`. Back-relations added to
+`Company`/`FinancialYear`/`User`/`Voucher`/`Supplier`/`PurchaseInvoice`.
+
+**Migration**: the dev database user lacks `CREATEDB` privilege, so `prisma migrate dev` (which
+needs a shadow database) failed with P3014. Worked around by diffing the live datasource directly
+against the updated schema (`prisma migrate diff --from-config-datasource --to-schema
+prisma/schema.prisma --script`), hand-placing the result at
+`prisma/migrations/20260922130000_add_purchase_credit_note/migration.sql` (after stripping one
+unrelated `RenameIndex` line the diff surfaced — pre-existing drift on
+`ProductPurchasePriceHistory`'s index name, out of scope for this feature, left untouched), then
+applying with `prisma migrate deploy` (which never needs a shadow database) and `prisma generate`.
+`prisma migrate status` confirms the schema is up to date afterward.
+
+**Module**: `src/types/purchase-credit-note.ts` and `src/modules/purchase-credit-notes/`
+(repository/service/validation/actions/components/utils) mirror `src/modules/credit-notes/`
+file-for-file, with `customerId`→`supplierId`, `salesInvoiceId`→`purchaseInvoiceId`, and every
+refund-mode field dropped. `purchaseCreditNoteService.postPurchaseCreditNote` re-validates the
+supplier and the optional invoice link against CURRENT state inside the posting transaction,
+recomputes every line via the GST Engine, posts a balanced `PURCHASE_CREDIT_NOTE` voucher — Credit
+`purchaseLedgerId` + the matching input-tax ledgers (intra-state CGST/SGST or inter-state IGST,
+plus Cess) for the adjustment amounts, Debit the supplier's own `Ledger` for `grandTotal` (the
+reversal of Purchase Invoice's own posting direction) — then flips the row to `POSTED`. **No
+Inventory Engine call anywhere in this module.** Posting-time ledger-mapping validation reuses
+`assertPurchaseLedgerMappingValid` (the same group/active/company-owned matrix Purchase
+Invoice/Purchase Return already share), not just the cheaper "is a value present" check the plan
+sketch mentioned — matching what those two sibling documents actually do at posting time.
+
+**UI**: `src/app/purchase/credit-notes/{page,new/page,[id]/page,[id]/edit/page}.tsx`, mirroring
+`src/app/sales/credit-notes/`'s structure. The optional invoice picker is the same inline
+`SearchableSelect` pattern Credit Note's own form uses (not Purchase Return's separate
+invoice-picker page), since the plan calls for an optional link, not a return's invoice-first
+flow — selecting an invoice prefills supplier + place of supply. Wired into
+`src/app/purchase/page.tsx` (new "Credit Notes" card) and `src/config/navigation.ts` (new
+Purchase-group leaf). `src/constants/breadcrumbs.ts` needed no change — the bare `"credit-notes":
+"Credit Notes"` key Sales' own module already claims resolves correctly for this route too (an
+accepted shared-key overlap, the same posture `69-purchase-reports.md`'s own note documents for
+"register"/"item-wise"/"party-wise").
+
+**Integration touchpoints** (mirroring every place `PURCHASE_RETURN`/`CREDIT_NOTE` is already
+consumed, grepped exhaustively at implementation time): `voucher-validation.ts` (new
+`VOUCHER_TYPE_VALUES` entry), `voucher-engine.ts` (`VOUCHER_TYPE_TO_DOCUMENT_TYPE` new pairing),
+`document-defaults.ts` (prefix `PCN`/`PCNV`, both `DOCUMENT_TYPE_*` maps). GST/ITC reporting:
+`gst-report-types.ts` (new `GstSupplyLineDocumentType` member), `gst-report-queries.ts`
+(`PURCHASE_CREDIT_NOTE_ITEM_INCLUDE`/`toPurchaseCreditNoteLine`, wired into
+`getInwardSupplyLines`, negative-signed like Purchase Return since it reverses claimed input tax
+credit), `types/gstr2.ts`/`gstr2-document-group-table.tsx`/`gst-register-table.tsx` (new
+document-type entries and detail-page hrefs). `gstr2-service.ts`/`itc-register-service.ts`/
+`gstr3b-service.ts` needed **no code changes at all** — they consume `getInwardSupplyLines`'s
+output generically (filtering on `partyGstin`/grouping by rate/party/HSN, never switching on a
+fixed document-type list), so Purchase Credit Note lines flow into GSTR-2 Table 3/7 and the ITC
+Register automatically. Likewise `dashboard-service.ts` (its voucher-type filter is a fixed list
+of manual-only types, Purchase Credit Note correctly excluded, no change needed),
+`purchase-reports.ts`/`purchase-report-service.ts`/`customer-reports.ts`/`supplier-reports.ts`
+(their `humanizeVoucherType` helper is a generic string transform over the `VoucherType` enum, so
+the Supplier Statement/Ledger surfaces this voucher type with zero new code — confirmed by reading
+each file, not assumed).
+
+**Permissions**: gated on the existing `purchase` module (`view`/`create`/`edit`/`approve`),
+identically to Purchase Invoice/Purchase Return — no new permission module, no seed changes (the
+default "Purchase" role doesn't carry `edit`/`approve` either, matching Purchase Return's own
+precedent of relying on Company Admin/custom-role assignment for those two actions).
+
+**Testing**: new `purchase-credit-note-service.test.ts` (34 tests) covering: create/update
+validation (supplier not-found/inactive, linked-invoice DRAFT/CANCELLED/company-mismatch/supplier-
+mismatch rejected), posting with and without a linked invoice (balanced voucher, correct
+CREDIT/DEBIT direction, no Inventory Engine involvement), posting-time re-validation of the
+invoice link and of all six purchase-ledger mappings (each one's specific missing-mapping message
+asserted individually), cross-company scoping, permission gating (`purchase`/`create`,
+`purchase`/`edit`, `purchase`/`approve`), and cancellation (mirrored voucher reversal, concurrent-
+cancellation race rejected). `gst-report-queries.test.ts` extended with a `purchaseCreditNoteItem`
+entry on its fake Prisma client (the existing `getInwardSupplyLines` tests failed until this was
+added) plus one new mapping test for the negative-signed, freeform (no HSN/product/quantity)
+Purchase Credit Note line shape.
+
+**Deviations from the plan sketch**: (1) posting-time ledger-mapping validation uses the full
+`assertPurchaseLedgerMappingValid` (group/active/company-owned checks), not just the cheaper
+`assertPurchaseLedgerMappingComplete`-style presence check the plan's prose literally named —
+matches what Purchase Invoice/Purchase Return actually do, and the plan's own Verification section
+implies the same "missing purchase-ledger-mapping rejected" test coverage either way. (2) the
+plan's Ledger Posting section mentioned "round-off entry mirrored the same way as Purchase
+Invoice's," but the plan's own Data Model section (and Credit Note's own established precedent)
+has no `roundOff` column on this model at all — no round-off entry exists or is needed, since
+every line amount is already paise-exact from the GST Engine. (3) code comments referencing a
+fabricated "`91-purchase-credit-note.md`" spec number were corrected — `#91` is already
+`91-payment-mode-integration-sales.md` in this repo; no `context/feature-specs/` file exists for
+this plan, so comments now say so explicitly instead of citing a number that collides with a real,
+different spec.
+
+**Verified**: `npx tsc --noEmit` (0 errors), `npx eslint src prisma` (0 errors, same 2
+pre-existing unrelated warnings as before this feature), `npx vitest run` (224 files / 3003 tests,
+all passing, including 34 new Purchase Credit Note tests and 2 new/updated
+`gst-report-queries.test.ts` cases), `next build` (clean;
+`/purchase/credit-notes`, `/purchase/credit-notes/new`, `/purchase/credit-notes/[id]`, and
+`/purchase/credit-notes/[id]/edit` all confirmed in the route table). Not yet manually exercised in
+a running app by the user (no browser tool available in this session, stated explicitly rather
+than claimed) — the plan's own Verification section calls for a manual ledger-balance check on a
+posted independent and a posted invoice-linked note before merge.

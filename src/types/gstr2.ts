@@ -4,12 +4,12 @@
 
 /**
  * One Table 3 (registered supplies) or Table 7 (composition/exempt) party-
- * scoped invoice-wise group, one row per Purchase Invoice/Purchase Return
- * document — mirrors 58-gstr-1.md's Gstr1DocumentGroup shape, restricted to
- * this codebase's two inward document types.
+ * scoped invoice-wise group, one row per Purchase Invoice/Purchase Return/
+ * Purchase Credit Note document — mirrors 58-gstr-1.md's Gstr1DocumentGroup
+ * shape, restricted to this codebase's inward document types.
  */
 export interface Gstr2DocumentGroup {
-  documentType: "PURCHASE_INVOICE" | "PURCHASE_RETURN";
+  documentType: "PURCHASE_INVOICE" | "PURCHASE_RETURN" | "PURCHASE_CREDIT_NOTE";
   documentId: string;
   documentNumber: string;
   documentDate: Date;

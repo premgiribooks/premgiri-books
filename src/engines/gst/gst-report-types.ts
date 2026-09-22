@@ -10,6 +10,7 @@ export const GST_SUPPLY_LINE_DOCUMENT_TYPES = [
   "DEBIT_NOTE",
   "PURCHASE_INVOICE",
   "PURCHASE_RETURN",
+  "PURCHASE_CREDIT_NOTE",
 ] as const;
 
 export type GstSupplyLineDocumentType = (typeof GST_SUPPLY_LINE_DOCUMENT_TYPES)[number];
@@ -17,8 +18,9 @@ export type GstSupplyLineDocumentType = (typeof GST_SUPPLY_LINE_DOCUMENT_TYPES)[
 /**
  * One transaction-level GST line, already sign-adjusted per document type
  * (Sales Invoice/Debit Note positive; Sales Return/Credit Note negative;
- * Purchase Invoice positive; Purchase Return negative) and already resolved
- * to the effective (overridden-preferred) tax figures actually posted.
+ * Purchase Invoice positive; Purchase Return/Purchase Credit Note negative)
+ * and already resolved to the effective (overridden-preferred) tax figures
+ * actually posted.
  */
 export interface GstSupplyLine {
   documentType: GstSupplyLineDocumentType;
@@ -30,11 +32,11 @@ export interface GstSupplyLine {
   partyName: string;
   partyGstin: string | null;
   placeOfSupplyStateCode: string;
-  /** null for Credit/Debit Note lines — freeform, no product to resolve an HSN from. */
+  /** null for Credit/Debit Note and Purchase Credit Note lines — freeform, no product to resolve an HSN from. */
   hsnCode: string | null;
-  /** null for Credit/Debit Note lines. */
+  /** null for Credit/Debit Note and Purchase Credit Note lines. */
   productId: string | null;
-  /** null for Credit/Debit Note lines (freeform, no quantity). */
+  /** null for Credit/Debit Note and Purchase Credit Note lines (freeform, no quantity). */
   quantity: number | null;
   ratePercent: number;
   cessPercent: number;

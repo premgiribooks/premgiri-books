@@ -11,6 +11,7 @@ const DOCUMENT_TYPE_LABELS: Record<GstSupplyLineDocumentType, string> = {
   DEBIT_NOTE: "Debit Note",
   PURCHASE_INVOICE: "Purchase Invoice",
   PURCHASE_RETURN: "Purchase Return",
+  PURCHASE_CREDIT_NOTE: "Purchase Credit Note",
 };
 
 /** Each document type's own detail-page route — the drill-down this report exists to provide. */
@@ -21,6 +22,7 @@ const DOCUMENT_DETAIL_HREF: Record<GstSupplyLineDocumentType, (id: string) => st
   DEBIT_NOTE: (id) => `/sales/debit-notes/${id}`,
   PURCHASE_INVOICE: (id) => `/purchase/invoices/${id}`,
   PURCHASE_RETURN: (id) => `/purchase/returns/${id}`,
+  PURCHASE_CREDIT_NOTE: (id) => `/purchase/credit-notes/${id}`,
 };
 
 function formatDate(date: Date): string {

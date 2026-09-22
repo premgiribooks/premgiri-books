@@ -1,17 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardList, PackageCheck, ReceiptText, RotateCcw } from "lucide-react";
+import { ClipboardList, FileMinus, PackageCheck, ReceiptText, RotateCcw } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 
-// Mirrors /sales's hub exactly (src/app/sales/page.tsx) — one card per Phase
-// 4 document type; Purchase Orders (42-purchase-orders.md), Goods Receipt
+// Mirrors /sales's hub exactly (src/app/sales/page.tsx) — one card per
+// document type; Purchase Orders (42-purchase-orders.md), Goods Receipt
 // Notes (43-goods-receipt-note.md), Purchase Invoices
-// (44-purchase-invoice.md), and Purchase Returns (45-purchase-return.md) —
-// the fourth and final card, completing this hub.
+// (44-purchase-invoice.md), Purchase Returns (45-purchase-return.md), and
+// Credit Notes (an ad hoc plan, no context/feature-specs number assigned) —
+// a pure financial adjustment
+// reducing a supplier's payable, no stock movement, mirroring Sales' own
+// Credit Notes card.
 const PURCHASE_MODULES = [
   {
     href: "/purchase/orders",
@@ -36,6 +39,12 @@ const PURCHASE_MODULES = [
     icon: RotateCcw,
     title: "Purchase Returns",
     description: "The physical, quantity-based reversal of a posted Purchase Invoice — goods back out to the supplier.",
+  },
+  {
+    href: "/purchase/credit-notes",
+    icon: FileMinus,
+    title: "Credit Notes",
+    description: "A pure financial adjustment reducing what the company owes a supplier — no stock movement.",
   },
 ] as const;
 

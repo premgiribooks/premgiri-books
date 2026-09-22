@@ -155,6 +155,7 @@ export const NAVIGATION: NavItem[] = [
     leaf("Goods Receipt Notes", "/purchase/receipts", PackageCheck),
     leaf("Purchase Invoices", "/purchase/invoices", ReceiptText),
     leaf("Purchase Returns", "/purchase/returns", RotateCcw),
+    leaf("Credit Notes", "/purchase/credit-notes", FileMinus),
   ]),
   group("Inventory", Package, "inventory", [
     leaf("Opening Stock", "/inventory/opening-stock", PackagePlus),

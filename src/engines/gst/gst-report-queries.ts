@@ -363,6 +363,46 @@ function toPurchaseReturnLine(row: PurchaseReturnItemRow): GstSupplyLine {
   };
 }
 
+const PURCHASE_CREDIT_NOTE_ITEM_INCLUDE = {
+  purchaseCreditNote: {
+    select: {
+      id: true,
+      noteNumber: true,
+      noteDate: true,
+      placeOfSupplyStateCode: true,
+      supplier: { select: { id: true, gstin: true, ledger: { select: { name: true } } } },
+    },
+  },
+} satisfies Prisma.PurchaseCreditNoteItemInclude;
+
+type PurchaseCreditNoteItemRow = Prisma.PurchaseCreditNoteItemGetPayload<{ include: typeof PURCHASE_CREDIT_NOTE_ITEM_INCLUDE }>;
+
+/** Mirrors toCreditNoteLine, negated like toPurchaseReturnLine — a Purchase
+ * Credit Note reverses previously-claimed input tax credit, so its taxable/
+ * tax/total figures reduce the inward register. */
+function toPurchaseCreditNoteLine(row: PurchaseCreditNoteItemRow): GstSupplyLine {
+  const party = resolveSupplierParty(row.purchaseCreditNote.supplier);
+  return {
+    documentType: "PURCHASE_CREDIT_NOTE",
+    documentId: row.purchaseCreditNote.id,
+    documentNumber: row.purchaseCreditNote.noteNumber ?? "",
+    documentDate: row.purchaseCreditNote.noteDate,
+    ...party,
+    placeOfSupplyStateCode: row.purchaseCreditNote.placeOfSupplyStateCode,
+    hsnCode: null,
+    productId: null,
+    quantity: null,
+    ratePercent: toNum(row.ratePercent),
+    cessPercent: toNum(row.cessPercent),
+    taxableAmount: -toNum(row.taxableAmount),
+    cgst: -toNum(row.cgst),
+    sgst: -toNum(row.sgst),
+    igst: -toNum(row.igst),
+    cess: -toNum(row.cess),
+    totalAmount: -toNum(row.totalAmount),
+  };
+}
+
 function byDocumentDateAscending(a: GstSupplyLine, b: GstSupplyLine): number {
   return a.documentDate.getTime() - b.documentDate.getTime();
 }
@@ -410,9 +450,10 @@ export async function getOutwardSupplyLines(
 }
 
 /**
- * The inward supply register: Purchase Invoice (+) and Purchase Return (-)
- * lines for `companyId` within `[from, to]` (inclusive), `POSTED` documents
- * only. Mirrors getOutwardSupplyLines exactly.
+ * The inward supply register: Purchase Invoice (+), Purchase Return (-), and
+ * Purchase Credit Note (-) lines for `companyId` within `[from, to]`
+ * (inclusive), `POSTED` documents only. Mirrors getOutwardSupplyLines
+ * exactly.
  */
 export async function getInwardSupplyLines(
   companyId: string,
@@ -422,7 +463,7 @@ export async function getInwardSupplyLines(
 ): Promise<GstSupplyLine[]> {
   const client = tx ?? prisma;
 
-  const [purchaseInvoiceItems, purchaseReturnItems] = await Promise.all([
+  const [purchaseInvoiceItems, purchaseReturnItems, purchaseCreditNoteItems] = await Promise.all([
     client.purchaseInvoiceItem.findMany({
       where: { purchaseInvoice: { companyId, status: "POSTED", invoiceDate: { gte: from, lte: to } } },
       include: PURCHASE_INVOICE_ITEM_INCLUDE,
@@ -431,9 +472,15 @@ export async function getInwardSupplyLines(
       where: { purchaseReturn: { companyId, status: "POSTED", returnDate: { gte: from, lte: to } } },
       include: PURCHASE_RETURN_ITEM_INCLUDE,
     }),
+    client.purchaseCreditNoteItem.findMany({
+      where: { purchaseCreditNote: { companyId, status: "POSTED", noteDate: { gte: from, lte: to } } },
+      include: PURCHASE_CREDIT_NOTE_ITEM_INCLUDE,
+    }),
   ]);
 
-  return [...purchaseInvoiceItems.map(toPurchaseInvoiceLine), ...purchaseReturnItems.map(toPurchaseReturnLine)].sort(
-    byDocumentDateAscending
-  );
+  return [
+    ...purchaseInvoiceItems.map(toPurchaseInvoiceLine),
+    ...purchaseReturnItems.map(toPurchaseReturnLine),
+    ...purchaseCreditNoteItems.map(toPurchaseCreditNoteLine),
+  ].sort(byDocumentDateAscending);
 }
