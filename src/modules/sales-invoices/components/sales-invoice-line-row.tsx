@@ -17,7 +17,7 @@ import { SalesInvoiceTaxOverridePopover } from "@/modules/sales-invoices/compone
 import { useMarginOverride } from "@/hooks/use-margin-override";
 import { previewMarginOverrideRateAction } from "@/lib/margin-override-actions";
 import type { CreateSalesInvoiceInput } from "@/modules/sales-invoices/validation/sales-invoice-schema";
-import type { SalesInvoiceLineComputation } from "@/types/sales-invoice";
+import type { SalesInvoiceLineComputation, SalesInvoiceProductOption } from "@/types/sales-invoice";
 
 function toNumberOrZero(value: number): number {
   return Number.isNaN(value) ? 0 : value;
@@ -26,6 +26,10 @@ function toNumberOrZero(value: number): number {
 interface SalesInvoiceLineRowProps {
   index: number;
   productOptions: ProductOptionItem[];
+  /** Keyed by product id — looked up for the selected line's product to show
+   * current stock (across all warehouses) right after the item name, so
+   * billing staff can see what's available while creating the sale. */
+  productsById: ReadonlyMap<string, SalesInvoiceProductOption>;
   computation?: SalesInvoiceLineComputation;
   customerId: string | undefined;
   invoiceDate: string;
@@ -48,6 +52,7 @@ interface SalesInvoiceLineRowProps {
 export function SalesInvoiceLineRow({
   index,
   productOptions,
+  productsById,
   computation,
   customerId,
   invoiceDate,
@@ -70,6 +75,7 @@ export function SalesInvoiceLineRow({
   const [resolvedCost, setResolvedCost] = React.useState<number | null>(null);
   const watchedProductId = useWatch({ control, name: `lines.${index}.productId` });
   const watchedQuantity = useWatch({ control, name: `lines.${index}.quantity` });
+  const selectedProduct = watchedProductId ? productsById.get(watchedProductId) : undefined;
 
   async function handleProductChange(productId: string | undefined) {
     setValue(`lines.${index}.productId`, productId ?? "", { shouldValidate: true });
@@ -171,6 +177,17 @@ export function SalesInvoiceLineRow({
             )}
           />
         )}
+        {selectedProduct ? (
+          <p
+            className={
+              "mt-1 text-xs " +
+              ((selectedProduct.availableQuantity ?? 0) < (watchedQuantity || 0) ? "text-destructive" : "text-muted-foreground")
+            }
+          >
+            Available: {(selectedProduct.availableQuantity ?? 0).toFixed(selectedProduct.unitDecimalPlaces)}{" "}
+            {selectedProduct.unitSymbol}
+          </p>
+        ) : null}
       </TableCell>
 
       <TableCell>

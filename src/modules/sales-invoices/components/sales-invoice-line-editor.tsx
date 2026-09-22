@@ -75,6 +75,8 @@ export function SalesInvoiceLineEditor({
     [products]
   );
 
+  const productsById = React.useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+
   const computationByLineNumber = React.useMemo(
     () => new Map(computations.map((computation) => [computation.lineNumber, computation])),
     [computations]
@@ -104,6 +106,7 @@ export function SalesInvoiceLineEditor({
                 key={field.id}
                 index={index}
                 productOptions={productOptions}
+                productsById={productsById}
                 computation={computationByLineNumber.get(index + 1)}
                 customerId={customerId}
                 invoiceDate={invoiceDate}

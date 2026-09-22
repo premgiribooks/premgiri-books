@@ -152,7 +152,10 @@ export interface SalesInvoiceListFilters {
 }
 
 /** The product picker's options — mirrors SalesOrderProductOption exactly
- * (pricing/GST prefill is still display-only here, same as specs 35–36). */
+ * (pricing/GST prefill is still display-only here, same as specs 35–36).
+ * `availableQuantity` is only populated for the form-options list (current
+ * stock across all warehouses, from the Inventory Engine) — undefined for
+ * `findProductsForLines`' computation-only lookups, which never display it. */
 export interface SalesInvoiceProductOption {
   id: string;
   name: string;
@@ -166,6 +169,7 @@ export interface SalesInvoiceProductOption {
   cessPercent: number;
   sellingPrice: number | null;
   purchasePrice: number | null;
+  availableQuantity?: number;
 }
 
 /** The payment line's ledger picker options — any active company Ledger,

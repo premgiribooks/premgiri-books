@@ -6314,3 +6314,28 @@ practice) — both APPROVE, zero CRITICAL/HIGH findings.**
 exercised in a running app by the user (no browser tool available in this session, stated
 explicitly rather than claimed) — recommended before merge, given this writes financial/pricing
 data that flows into every computed selling price company-wide.
+
+---
+
+## Sales Invoice line editor — show available stock next to the item picker (2026-09-22)
+
+Small UI addition to `38-sales-invoice.md`'s billing screen, requested directly by the user
+("show available qty on sales page to track available stock which creating sale after item
+name") — no new feature-spec number, scoped entirely within the existing Sales Invoice module.
+
+**What changed**: `SalesInvoiceProductOption` (`src/types/sales-invoice.ts`) gained an optional
+`availableQuantity` field, populated only for the form-options product list (never for
+`findProductsForLines`' computation-only lookups, which don't display it — kept optional rather
+than threading a real value through every call site, per YAGNI). `listSalesInvoiceFormOptions`
+(`sales-invoice-service.ts`) now also calls `inventoryEngine.getCurrentStock(companyId)` — the
+Sales module's only sanctioned channel into inventory data (architecture-context.md's "Sales
+module communicates only through Pricing/Inventory/Voucher/GST Engines") — and sums each
+product's net quantity across all warehouses into that field, alongside the existing repository
+read. `SalesInvoiceLineEditor` now also builds a `productsById` lookup map and passes it to each
+`SalesInvoiceLineRow`, which renders "Available: `<qty>` `<unit symbol>`" directly under the
+product selector for the line's currently-selected product — in `text-destructive` when available
+quantity is less than the entered line quantity, `text-muted-foreground` otherwise, so a stock
+shortfall is visible while building the invoice rather than only surfacing as a save-time error.
+
+**Verified**: `npx tsc --noEmit` (0 errors). Not yet manually exercised in a running app by the
+user (no browser tool available in this session, stated explicitly rather than claimed).

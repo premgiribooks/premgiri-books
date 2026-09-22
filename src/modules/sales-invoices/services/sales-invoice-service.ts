@@ -906,10 +906,11 @@ export const salesInvoiceService = {
 
     const financialYear = await requireFinancialYear();
 
-    const [customers, products, paymentLedgers, ledgerClassById, paymentModes, companyStateCode, settings, preview] =
+    const [customers, products, stockRows, paymentLedgers, ledgerClassById, paymentModes, companyStateCode, settings, preview] =
       await Promise.all([
         customerService.listSelectableCustomers(),
         salesInvoiceRepository.findInvoiceableProducts(user.companyId),
+        inventoryEngine.getCurrentStock(user.companyId),
         ledgerService.listSelectableLedgers(),
         getLedgerPaymentClassMap(user.companyId),
         paymentModeService.listActivePaymentModes(),
@@ -921,6 +922,15 @@ export const salesInvoiceService = {
           documentType: "SALES_INVOICE",
         }),
       ]);
+
+    // Current stock across all warehouses, per product — lets the line
+    // editor show "available to sell" right next to the item picker so
+    // billing staff can spot a stock-out before saving, not after posting
+    // fails the negative-stock check.
+    const availableQuantityByProductId = new Map<string, number>();
+    for (const row of stockRows) {
+      availableQuantityByProductId.set(row.productId, (availableQuantityByProductId.get(row.productId) ?? 0) + row.quantity);
+    }
 
     return {
       customers: customers.map((customer) => ({
@@ -936,7 +946,10 @@ export const salesInvoiceService = {
         state: customer.state,
         pinCode: customer.pinCode,
       })),
-      products,
+      products: products.map((product) => ({
+        ...product,
+        availableQuantity: availableQuantityByProductId.get(product.id) ?? 0,
+      })),
       paymentLedgers: paymentLedgers.map((ledger) => ({
         id: ledger.id,
         name: ledger.name,
