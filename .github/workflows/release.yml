@@ -1,10 +1,11 @@
 name: Release desktop app
 
-# Builds and publishes unsigned installers (see docs/release-process.md) for
-# Windows, macOS, and Linux to GitHub Releases whenever a `v*.*.*` tag is
-# pushed. Each OS builds on its own native runner so macOS's .dmg step
-# (which needs a real macOS host) and Windows' NSIS step both work without
-# cross-compilation.
+# Builds and publishes an unsigned Windows installer (see
+# docs/release-process.md) to GitHub Releases whenever a `v*.*.*` tag is
+# pushed. macOS and Linux builds are disabled (2026-09-22, explicit request)
+# — re-add `macos-latest`/`ubuntu-latest` to the matrix below to bring them
+# back; each needs its own native runner (macOS's .dmg step in particular
+# needs a real macOS host, no cross-compilation).
 #
 # The GitHub release itself is created as a draft by its own job *before*
 # the OS matrix runs, and only published (undrafted) after every OS build
@@ -73,7 +74,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

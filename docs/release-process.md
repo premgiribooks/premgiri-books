@@ -14,10 +14,12 @@ folder, since Next doesn't do that on its own.
 
 1. Bump `version` in `package.json` and commit.
 2. Tag it and push the tag: `git tag v1.2.0 && git push origin v1.2.0`.
-3. `.github/workflows/release.yml` builds Windows/macOS/Linux installers on
-   their native runners and publishes them to GitHub Releases via
-   `electron-builder --publish always`. No manual step needed beyond the tag
-   push.
+3. `.github/workflows/release.yml` builds a Windows installer and publishes
+   it to GitHub Releases via `electron-builder --publish always`. No manual
+   step needed beyond the tag push. **macOS and Linux builds are disabled**
+   (2026-09-22, explicit request) — the workflow's `build` job matrix only
+   runs `windows-latest`; add `macos-latest`/`ubuntu-latest` back to that
+   matrix to resume publishing those installers.
 
 To test a packaged build locally without publishing, run `pnpm dist:dir`
 (unpacked, fastest) or `pnpm dist` (full installer for your current OS).
