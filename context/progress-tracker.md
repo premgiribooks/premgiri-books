@@ -2824,6 +2824,8 @@ Mapping so far:
 - **New — a confirmed Purchase Order's rate can now override an already-invoiced cost** (recorded 2026-09-22). Per explicit user decision, both Purchase Order confirmation and Purchase Invoice posting write `Product.purchasePrice`, whichever happens most recently. A PO records an intended/negotiated rate that may never be invoiced, while an invoice records what was actually billed — "most recently posted wins" lets the aspirational PO rate win over a real invoiced cost. Flagged, not re-litigated; would be a small change to the resolution rule (compare `sourceDocumentType` priority) if the user later wants invoice-precedence instead.
 - **New — no backfill exists for purchase documents posted/confirmed before 95-purchase-price-sync.md shipped (2026-09-22)** — deliberate, explicit user decision (prospective-only scope, see that spec's Business Rules §1.9 and this file's Architecture Decisions entry below). A product's Purchase Price History tab shows no rows for activity before this feature's rollout, and `purchasePrice` for such products remains whatever was last manually entered until the next qualifying document posts.
 - **New — `StockTransaction.unitCost` remains unpopulated after 95-purchase-price-sync.md, despite this feature editing the exact Purchase Invoice posting code path (`stockLines`) that a future FIFO/Weighted-Average feature would need to populate it from** (recorded 2026-09-22). Deliberately out of scope for this feature (see its Do Not section) — `ProductPurchasePriceHistory` is a per-product *price-change audit trail*, not a per-movement cost layer, and must not be conflated with FIFO's own future data source. Flagged so a future costing feature doesn't assume this gap was closed.
+- **Accepted, not fixed: `syncFromPurchaseDocument`'s per-product write loop is N+1-shaped** (found during 95-purchase-price-sync.md's code review, 2026-09-22). `product-purchase-price-history-service.ts:52-63` issues one `updateMany` + one `create` per distinct product on a document, serially, inside the caller's Serializable transaction — extends transaction duration on a large multi-product document, slightly increasing retry-conflict odds under Postgres SSI. Not a correctness bug (reads already batched via `findCurrentPurchasePrices`; the existing bounded-retry wrapper absorbs the added contention). Not fixed now per YAGNI — no evidence 50+-distinct-product purchase documents occur in this app's actual usage; revisit with a single multi-row upsert/insert if that changes.
+- **Accepted, not fixed: `postPurchaseInvoice`'s Latest-Purchase-Cost sync derives `lineNumber` from `built.lines`' array index, an implicit ordering invariant with no test that would catch a future reorder** (found during the same code review). Correct as implemented today (`purchase-invoice-service.ts:1167-1171` — nothing reorders/filters `built.lines` between its index-derived `lineNumber` assignment and the sync call, and this mirrors an identical existing convention elsewhere in the same file). Flagged so a future refactor that reorders `built.lines` (e.g., grouping by warehouse) re-verifies the "last line wins" cost-sync rule still holds, since no automated test currently pins that ordering assumption directly.
 
 ## Architecture Decisions
 
@@ -6273,10 +6275,42 @@ responsibilities, Purchase module boundary's recorded exception, Costing Strateg
 `context/feature-specs/42-purchase-orders.md` (inline amendment note near its now-superseded
 "rate prefills, never written back" claim).
 
-**Open**: not yet merged to `main` (Purchase-related planning delegated the git workflow's
-Repository Synchronization/branch-creation steps to this same session, which is now itself the
-"next branch" the eventual completion of this feature must merge before any further unrelated
-work starts, per the same Centralized Codebase Rule this session already applied once for
-`feature/margin-override-shortcut`). Code review / security review not yet run — this touches
-financial/pricing data and a transaction-isolation change to a previously non-transactional method,
-both explicit triggers in this project's code-review standards; recommended before merge.
+**Code review and security review (2026-09-22, run in parallel, mirroring every prior phase's
+practice) — both APPROVE, zero CRITICAL/HIGH findings.**
+
+- **Security review**: zero findings of any severity. Explicitly verified clean: multi-tenant
+  isolation (every repository query scoped by server-derived `companyId`, never client-supplied;
+  the cross-company case is pinned by test), the no-permission-check design on
+  `syncFromPurchaseDocument` (confirmed via grep — its only two callers are the already-
+  permission-checked `postPurchaseInvoice`/`confirmPurchaseOrder`, no Server Action or route
+  exposes it directly), the new UI route's `masters`/`view` gate (matches the Batches tab
+  byte-for-byte, plus two more independent scoping checks behind it), the pricing guard against
+  malformed input (non-finite/non-positive values dropped before ever reaching a stored price),
+  the hand-applied migration (additive-only, correct FK cascade behavior, no drift vs. schema.prisma),
+  and standard OWASP checks (no raw SQL, no secrets, no XSS, no leaking error messages).
+- **Code review**: APPROVE. Two MEDIUM observations, both **accepted, not fixed** (pre-existing
+  patterns/tradeoffs, not new defects, both already covered by existing safety nets — matching
+  this project's own "accepted, not fixed" Open Questions convention rather than silently closed):
+  1. `syncFromPurchaseDocument`'s per-product write loop (`product-purchase-price-history-service.ts:52-63`)
+     is N+1-shaped — one `updateMany` + one `create` per distinct product, serially, inside the
+     Serializable transaction, which extends how long the transaction stays open on a large
+     multi-product document and slightly increases retry-conflict odds under Postgres SSI. Not a
+     correctness bug (reads are already batched; the existing `SERIALIZABLE_RETRY` wrapper absorbs
+     it) — worth a single multi-row upsert/insert if 50+ distinct-product documents turn out to be
+     common. Added to Open Questions below rather than fixed speculatively (YAGNI — no evidence
+     this document size occurs in practice).
+  2. `postPurchaseInvoice`'s sync step derives `lineNumber` from array index (`built.lines.map((line, index) => ...)`,
+     `purchase-invoice-service.ts:1167-1171`) — consistent with an identical existing convention
+     elsewhere in the same file (line 847), correct as implemented since nothing reorders/filters
+     `built.lines` between assignment and the sync call, but it is an implicit invariant a future
+     refactor could silently break with no test catching it. Flagged, not changed — recorded here
+     so a future session touching `built.lines` ordering knows to re-check "last line wins" still
+     holds.
+  One LOW note (confirmed as a non-issue, not a finding): `purchase-cost-sync.ts`'s pure function
+  has no explicit batch-size guard, but is O(n) via a `Map` with no realistic risk at this app's
+  scale.
+
+**Merged to `main`**: pending — not yet merged as of this entry. This branch has not been manually
+exercised in a running app by the user (no browser tool available in this session, stated
+explicitly rather than claimed) — recommended before merge, given this writes financial/pricing
+data that flows into every computed selling price company-wide.

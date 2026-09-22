@@ -259,8 +259,11 @@ instruction), with every change recorded in a new append-only
 `ProductPurchasePriceHistory` trail. New unconditional "Purchase Price History" tab on
 the Product detail page. Selling-price calculation is unaffected — the Pricing Engine
 already read `purchasePrice` live, so no engine change was needed there. Prospective
-only: no backfill for documents already posted/confirmed before this shipped. Full
-record in `context/progress-tracker.md`'s dated 2026-09-22 entry and
+only: no backfill for documents already posted/confirmed before this shipped. Code review and
+security review (2026-09-22, run in parallel) both **APPROVE**, zero CRITICAL/HIGH findings; two
+MEDIUM code-review observations accepted-not-fixed (disposition recorded in
+`context/progress-tracker.md`). Not yet merged to `main` and not yet manually exercised in a
+running app. Full record in `context/progress-tracker.md`'s dated 2026-09-22 entry and
 `context/feature-specs/95-purchase-price-sync.md`.
 
 ---
