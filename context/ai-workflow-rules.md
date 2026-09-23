@@ -720,6 +720,72 @@ Before marking the feature complete, verify:
 -   `progress-tracker.md` AND `context/Phases/phase-tracker.md` both
     updated (see Tracker Update Rule).
 
+------------------------------------------------------------------------
+
+# Deploy Process
+
+The web build has one deploy channel: `.github/workflows/deploy.yml`,
+which runs automatically on every push to `main`. There is no manual
+deploy step and no separate staging environment — merging to `main` is
+the deploy trigger.
+
+## What Happens on Push to Main
+
+1.  GitHub Actions picks up the push on the self-hosted runner
+    (registered on `CHE-RL-LTP14`, matched by the `[self-hosted,
+    Windows]` labels — not the runner's name).
+2.  The workflow installs dependencies, runs `prisma generate`, then
+    builds the Next.js standalone server (`next build` +
+    `scripts/prepare-standalone.mjs`) — this skips
+    `scripts/build-electron.mjs`, which is Electron-desktop-only and
+    unrelated to this deploy.
+3.  The standalone build is uploaded over SSH/SCP to the Termux
+    webserver host and started/restarted under `pm2` as
+    `premgiri-books`.
+4.  `argon2`'s native addon is rebuilt on the Termux (Android/aarch64)
+    side as part of this step, since the Windows build machine produces
+    a binary that cannot load there.
+
+This is a completely separate distribution channel from the Electron
+desktop app (`release.yml`) — same application code, no `src/`
+differences between the two; only `electron/` and
+`scripts/build-electron.mjs` differ.
+
+## AI Responsibilities Before Pushing to Main
+
+Before a merge/push to `main` that will trigger this deploy:
+
+-   Confirm the full Completion Checklist above has passed (TypeScript,
+    ESLint, build).
+-   Confirm no in-progress/experimental change is being merged
+    unintentionally — a push to `main` ships to the live server
+    immediately, there is no review gate in between.
+-   Never push directly to `main` to "test a deploy" — only push once a
+    feature branch has actually been reviewed and merged per the Git
+    Workflow above.
+
+## After Triggering a Deploy
+
+-   Confirm the Actions run for `deploy.yml` succeeds (checkout → build
+    → upload → restart, in that order) before considering the task
+    done — a green push does not by itself confirm the deploy finished;
+    check the Actions tab.
+-   If PWA/manifest, favicon, icon, or `metadata` fields in
+    `src/app/layout.tsx` are touched, re-verify "Add to Home Screen" /
+    install behavior on an actual mobile Chrome session after deploy —
+    this project intentionally does **not** want a real installable
+    PWA (see `public/site.webmanifest`); only the plain home-screen
+    icon shortcut is wanted. Do not re-link `metadata.manifest` in
+    `layout.tsx` without explicit user instruction.
+-   Record the deploy (what was merged, commit hash, and result) in
+    `progress-tracker.md` per the Tracker Update Rule.
+
+See `docs/web-deployment.md` for the separate, manually-triggered
+Docker + Caddy VPS deployment path — that one is not part of this
+GitHub Actions flow and is not run on every push.
+
+------------------------------------------------------------------------
+
 # Code Quality Checklist
 
 Before completing any feature
