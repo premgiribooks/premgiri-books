@@ -166,7 +166,17 @@ const NARRATION_SCHEMA = z
 // and the lenient live-preview schema below.
 const salesInvoiceBaseSchema = z.object({
   customerMode: z.enum(CUSTOMER_MODE_VALUES, "Select a valid customer mode"),
-  customerId: z.uuid("Select a valid customer").optional(),
+  // `.string().optional()` up front (not a bare `.string()`) so a genuinely
+  // absent value — as arrives on server-side re-validation, vs. the form's
+  // own `""` default — is tolerated too; a bare `.string()` would reject
+  // `undefined` outright before the empty-string normalization below ever
+  // ran, and keeps the zodResolver input type as `string | undefined`
+  // (matching every call site's `z.input`) rather than `unknown`.
+  customerId: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined || value.trim() === "" ? undefined : value))
+    .pipe(z.uuid("Select a valid customer").optional()),
   quickCustomerName: QUICK_CUSTOMER_TEXT_SCHEMA,
   quickCustomerMobile: QUICK_CUSTOMER_TEXT_SCHEMA,
   quickCustomerGstin: QUICK_CUSTOMER_TEXT_SCHEMA,
