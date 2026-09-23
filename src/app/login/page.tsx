@@ -1,4 +1,4 @@
-import { BookOpen } from "lucide-react";
+import Image from "next/image";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "@/components/auth/login-form";
@@ -10,7 +10,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <BookOpen size={28} className="text-primary" />
+          <Image src="/logo-2-v2.svg" alt="Premgiri Books" width={36} height={23} priority />
           <h1 className="text-lg font-semibold text-foreground">Premgiri Books ERP</h1>
         </div>
 

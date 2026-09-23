@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Search, Bell, Menu, Settings, User, UserCog, LogOut } from "lucide-react";
+import Image from "next/image";
+import { Search, Bell, Menu, Settings, User, UserCog, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export function TopNavbar({ onOpenMobileNav }: TopNavbarProps) {
       )}
 
       <div className="flex shrink-0 items-center gap-2">
-        <BookOpen size={22} className="text-primary" />
+        <Image src="/logo-2-v2.svg" alt="Premgiri Books" width={22} height={14} priority />
         <span className="text-sm font-semibold tracking-tight">
           Premgiri Books
         </span>
