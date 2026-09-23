@@ -30,7 +30,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Premgiri Books ERP",
   description: "Modular ERP for accounting, GST, inventory, and billing.",
-  manifest: "/site.webmanifest",
   icons: {
     icon: [
       { url: "/favicon.ico" },
