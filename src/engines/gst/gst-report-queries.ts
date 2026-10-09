@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
+import type { IssuedDocument } from "./gstr1-offline/documents-issued";
 import type { GstSupplyLine } from "./gst-report-types";
 
 type PrismaClientOrTransaction = typeof prisma | Prisma.TransactionClient;
@@ -447,6 +448,75 @@ export async function getOutwardSupplyLines(
     ...creditNoteItems.map(toCreditNoteLine),
     ...debitNoteItems.map(toDebitNoteLine),
   ].sort(byDocumentDateAscending);
+}
+
+/**
+ * Every numbered outward document issued in `[from, to]` (inclusive) —
+ * Sales Invoices, Sales Returns, Credit Notes and Debit Notes that were
+ * `POSTED` or later `CANCELLED` — for GSTR-1 Table 13. Cancelled documents
+ * keep their number, so they count toward the series. Returns and notes get
+ * their number only at posting, so a null number (a draft) is never issued.
+ */
+export async function getIssuedOutwardDocuments(
+  companyId: string,
+  from: Date,
+  to: Date,
+  tx?: PrismaClientOrTransaction
+): Promise<IssuedDocument[]> {
+  const client = tx ?? prisma;
+  const issuedStatus = { in: ["POSTED", "CANCELLED"] as ("POSTED" | "CANCELLED")[] };
+
+  const [invoices, returns, creditNotes, debitNotes] = await Promise.all([
+    client.salesInvoice.findMany({
+      where: { companyId, status: issuedStatus, invoiceDate: { gte: from, lte: to } },
+      select: { invoiceNumber: true, status: true },
+    }),
+    client.salesReturn.findMany({
+      where: { companyId, status: issuedStatus, returnDate: { gte: from, lte: to }, returnNumber: { not: null } },
+      select: { returnNumber: true, status: true },
+    }),
+    client.creditNote.findMany({
+      where: { companyId, status: issuedStatus, noteDate: { gte: from, lte: to }, noteNumber: { not: null } },
+      select: { noteNumber: true, status: true },
+    }),
+    client.debitNote.findMany({
+      where: { companyId, status: issuedStatus, noteDate: { gte: from, lte: to }, noteNumber: { not: null } },
+      select: { noteNumber: true, status: true },
+    }),
+  ]);
+
+  return [
+    ...invoices.map((row) => ({ documentType: "SALES_INVOICE" as const, documentNumber: row.invoiceNumber, isCancelled: row.status === "CANCELLED" })),
+    ...returns.flatMap((row) =>
+      row.returnNumber ? [{ documentType: "SALES_RETURN" as const, documentNumber: row.returnNumber, isCancelled: row.status === "CANCELLED" }] : []
+    ),
+    ...creditNotes.flatMap((row) =>
+      row.noteNumber ? [{ documentType: "CREDIT_NOTE" as const, documentNumber: row.noteNumber, isCancelled: row.status === "CANCELLED" }] : []
+    ),
+    ...debitNotes.flatMap((row) =>
+      row.noteNumber ? [{ documentType: "DEBIT_NOTE" as const, documentNumber: row.noteNumber, isCancelled: row.status === "CANCELLED" }] : []
+    ),
+  ];
+}
+
+/**
+ * Numbers of Sales Invoices still in `DRAFT` dated in `[from, to]`. A draft
+ * already holds a number from the invoice series, so it would otherwise be an
+ * unexplained gap in Table 13.
+ */
+export async function getDraftSalesInvoiceNumbers(
+  companyId: string,
+  from: Date,
+  to: Date,
+  tx?: PrismaClientOrTransaction
+): Promise<string[]> {
+  const client = tx ?? prisma;
+  const drafts = await client.salesInvoice.findMany({
+    where: { companyId, status: "DRAFT", invoiceDate: { gte: from, lte: to } },
+    select: { invoiceNumber: true },
+    orderBy: { invoiceNumber: "asc" },
+  });
+  return drafts.map((draft) => draft.invoiceNumber);
 }
 
 /**

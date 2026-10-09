@@ -5,7 +5,7 @@ import { getCurrentFinancialYear } from "@/lib/current-financial-year";
 import { getCurrentCompanyUser } from "@/lib/current-user";
 import { hasPermission, isCurrentUserCompanyAdmin } from "@/lib/permissions";
 import { companySettingsService } from "@/modules/company/services/company-settings-service";
-import { GstReportExportButton } from "@/modules/gst/components/gst-report-export-button";
+import { Gstr1PortalExportButton } from "@/modules/gst/components/gstr1-portal-export-button";
 import { Gstr1B2bTable } from "@/modules/gst/components/gstr1-b2b-table";
 import { Gstr1B2cTable } from "@/modules/gst/components/gstr1-b2c-table";
 import { Gstr1CreditDebitNoteTable } from "@/modules/gst/components/gstr1-credit-debit-note-table";
@@ -93,7 +93,7 @@ export default async function Gstr1Page({ searchParams }: Gstr1PageProps) {
             <h1 className="text-xl font-semibold text-foreground">GSTR-1</h1>
             <p className="text-sm text-muted-foreground">Statutory outward-supply return, classified from the GST Registers.</p>
           </div>
-          <GstReportExportButton />
+          {selectedPeriod ? <Gstr1PortalExportButton from={selectedPeriod.from} to={selectedPeriod.to} /> : null}
         </div>
 
         {selectedPeriod ? (

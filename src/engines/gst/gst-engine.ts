@@ -1,9 +1,14 @@
 import { calculateDocument, calculateLine, determineSupplyType, isHsnRequired } from "@/engines/gst/gst-calculation";
-import { getInwardSupplyLines, getOutwardSupplyLines } from "@/engines/gst/gst-report-queries";
+import {
+  getDraftSalesInvoiceNumbers,
+  getInwardSupplyLines,
+  getIssuedOutwardDocuments,
+  getOutwardSupplyLines,
+} from "@/engines/gst/gst-report-queries";
 
 export { calculateDocument, calculateLine, determineSupplyType, isHsnRequired };
 export { getGstStateName, GST_STATE_CODES, isValidGstStateCode, type GstStateCode } from "@/engines/gst/state-codes";
-export { getInwardSupplyLines, getOutwardSupplyLines };
+export { getDraftSalesInvoiceNumbers, getInwardSupplyLines, getIssuedOutwardDocuments, getOutwardSupplyLines };
 export {
   GST_SUPPLY_LINE_DOCUMENT_TYPES,
   type GstSupplyLine,
@@ -30,4 +35,6 @@ export const gstEngine = {
 export const gstReportEngine = {
   getOutwardSupplyLines,
   getInwardSupplyLines,
+  getIssuedOutwardDocuments,
+  getDraftSalesInvoiceNumbers,
 };

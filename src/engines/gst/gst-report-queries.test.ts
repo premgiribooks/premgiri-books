@@ -8,7 +8,12 @@ import type { Prisma } from "@prisma/client";
 // own fake client as `tx`, so the stub is never actually invoked.
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
-import { getInwardSupplyLines, getOutwardSupplyLines } from "@/engines/gst/gst-report-queries";
+import {
+  getDraftSalesInvoiceNumbers,
+  getInwardSupplyLines,
+  getIssuedOutwardDocuments,
+  getOutwardSupplyLines,
+} from "@/engines/gst/gst-report-queries";
 
 const COMPANY_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_COMPANY_ID = "99999999-9999-4999-8999-999999999999";
@@ -567,5 +572,111 @@ describe("getInwardSupplyLines", () => {
     expect(line.cgst).toBe(-9);
     expect(line.sgst).toBe(-9);
     expect(line.totalAmount).toBe(-118);
+  });
+});
+
+interface IssuedDocumentsFakeRows {
+  invoices?: unknown[];
+  returns?: unknown[];
+  creditNotes?: unknown[];
+  debitNotes?: unknown[];
+}
+
+function issuedDocumentsClient(rows: IssuedDocumentsFakeRows) {
+  return {
+    salesInvoice: { findMany: vi.fn().mockResolvedValue(rows.invoices ?? []) },
+    salesReturn: { findMany: vi.fn().mockResolvedValue(rows.returns ?? []) },
+    creditNote: { findMany: vi.fn().mockResolvedValue(rows.creditNotes ?? []) },
+    debitNote: { findMany: vi.fn().mockResolvedValue(rows.debitNotes ?? []) },
+  } as unknown as Prisma.TransactionClient;
+}
+
+describe("getIssuedOutwardDocuments", () => {
+  it("scopes every query to the company, the date range and POSTED/CANCELLED documents", async () => {
+    const client = issuedDocumentsClient({});
+
+    await getIssuedOutwardDocuments(COMPANY_ID, FROM, TO, client);
+
+    const issued = { in: ["POSTED", "CANCELLED"] };
+    expect(client.salesInvoice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: COMPANY_ID, status: issued, invoiceDate: { gte: FROM, lte: TO } } })
+    );
+    expect(client.salesReturn.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ companyId: COMPANY_ID, status: issued, returnDate: { gte: FROM, lte: TO } }) })
+    );
+    expect(client.creditNote.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ companyId: COMPANY_ID, status: issued, noteDate: { gte: FROM, lte: TO } }) })
+    );
+    expect(client.debitNote.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ companyId: COMPANY_ID, status: issued, noteDate: { gte: FROM, lte: TO } }) })
+    );
+  });
+
+  it("only asks for returns and notes that already hold a number", async () => {
+    const client = issuedDocumentsClient({});
+
+    await getIssuedOutwardDocuments(COMPANY_ID, FROM, TO, client);
+
+    expect(client.salesReturn.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ returnNumber: { not: null } }) })
+    );
+    expect(client.creditNote.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ noteNumber: { not: null } }) })
+    );
+  });
+
+  it("maps each document type and flags CANCELLED ones", async () => {
+    const client = issuedDocumentsClient({
+      invoices: [
+        { invoiceNumber: "PBD-2627-INV-001", status: "POSTED" },
+        { invoiceNumber: "PBD-2627-INV-002", status: "CANCELLED" },
+      ],
+      returns: [{ returnNumber: "PBD-2627-SR-001", status: "POSTED" }],
+      creditNotes: [{ noteNumber: "PBD-2627-CN-001", status: "CANCELLED" }],
+      debitNotes: [{ noteNumber: "PBD-2627-DN-001", status: "POSTED" }],
+    });
+
+    const documents = await getIssuedOutwardDocuments(COMPANY_ID, FROM, TO, client);
+
+    expect(documents).toEqual([
+      { documentType: "SALES_INVOICE", documentNumber: "PBD-2627-INV-001", isCancelled: false },
+      { documentType: "SALES_INVOICE", documentNumber: "PBD-2627-INV-002", isCancelled: true },
+      { documentType: "SALES_RETURN", documentNumber: "PBD-2627-SR-001", isCancelled: false },
+      { documentType: "CREDIT_NOTE", documentNumber: "PBD-2627-CN-001", isCancelled: true },
+      { documentType: "DEBIT_NOTE", documentNumber: "PBD-2627-DN-001", isCancelled: false },
+    ]);
+  });
+
+  it("skips a return or note whose number is still null", async () => {
+    const client = issuedDocumentsClient({
+      returns: [{ returnNumber: null, status: "POSTED" }],
+      creditNotes: [{ noteNumber: null, status: "POSTED" }],
+      debitNotes: [{ noteNumber: null, status: "POSTED" }],
+    });
+
+    expect(await getIssuedOutwardDocuments(COMPANY_ID, FROM, TO, client)).toEqual([]);
+  });
+});
+
+describe("getDraftSalesInvoiceNumbers", () => {
+  it("returns the numbers of DRAFT invoices in the range, scoped to the company", async () => {
+    const findMany = vi.fn().mockResolvedValue([{ invoiceNumber: "PBD-2627-INV-004" }, { invoiceNumber: "PBD-2627-INV-009" }]);
+    const client = { salesInvoice: { findMany } } as unknown as Prisma.TransactionClient;
+
+    const numbers = await getDraftSalesInvoiceNumbers(COMPANY_ID, FROM, TO, client);
+
+    expect(numbers).toEqual(["PBD-2627-INV-004", "PBD-2627-INV-009"]);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { companyId: COMPANY_ID, status: "DRAFT", invoiceDate: { gte: FROM, lte: TO } } })
+    );
+  });
+
+  it("never queries with another company's id", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const client = { salesInvoice: { findMany } } as unknown as Prisma.TransactionClient;
+
+    await getDraftSalesInvoiceNumbers(OTHER_COMPANY_ID, FROM, TO, client);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ companyId: OTHER_COMPANY_ID }) }));
   });
 });

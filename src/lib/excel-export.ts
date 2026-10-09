@@ -62,7 +62,7 @@ function cellDisplayLength(value: string | number | Date | null): number {
 // apostrophe forces the cell to be read back as literal text.
 const FORMULA_INJECTION_LEADING_CHARS = /^[=+\-@\t\r]/;
 
-function sanitizeCellText(value: string): string {
+export function sanitizeCellText(value: string): string {
   return FORMULA_INJECTION_LEADING_CHARS.test(value) ? `'${value}` : value;
 }
 

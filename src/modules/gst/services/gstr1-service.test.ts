@@ -106,9 +106,13 @@ describe("gstr1Service.getGstr1Return — B2B/B2C classification matrix", () => 
 });
 
 describe("gstr1Service.getGstr1Return — B2C Large threshold boundary", () => {
-  function interStateLine(totalAmount: number) {
+  const LEGACY_INVOICE_DATE = new Date("2024-07-31T00:00:00.000Z");
+  const CURRENT_RULE_INVOICE_DATE = new Date("2024-08-01T00:00:00.000Z");
+
+  function interStateLine(totalAmount: number, documentDate: Date = FROM) {
     return salesInvoiceLine({
       documentId: "inv-large",
+      documentDate,
       partyGstin: null,
       igst: totalAmount * 0.18 * (1 / 1.18),
       cgst: 0,
@@ -118,25 +122,44 @@ describe("gstr1Service.getGstr1Return — B2C Large threshold boundary", () => {
     });
   }
 
-  it("classifies an inter-state invoice just above ₹2,50,000 as B2C Large", async () => {
-    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(250000.01)]);
+  it("classifies an inter-state invoice just above ₹1,00,000 as B2C Large from the August 2024 return period", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(100000.01)]);
     const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
     expect(result.b2cLarge).toHaveLength(1);
     expect(result.b2cSmall).toHaveLength(0);
   });
 
-  it("classifies an inter-state invoice exactly at ₹2,50,000 as B2C Small (strictly greater-than required)", async () => {
-    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(250000)]);
+  it("classifies an inter-state invoice exactly at ₹1,00,000 as B2C Small (strictly greater-than required)", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(100000)]);
     const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
     expect(result.b2cLarge).toHaveLength(0);
     expect(result.b2cSmall.length).toBeGreaterThan(0);
   });
 
-  it("classifies an inter-state invoice just below ₹2,50,000 as B2C Small", async () => {
-    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(249999.99)]);
+  it("classifies an inter-state invoice just below ₹1,00,000 as B2C Small", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(99999.99)]);
     const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
     expect(result.b2cLarge).toHaveLength(0);
     expect(result.b2cSmall.length).toBeGreaterThan(0);
+  });
+
+  it("applies the ₹1,00,000 limit to an invoice dated exactly on 1 August 2024", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(150000, CURRENT_RULE_INVOICE_DATE)]);
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+    expect(result.b2cLarge).toHaveLength(1);
+  });
+
+  it("keeps the older ₹2,50,000 limit for an invoice dated before August 2024", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(150000, LEGACY_INVOICE_DATE)]);
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+    expect(result.b2cLarge).toHaveLength(0);
+    expect(result.b2cSmall.length).toBeGreaterThan(0);
+  });
+
+  it("classifies a pre-August-2024 inter-state invoice just above ₹2,50,000 as B2C Large", async () => {
+    getOutwardSupplyLinesMock.mockResolvedValue([interStateLine(250000.01, LEGACY_INVOICE_DATE)]);
+    const result = await gstr1Service.getGstr1Return({ from: FROM, to: TO });
+    expect(result.b2cLarge).toHaveLength(1);
   });
 
   it("excludes an intra-state invoice from B2C Large regardless of value", async () => {

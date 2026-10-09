@@ -26,7 +26,7 @@ record scope rather than attempt full statutory fidelity):**
 | GSTR-1 Table | In scope | Reasoning |
 |---|---|---|
 | 4 — B2B (registered recipients) | **Yes** | Fully computable from stored data |
-| 5 — B2C Large (inter-state, unregistered, invoice value > ₹2,50,000) | **Yes** | Fully computable |
+| 5 — B2C Large (inter-state, unregistered, invoice value > ₹1,00,000 from the Aug-2024 return period; > ₹2,50,000 before) | **Yes** | Fully computable |
 | 7 — B2C Small (consolidated, rate + place-of-supply wise) | **Yes** | Fully computable |
 | 9B/9C — Credit/Debit Notes (registered / unregistered) | **Yes** | Fully computable |
 | 8 — Nil-rated / Exempt / Non-GST outward supplies | **Yes**, nil-rated/exempt only | Non-GST supplies (alcohol, petroleum) have no product/document concept in this codebase — out of scope until one exists |
@@ -34,7 +34,7 @@ record scope rather than attempt full statutory fidelity):**
 | 6A/6B — Exports, SEZ supplies | **Deferred** | No export/SEZ flow, LUT/bond capture, or shipping-bill reference exists anywhere in this codebase |
 | 11 — Advances received/adjusted | **Deferred** | No advance-billing feature exists (a Sales Order/Quotation is not a GST-liable advance receipt in this codebase's model) |
 | 10 — Amendments to prior-period B2C | **Deferred** | Amending a *filed* prior period requires diffing against what was actually filed, which requires a filed-period snapshot this MVP does not keep (see Data Model's "advisory, not a snapshot" decision) |
-| Table 13 — Documents issued summary | **Deferred** | Requires reconciling every `DocumentSequence` gap (cancelled/skipped numbers) across all outward document types — a distinct, non-trivial feature better scoped on its own if ever requested |
+| Table 13 — Documents issued summary | **Partial** | Not shown on the GSTR-1 screen. Produced only inside the portal-import export (`docs` sheet — see "Portal import export" below): one row per contiguous run of numbers in each document series, cancelled counted, drafts blocked |
 
 A future spec can extend this one when export/advance/amendment flows exist; nothing
 here blocks that.
@@ -199,9 +199,9 @@ Decisions
   invoice number/date, place of supply, taxable value, and rate-wise tax breakup.
 - **Table 5 (B2C Large)**: every line with **no** party GSTIN, an **inter-state**
   supply (`igst > 0`), and that invoice's `grandTotal` (not just this one line) exceeding
-  the statutory threshold — **₹2,50,000**, a named constant
-  (`B2C_LARGE_THRESHOLD_RUPEES`) rather than a magic number — listed invoice-wise like
-  B2B.
+  the statutory threshold — **₹1,00,000** for invoices dated from 2024-08-01 and
+  **₹2,50,000** before that (`getB2cLargeThreshold(invoiceDate)`, named constants rather
+  than magic numbers) — listed invoice-wise like B2B.
 - **Table 7 (B2C Small)**: every remaining unregistered-recipient line (intra-state of
   any value, or inter-state at or below the threshold) — **consolidated**, not
   invoice-wise, grouped by `(placeOfSupplyStateCode, ratePercent)` into one row per
@@ -329,7 +329,8 @@ vitest coverage for:
 - B2B/B2C classification matrix: GSTIN-present vs. absent, across all three customer
   modes including a mid-transaction-converted `QUICK` invoice
 - B2C Large threshold boundary (`grandTotal` exactly at, just above, and just below
-  ₹2,50,000; intra-state excluded regardless of value)
+  ₹1,00,000, plus the 2024-08-01 cut-over to/from ₹2,50,000; intra-state excluded
+  regardless of value)
 - B2C Small consolidation grouping (`placeOfSupplyStateCode` × `ratePercent`)
 - Nil-rated exclusion from Table 7/5's own totals
 - Credit/Debit Note registered/unregistered split, and Sales Return's exclusion from
@@ -366,7 +367,7 @@ Verify
 
 - A registered (GSTIN-present) customer's invoice lines appear under Table 4 (B2B),
   regardless of `customerMode`; an unregistered customer's inter-state invoice above
-  ₹2,50,000 appears under Table 5; everything else unregistered appears consolidated
+  the threshold in force on its date appears under Table 5; everything else unregistered appears consolidated
   under Table 7; a zero-rate line appears only under Table 8, never double-counted in
   7/5.
 - A Credit Note against a registered customer appears under Table 9B; a Sales Return
@@ -384,3 +385,29 @@ Verify
 Feature-spec 58 (this spec) is `context/Phases/phase-tracker.md`'s Phase 8 item #56.
 Feature-spec 59 (GSTR-3B, tracker #57) reuses this spec's `GstFilingRecord` model without
 adding a new one.
+
+## Portal import export (added 2026-10-09)
+
+The GSTR-1 screen's **Export for GST portal** button downloads a workbook in the layout of
+the GST portal's `GSTR1_Excel_Workbook_Template_V2.2` for the offline-tool import. Only the
+three sheets this business files are produced: `b2cs` (Table 7), `hsn(b2c)` (Table 12, B2C
+part) and `docs` (Table 13). Nil-rated/exempt (Table 8), B2B, B2CL and credit/debit-note
+sheets are not exported.
+
+- Route: `GET /gst/gstr-1/export?from=&to=` (`reports`/`export`; the service re-checks
+  `gst`/`view`). The period is capped at 93 days. Refusals come back as a 400 with a message
+  that the button shows as a toast.
+- **b2cs**: the same small-B2C classification as this screen (`classifySalesInvoiceLines`),
+  with unregistered credit/debit notes netted in, grouped by place of supply and rate. Type
+  is always `OE`. Rate-0 supplies are left out (they belong in Table 8).
+- **hsn(b2c)**: every unregistered sale and return (including B2CL and nil-rated), grouped by
+  HSN, rate and UQC, with the portal's `CODE-DESCRIPTION` UQC label (unknown units become
+  `OTH-OTHERS`). Services (SAC / HSN starting 99) leave UQC and quantity blank. Credit/debit
+  notes carry no HSN or quantity, so they are not in this sheet.
+- **docs**: one row per contiguous run of serial numbers in each series (sales invoices,
+  sales returns and credit notes as "Credit Note", debit notes as "Debit Note"); cancelled
+  documents are counted. A numbering gap starts a new row.
+- The export refuses while DRAFT sales invoices are dated in the period (a draft already
+  holds a number), when a sold product has no HSN/SAC, or when a rate or state is not in the
+  portal's drop-down lists.
+- Portal drop-down values live in `src/engines/gst/gstr1-offline/portal-masters.ts`.

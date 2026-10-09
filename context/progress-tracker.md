@@ -6459,3 +6459,28 @@ all passing, including 34 new Purchase Credit Note tests and 2 new/updated
 a running app by the user (no browser tool available in this session, stated explicitly rather
 than claimed) — the plan's own Verification section calls for a manual ledger-balance check on a
 posted independent and a posted invoice-linked note before merge.
+
+## 2026-10-09 — GSTR-1 portal-import export (b2cs, hsn(b2c), docs)
+
+The GSTR-1 screen's disabled Export button is now **Export for GST portal**. It downloads an
+.xlsx in the layout of the GST portal's offline-tool template (`GSTR1_Excel_Workbook_Template_V2.2`),
+with only the three sheets this business files: `b2cs`, `hsn(b2c)` and `docs`. The header block
+(rows 1–4, sheet names, summary formulas) was compared cell by cell against the real template.
+
+- **New:** `src/engines/gst/gstr1-offline/` (portal drop-down masters, row builders, document-series
+  builder, workbook writer), `src/modules/gst/services/gstr1-offline-export-service.ts`,
+  `src/app/gst/gstr-1/export/route.ts`, `Gstr1PortalExportButton`, and two read queries in
+  `gst-report-queries.ts` (`getIssuedOutwardDocuments`, `getDraftSalesInvoiceNumbers`).
+- **Behaviour change:** the B2C Large limit is now date-aware, ₹1,00,000 from invoices dated
+  2024-08-01 and ₹2,50,000 before. This affects the on-screen GSTR-1 too, not just the export.
+- **Decisions:** export is blocked while DRAFT sales invoices exist in the period (drafts hold a
+  number); unregistered credit/debit notes net into b2cs; numbering gaps become separate `docs`
+  rows rather than an error; products with no HSN block the export.
+- **Not in the file:** nil-rated/exempt supplies (the `exemp` sheet), B2B, B2CL, credit/debit-note
+  sheets. Nil-rated B2C sales are in `hsn(b2c)` but must be entered in Table 8 on the portal.
+- Spec `58-gstr-1.md` updated (threshold, Table 13 now Partial, new "Portal import export" section).
+- Small shared changes: `loadProductInfo` exported from `hsn-summary-service.ts`,
+  `sanitizeCellText` from `excel-export.ts`, `downloadBlob` from `pdf-client.ts`.
+- **Verification:** `tsc` and ESLint clean; `vitest run` 238 files / 3,142 tests passing.
+  **Not verified:** an import into the real GST offline tool, and a browser click-through.
+

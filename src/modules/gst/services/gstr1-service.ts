@@ -16,7 +16,18 @@ import type {
 } from "@/types/gstr1";
 
 const RETURN_TYPE = "GSTR1";
-const B2C_LARGE_THRESHOLD_RUPEES = 250000;
+/** Inter-state B2C invoices above this are "large" (Table 5) — up to July 2024 return periods. */
+const B2C_LARGE_THRESHOLD_RUPEES_LEGACY = 250000;
+/** From the August 2024 return period the limit is ₹1 lakh (GSTR-1 Table 7 note). */
+const B2C_LARGE_THRESHOLD_RUPEES = 100000;
+const B2C_LARGE_THRESHOLD_CHANGE_DATE = new Date("2024-08-01T00:00:00.000Z");
+
+/** The B2C Large limit in force for an invoice dated `invoiceDate`. */
+export function getB2cLargeThreshold(invoiceDate: Date): number {
+  return invoiceDate.getTime() >= B2C_LARGE_THRESHOLD_CHANGE_DATE.getTime()
+    ? B2C_LARGE_THRESHOLD_RUPEES
+    : B2C_LARGE_THRESHOLD_RUPEES_LEGACY;
+}
 const ALREADY_FILED_MESSAGE = "This period has already been filed. Reopen it first to re-file.";
 const FILING_RECORD_NOT_FOUND_MESSAGE = "GST filing record not found.";
 const NO_FINANCIAL_YEAR_MESSAGE = "Select a financial year before marking a GST return period filed.";
@@ -108,7 +119,7 @@ function toDocumentGroups(lines: GstSupplyLine[]): Gstr1DocumentGroup[] {
   return [...groups.values()];
 }
 
-interface Gstr1SalesInvoiceClassification {
+export interface Gstr1SalesInvoiceClassification {
   b2b: Gstr1DocumentGroup[];
   b2cLarge: Gstr1DocumentGroup[];
   b2cSmall: Gstr1ConsolidatedGroup[];
@@ -139,7 +150,7 @@ interface Gstr1SalesInvoiceClassification {
  * classified into 9B/9C — only real CreditNote/DebitNote rows are (see
  * classifyNoteLines).
  */
-function classifySalesInvoiceLines(lines: GstSupplyLine[]): Gstr1SalesInvoiceClassification {
+export function classifySalesInvoiceLines(lines: GstSupplyLine[]): Gstr1SalesInvoiceClassification {
   const nilRatedLines: GstSupplyLine[] = [];
   const b2bLines: GstSupplyLine[] = [];
   const unregisteredLines: GstSupplyLine[] = [];
@@ -187,7 +198,7 @@ function classifySalesInvoiceLines(lines: GstSupplyLine[]): Gstr1SalesInvoiceCla
   for (const [documentId, invoiceLines] of taxedLinesByInvoice) {
     const isInterState = invoiceLines.some((line) => line.igst !== 0);
     const invoiceTotal = invoiceTotalByDocumentId.get(documentId) ?? 0;
-    if (isInterState && invoiceTotal > B2C_LARGE_THRESHOLD_RUPEES) {
+    if (isInterState && invoiceTotal > getB2cLargeThreshold(invoiceLines[0].documentDate)) {
       b2cLargeLines.push(...invoiceLines);
     } else {
       b2cSmallLines.push(...invoiceLines);
@@ -202,7 +213,7 @@ function classifySalesInvoiceLines(lines: GstSupplyLine[]): Gstr1SalesInvoiceCla
   };
 }
 
-function classifyNoteLines(lines: GstSupplyLine[]): {
+export function classifyNoteLines(lines: GstSupplyLine[]): {
   registered: Gstr1DocumentGroup[];
   unregistered: Gstr1ConsolidatedGroup[];
 } {

@@ -13,7 +13,7 @@ import type { HsnSummaryResult, HsnSummaryRow } from "@/types/hsn-summary";
 /** The single bucket key for every product-bearing line whose product has no `hsnCodeId` (Business Rules). */
 const NO_HSN_BUCKET_KEY = "__NO_HSN__";
 
-interface ProductInfo {
+export interface ProductInfo {
   hsnCode: string | null;
   codeType: HsnCodeType | null;
   description: string | null;
@@ -38,7 +38,7 @@ interface GroupAccumulator {
 }
 
 /** Batched product -> (HSN/codeType/description, unit label) lookup — one query for every distinct product referenced by the period's lines, never one query per group (Service / Repository). */
-async function loadProductInfo(companyId: string, productIds: readonly string[]): Promise<Map<string, ProductInfo>> {
+export async function loadProductInfo(companyId: string, productIds: readonly string[]): Promise<Map<string, ProductInfo>> {
   if (productIds.length === 0) {
     return new Map();
   }
